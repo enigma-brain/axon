@@ -312,8 +312,10 @@ Compile every package, vet and test:
     go test -race ./...
 
 The tests never touch the real `~/.axon`: they run against temporary home
-directories. CI runs the same checks, and a `gofmt` check, on Linux and macOS
-for every pull request and every push to `main`.
+directories. CI runs the same checks, and a `gofmt` check, on Linux for every
+pull request and every push to `main`, and on macOS when the change touches
+code. [CONTRIBUTING.md](CONTRIBUTING.md#continuous-integration) sets out which
+CI job runs when.
 
 ### The SkyPilot client install
 
@@ -343,8 +345,24 @@ with:
 
     AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
 
-CI runs it on Linux and macOS for every push to `main` and for pull requests
-that change `internal/skyclient/` or the workflow.
+CI runs it on Linux, on macOS on Apple silicon and on macOS on Intel when a
+change touches `internal/skyclient/` or the workflow.
+
+### The smoke test
+
+`smoke_test.go` runs the built `axon` as a user would, in an empty home
+directory with an empty `PATH`: `axon login --org` adds a made-up
+organisation file, installs the SkyPilot client for real, and stops at the
+endpoint's reachability check, before the browser login. The endpoint is on
+the loopback address, so the test reaches no server. It downloads the client,
+so it runs only with:
+
+    AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
+
+With `AXON_SMOKE_BIN` set to a binary's path, it runs that binary instead of
+building one. CI runs it on Linux, on macOS on Apple silicon and on macOS on
+Intel when a change touches code, and the release runs it against the binary
+the install line installed.
 
 ### The tsh install
 
@@ -377,9 +395,8 @@ runs on Linux on x86-64 or on macOS with no `tsh` on `PATH`:
 
     AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/tsh
 
-CI runs it on Linux, on macOS on Apple silicon and on macOS on Intel for
-every push to `main` and for pull requests that change `internal/tsh/` or
-the workflow.
+CI runs it on Linux, on macOS on Apple silicon and on macOS on Intel when a
+change touches `internal/tsh/` or the workflow.
 
 ### Command reference
 
@@ -400,9 +417,10 @@ as a GitHub release; the binary's `axon --version` prints `<version>`. A tag
 with a pre-release part, such as `v1.2.3-rc.1`, is published as a
 pre-release, which the install line does not pick up unless `AXON_VERSION`
 names it. Once the release is published, the workflow runs the install line
-on Linux and macOS and checks the installed version.
+on Linux, on macOS on Apple silicon and on macOS on Intel, checks the
+installed version, and runs the smoke test against the installed binary.
 
-For every pull request, CI runs GoReleaser in snapshot mode and checks that
+For every change that touches code, CI runs GoReleaser in snapshot mode and checks that
 each archive and `checksums.txt` are built, and runs `shellcheck` on
 `install.sh`. To build the archives locally into `dist/`:
 
