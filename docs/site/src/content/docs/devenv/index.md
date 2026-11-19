@@ -32,7 +32,11 @@ Any other command is refused:
 
 ```text
 axon: axon devenv does not cover "<command>". Run "axon devenv --help" for the commands it covers
+axon: axon devenv does not cover "<command>". The <group> commands it covers are <list>
 ```
+
+The second form is for a command in a group that `axon` covers in part, such as
+`volumes`, and names the commands it does cover.
 
 ## Help
 
