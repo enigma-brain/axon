@@ -286,7 +286,8 @@ stops at the first that fails:
 2. Determine the pathway.
 3. Refresh the pathway's file, as "Updating an organisation file" sets out.
 4. Establish the pathway's session.
-5. Connect each command group, by that group's own steps.
+5. Connect each command group, by that group's own steps
+   [{Q?}](questions/command-group-login.md).
 
 `axon login` is idempotent. Running it when everything is in place changes
 nothing and reports each connection as good.
