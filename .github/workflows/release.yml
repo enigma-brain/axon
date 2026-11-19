@@ -29,12 +29,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   verify-install:
-    name: Install the release with the install line (${{ matrix.os }})
+    name: Install the release and smoke-test it (${{ matrix.os }})
     needs: release
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # One runner per platform the release is built for: Linux on
+        # x86-64, macOS on Apple silicon (macos-latest) and macOS on Intel
+        # (macos-15-intel).
+        os: [ubuntu-latest, macos-latest, macos-15-intel]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -67,3 +70,14 @@ jobs:
             echo "axon --version printed \"$got\", want \"$want\""
             exit 1
           fi
+      # The release is already published when this runs, so a failure here
+      # cannot withdraw it; it fails the workflow, and CONTRIBUTING.md says
+      # what a maintainer does then.
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Run the installed axon login with an example organisation file in an empty home
+        env:
+          AXON_REAL_INSTALL: "1"
+        run: AXON_SMOKE_BIN="$HOME/.local/bin/axon" go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
