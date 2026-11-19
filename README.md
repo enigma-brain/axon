@@ -321,7 +321,9 @@ CI job runs when.
 
 `internal/skyclient` installs `axon`'s own SkyPilot client. A pinned `uv`,
 verified against its checksum, installs a Python and `skypilot[kubernetes]`
-under `~/.axon/tools/`:
+under `~/.axon/tools/`. It installs pre-built packages only
+(`--only-binary :all:`), so no compiler is needed and, for each package, it
+takes the newest version that has a build for the machine:
 
 | Path under `~/.axon/tools/` | Holds |
 |---|---|

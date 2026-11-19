@@ -132,7 +132,10 @@ func installClient(ctx context.Context, uv string, env []string, tools, version 
 		return err
 	}
 	python := filepath.Join(venv, "bin", "python")
-	if err := runUV(ctx, uv, env, "pip", "install", "--python", python, skypilotPackage+"=="+version); err != nil {
+	// Pre-built packages only: a package with no build for this machine is
+	// taken at its newest version that has one, and none is ever compiled,
+	// so the install needs no compiler on the laptop.
+	if err := runUV(ctx, uv, env, "pip", "install", "--python", python, skypilotPackage+"=="+version, "--only-binary", ":all:"); err != nil {
 		return err
 	}
 	if !isExecutable(filepath.Join(venv, "bin", "sky")) {

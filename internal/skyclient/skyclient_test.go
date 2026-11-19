@@ -490,6 +490,20 @@ func TestUVEnvironmentStaysInsideTools(t *testing.T) {
 	}
 }
 
+// The client's install takes pre-built packages only, so no package is
+// ever compiled on the laptop.
+func TestEnsureInstallsPrebuiltPackagesOnly(t *testing.T) {
+	f := newFixture(t)
+	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+		t.Fatal(err)
+	}
+	python := filepath.Join(f.tools, skypilotDir, "0.13.0", "bin", "python")
+	want := "uv pip install --python " + python + " " + skypilotPackage + "==0.13.0 --only-binary :all: --quiet\n"
+	if log := f.uvLog(t); !strings.Contains(log, want) {
+		t.Errorf("uv log lacks %q:\n%s", want, log)
+	}
+}
+
 func TestCommandIgnoresSkyOnPath(t *testing.T) {
 	f := newFixture(t)
 	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
