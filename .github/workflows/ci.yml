@@ -36,11 +36,16 @@ jobs:
         run: |
           # On a pull request, the change is the pull request's diff; on a
           # push, the commits the push added. When that cannot be worked
-          # out, such as for the first push of a branch, everything runs.
-          if [ "$EVENT" = "pull_request" ]; then
-            changed=$(git diff --name-only --no-renames "$PR_BASE...$PR_HEAD")
-          elif [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ] \
-              && changed=$(git diff --name-only --no-renames "$PUSH_BEFORE" "$PUSH_AFTER" 2>/dev/null); then
+          # out, such as for the first push of a branch or a commit a
+          # force-push removed, everything runs. Paths are printed as they
+          # are, not quoted, so that a name with non-ASCII characters still
+          # matches the patterns below.
+          changed_paths() { git -c core.quotePath=false diff --name-only --no-renames "$@" 2>/dev/null; }
+          if [ "$EVENT" = "pull_request" ] && changed=$(changed_paths "$PR_BASE...$PR_HEAD"); then
+            :
+          elif [ "$EVENT" = "push" ] && [ -n "$PUSH_BEFORE" ] \
+              && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ] \
+              && changed=$(changed_paths "$PUSH_BEFORE" "$PUSH_AFTER"); then
             :
           else
             changed=".github/workflows/ci.yml"
