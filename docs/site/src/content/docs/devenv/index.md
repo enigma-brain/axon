@@ -31,7 +31,7 @@ command runs and what `axon` does for it.
 Any other command is refused:
 
 ```text
-axon: axon devenv does not cover "bogus". Run "axon devenv --help" for the commands it covers
+axon: axon devenv does not cover "<command>". Run "axon devenv --help" for the commands it covers
 ```
 
 ## Help

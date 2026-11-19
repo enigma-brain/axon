@@ -20,17 +20,16 @@ Most problems end with the same step: run `axon login` again.
 ### No release for your system
 
 ```text
-axon install: there is no axon release for <os> on <arch>.
+axon install: there is no axon release for <os> on <arch>. axon is released for macOS on Apple silicon, macOS on Intel and Linux on x86-64; on Windows, install it inside WSL.
 ```
 
-`axon` is released for macOS on Apple silicon, macOS on Intel and Linux on
-x86-64. On Windows, install it inside WSL.
+The installer stops before it writes anything.
 
 ### curl or a checksum tool is missing
 
 ```text
-axon install: curl is not installed
-neither sha256sum nor shasum
+axon install: curl is not installed, and this script needs it to download axon. Install curl, then run this again.
+axon install: neither sha256sum nor shasum is installed, so the download cannot be verified. Install one of them, then run this again.
 ```
 
 Install `curl`, and `sha256sum` or `shasum`, then run the install line again.
@@ -48,10 +47,10 @@ nothing was written to `~/.local/bin`.
 ### The checksum does not match
 
 ```text
-axon install: the checksum of <archive> does not match checksums.txt
+axon install: the checksum of <archive> does not match checksums.txt (expected <checksum>, got <checksum>). Nothing was installed.
 ```
 
-The archive is not the one the release published. Nothing was installed. Run the
+The archive is not the one the release published. Run the
 install line again, and if it fails the same way, do not use the archive.
 
 ### The axon command is not found
@@ -61,7 +60,7 @@ axon: command not found
 command not found: axon
 ```
 
-Check that `~/.local/bin/axon` exists. When it does not, the install did not finish:
+These are your shell's messages, not `axon`'s. Check that `~/.local/bin/axon` exists. When it does not, the install did not finish:
 run the install line again. When it does, `~/.local/bin` is not on your `PATH`: add
 the line the install script printed to your shell's startup file, and open a new
 terminal:
@@ -115,7 +114,7 @@ starts with `https://`.
 ### The address carries a user name or password
 
 ```text
-an address must not carry a user name or password
+axon: add the organisation file: <address>: an address must not carry a user name or password
 ```
 
 An address is fetched without credentials. Remove them from the address. When your
@@ -132,8 +131,8 @@ The path is wrong. Check it, and quote it when it holds a space.
 ### The organisation file could not be fetched
 
 ```text
-axon: add the organisation file: fetch <address>: ...
-the server answered <status>
+axon: add the organisation file: fetch <address>: <reason>
+axon: add the organisation file: fetch <address>: the server answered <status>
 ```
 
 The address could not be fetched. Check your network and the address. A server that
@@ -291,8 +290,8 @@ You answered `n` to the offer to install `tsh`. Install it from the link, or run
 ### tsh could not be downloaded
 
 ```text
-install tsh <version>: ...
-download Teleport <version>: ...
+install tsh <version>: <reason>. Install tsh from <link> and run `axon login` again
+download Teleport <version>: <reason>. Install tsh from <link> and run `axon login` again
 ```
 
 The download or its check failed: a network error, a stall of 30 seconds with no data,
@@ -379,10 +378,10 @@ network and run `axon login` again.
 ### Your platform has no SkyPilot client
 
 ```text
-the SkyPilot client cannot be installed on <platform>
+the SkyPilot client cannot be installed on <platform>; axon supports macOS on Apple silicon and Intel, and Linux on x86-64
 ```
 
-`axon` installs its client on macOS on Apple silicon and Intel, and on Linux on x86-64.
+`axon` installs its client only on those platforms.
 
 ### SkyPilot's configuration file is not valid
 
@@ -471,8 +470,10 @@ which installs it.
 ### The command is not covered by axon devenv
 
 ```text
-axon: axon devenv does not cover "<command>".
+axon: axon devenv does not cover "<command>". Run "axon devenv --help" for the commands it covers
+axon: axon devenv does not cover "<command>". The <group> commands it covers are <list>
 ```
 
 `axon devenv` runs only the commands on the [devenv page](/axon/devenv/#the-commands).
-Run `axon devenv --help` for the list.
+The second form is for a command in a group that `axon` covers in part, and names the
+commands it does cover.
