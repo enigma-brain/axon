@@ -1,0 +1,194 @@
+// Package axondir owns ~/.axon, the one directory axon keeps on the laptop.
+//
+// The directory holds the organisation files, the configuration file, the
+// tools axon installs for its own use, and the state it records. Directories are created on first
+// use, readable by the user only; files are written readable by the user
+// only.
+package axondir
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/BurntSushi/toml"
+)
+
+const (
+	dirMode  fs.FileMode = 0o700
+	fileMode fs.FileMode = 0o600
+
+	configFile = "config.toml"
+	orgsDir    = "orgs"
+	toolsDir   = "tools"
+	stateDir   = "state"
+	emailFile  = "email"
+)
+
+// Dir is the axon directory under one home directory.
+type Dir struct {
+	root string
+}
+
+// config is the content of config.toml.
+type config struct {
+	Pathway string `toml:"pathway"`
+}
+
+// Default returns the axon directory under the user's home directory.
+func Default() (Dir, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return Dir{}, fmt.Errorf("find the home directory: %w", err)
+	}
+	return New(home), nil
+}
+
+// New returns the axon directory under home. It creates nothing.
+func New(home string) Dir {
+	return Dir{root: filepath.Join(home, ".axon")}
+}
+
+// Root returns the path of the axon directory.
+func (d Dir) Root() string { return d.root }
+
+// ConfigPath returns the path of the configuration file.
+func (d Dir) ConfigPath() string { return filepath.Join(d.root, configFile) }
+
+// OrgsDir returns the directory for the organisation files, creating it
+// when it does not exist.
+func (d Dir) OrgsDir() (string, error) { return d.ensure(orgsDir) }
+
+// ToolsDir returns the directory for the tools axon installs, creating it
+// when it does not exist.
+func (d Dir) ToolsDir() (string, error) { return d.ensure(toolsDir) }
+
+// StateDir returns the directory for the state axon records, creating it
+// when it does not exist.
+func (d Dir) StateDir() (string, error) { return d.ensure(stateDir) }
+
+// Pathway returns the identifier of the active pathway. The boolean is
+// false when none is stored. The identifier is not checked against the
+// organisation files: whether a stored file still has it is the caller's
+// question.
+func (d Dir) Pathway() (string, bool, error) {
+	data, err := os.ReadFile(d.ConfigPath())
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("read %s: %w", d.ConfigPath(), err)
+	}
+	var c config
+	if _, err := toml.Decode(string(data), &c); err != nil {
+		return "", false, fmt.Errorf("read %s: %w", d.ConfigPath(), err)
+	}
+	if c.Pathway == "" {
+		return "", false, nil
+	}
+	return c.Pathway, true, nil
+}
+
+// SetPathway stores id as the active pathway in the configuration file.
+func (d Dir) SetPathway(id string) error {
+	if id == "" || strings.ContainsAny(id, "\r\n") {
+		return fmt.Errorf("store the pathway: %q is not a pathway identifier", id)
+	}
+	if _, err := d.ensure(""); err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(config{Pathway: id}); err != nil {
+		return fmt.Errorf("write %s: %w", d.ConfigPath(), err)
+	}
+	return ReplaceFile(d.ConfigPath(), buf.Bytes())
+}
+
+// Email returns the recorded email of the logged-in user. The boolean is
+// false when none is recorded.
+func (d Dir) Email() (string, bool, error) {
+	path := filepath.Join(d.root, stateDir, emailFile)
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("read %s: %w", path, err)
+	}
+	email := strings.TrimSpace(string(data))
+	return email, email != "", nil
+}
+
+// SetEmail records the email of the logged-in user.
+func (d Dir) SetEmail(email string) error {
+	email = strings.TrimSpace(email)
+	if email == "" || strings.ContainsAny(email, "\r\n") {
+		return fmt.Errorf("record the email: %q is not an email address", email)
+	}
+	dir, err := d.StateDir()
+	if err != nil {
+		return err
+	}
+	return ReplaceFile(filepath.Join(dir, emailFile), []byte(email+"\n"))
+}
+
+// RemoveEmail deletes the recorded email, when there is one.
+func (d Dir) RemoveEmail() error {
+	path := filepath.Join(d.root, stateDir, emailFile)
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("remove %s: %w", path, err)
+	}
+	return nil
+}
+
+// ensure creates the axon directory and its subdirectory sub, when they do
+// not exist, and returns the subdirectory's path.
+func (d Dir) ensure(sub string) (string, error) {
+	path := d.root
+	for _, p := range []string{d.root, filepath.Join(d.root, sub)} {
+		err := os.Mkdir(p, dirMode)
+		if errors.Is(err, fs.ErrExist) {
+			info, statErr := os.Stat(p)
+			if statErr != nil {
+				return "", fmt.Errorf("create %s: %w", p, statErr)
+			}
+			if !info.IsDir() {
+				return "", fmt.Errorf("create %s: it exists and is not a directory", p)
+			}
+		} else if err != nil {
+			return "", fmt.Errorf("create %s: %w", p, err)
+		}
+		path = p
+	}
+	return path, nil
+}
+
+// ReplaceFile replaces path with data, readable by the user only. It writes
+// a temporary file in the same directory and renames it over path, so a
+// reader never sees a partial file. The directory must exist.
+func ReplaceFile(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := tmp.Chmod(fileMode); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}

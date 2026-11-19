@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publish the release with GoReleaser
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  verify-install:
+    name: Install the release with the install line (${{ matrix.os }})
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Run the install line
+        run: |
+          # The unpinned line installs the latest release. GitHub never serves
+          # a pre-release as the latest, and a newer release may have been
+          # published since this tag, so unless this tag is the latest the
+          # script of this tag's release is downloaded and told which version
+          # to install.
+          latest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
+          if [ "$latest" = "$TAG" ]; then
+            curl -fsSL https://github.com/enigma-brain/axon/releases/latest/download/install.sh | sh
+          else
+            echo "$TAG is not the latest release; installing it by name"
+            curl -fsSL -o install.sh "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/install.sh"
+            AXON_VERSION="$TAG" sh install.sh
+          fi
+      - name: Check axon --version
+        run: |
+          want="axon ${TAG#v}"
+          got=$("$HOME/.local/bin/axon" --version)
+          echo "$got"
+          if [ "$got" != "$want" ]; then
+            echo "axon --version printed \"$got\", want \"$want\""
+            exit 1
+          fi

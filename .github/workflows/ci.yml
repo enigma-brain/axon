@@ -1,0 +1,165 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race ./...
+
+  shellcheck:
+    name: Check install.sh with shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck install.sh
+
+  goreleaser-snapshot:
+    name: Build the release archives in snapshot mode
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean
+      - name: Check the archives, checksums and install.sh
+        run: |
+          missing=0
+          for platform in darwin_arm64 darwin_amd64 linux_amd64; do
+            if ! ls dist/axon_*_"$platform".tar.gz >/dev/null 2>&1; then
+              echo "No archive for $platform"
+              missing=1
+            fi
+          done
+          if [ ! -f dist/checksums.txt ]; then
+            echo "No checksums.txt"
+            missing=1
+          fi
+          # A snapshot build does not copy the release's extra files into
+          # dist/; they are attached only when a release is published. So
+          # check that the configuration GoReleaser resolved attaches
+          # install.sh, and that the file exists to be attached.
+          if ! grep -Eq '^[[:space:]]+- glob: install\.sh$' dist/config.yaml; then
+            echo "The release does not attach install.sh"
+            missing=1
+          fi
+          if [ ! -f install.sh ]; then
+            echo "No install.sh at the repository root"
+            missing=1
+          fi
+          if ls dist/*windows* >/dev/null 2>&1; then
+            echo "A Windows archive was built"
+            missing=1
+          fi
+          ls dist
+          exit "$missing"
+
+  changes:
+    name: Detect install changes
+    runs-on: ubuntu-latest
+    outputs:
+      skyclient: ${{ steps.filter.outputs.skyclient }}
+      tsh: ${{ steps.filter.outputs.tsh }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        name: Check the changed paths
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "skyclient=true" >> "$GITHUB_OUTPUT"
+            echo "tsh=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE...$HEAD")
+          if echo "$changed" | grep -qE '^(internal/skyclient/|\.github/workflows/ci\.yml$)'; then
+            echo "skyclient=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skyclient=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$changed" | grep -qE '^(internal/tsh/|\.github/workflows/ci\.yml$)'; then
+            echo "tsh=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tsh=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  real-install:
+    name: Install the SkyPilot client for real (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.skyclient == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install into an empty home and run sky --version
+        env:
+          AXON_REAL_INSTALL: "1"
+        run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
+
+  tsh-real-install:
+    name: Install tsh for real (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.tsh == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-latest is Apple silicon; macos-15-intel is Intel.
+        os: [ubuntu-latest, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install into an empty home and run tsh version
+        env:
+          AXON_REAL_INSTALL: "1"
+        run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/tsh

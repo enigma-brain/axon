@@ -1,0 +1,49 @@
+# GoReleaser configuration for axon. A pushed tag v<version> builds the
+# archives and checksums.txt and publishes them as a GitHub release.
+version: 2
+
+project_name: axon
+
+builds:
+  - id: axon
+    main: .
+    binary: axon
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    targets:
+      - darwin_arm64
+      - darwin_amd64
+      - linux_amd64
+
+archives:
+  - id: axon
+    ids: [axon]
+    formats: [tar.gz]
+    # install.sh selects the archive by this name: axon_<version>_<os>_<arch>.tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - none*
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  use: github
+  sort: asc
+
+release:
+  github:
+    owner: enigma-brain
+    name: axon
+  # A tag such as v0.1.0-rc.1 is published as a pre-release, which GitHub
+  # never serves as the latest release.
+  prerelease: auto
+  # install.sh is published beside the archives, so the install line can
+  # download it from the same release it installs.
+  extra_files:
+    - glob: install.sh

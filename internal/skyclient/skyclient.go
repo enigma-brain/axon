@@ -1,0 +1,261 @@
+// Package skyclient installs and locates axon's own SkyPilot client, kept
+// under ~/.axon/tools/ and separate from any other on the laptop.
+//
+// A pinned uv, verified against its checksum, installs a uv-managed Python
+// and skypilot[kubernetes] into one virtual environment per client version.
+// Every directory uv writes to is under ~/.axon/tools/, so the install needs
+// no Python, uv or sudo on the laptop, and removing ~/.axon removes it. The
+// client is always run by absolute path, never looked up on PATH.
+package skyclient
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+
+	"github.com/enigma-brain/axon/internal/axondir"
+)
+
+// DefaultVersion is the client version installed when no other is given.
+const DefaultVersion = "0.13.0"
+
+// pythonVersion is the Python the client runs on.
+const pythonVersion = "3.12"
+
+// skypilotPackage is the package installed at the client version.
+const skypilotPackage = "skypilot[kubernetes]"
+
+const (
+	dirMode fs.FileMode = 0o700
+
+	// skypilotDir, under the tools directory, holds one virtual environment
+	// per client version, and currentFile.
+	skypilotDir = "skypilot"
+	// currentFile names the installed client's version. It is written only
+	// after an install succeeds, so it always names a complete client.
+	currentFile = "current"
+)
+
+// versionPattern accepts a release version. It starts with a digit, so it is
+// never "." or "..", and holds no separator or requirement operator.
+var versionPattern = regexp.MustCompile(`^[0-9][0-9A-Za-z.+!-]*$`)
+
+// Ensure makes sure the client is installed at version, writing progress to
+// progress. It returns the version it moved from and the version it moved to;
+// from is empty when no client was installed, and from equals to when
+// nothing changed. An empty version means DefaultVersion. A failed install
+// leaves the previously installed client in place.
+//
+// Concurrent calls on one axon directory, from this process or another, run
+// one at a time: a call that finds another installing says so and waits.
+func Ensure(ctx context.Context, dir axondir.Dir, version string, progress io.Writer) (from, to string, err error) {
+	if version == "" {
+		version = DefaultVersion
+	}
+	if !versionPattern.MatchString(version) {
+		return "", "", fmt.Errorf("install SkyPilot: %q is not a release version", version)
+	}
+	if progress == nil {
+		progress = io.Discard
+	}
+
+	tools, err := dir.ToolsDir()
+	if err != nil {
+		return "", "", err
+	}
+	// The lock is held from the version check to the cleanup, so a call
+	// that waited sees what the call before it installed.
+	unlock, err := lockTools(ctx, tools, progress)
+	if err != nil {
+		return "", "", err
+	}
+	defer unlock()
+
+	from, installed, err := Version(dir)
+	if err != nil {
+		return "", "", err
+	}
+	if installed && from == version {
+		return from, version, nil
+	}
+
+	fmt.Fprintf(progress, "devenv: installing the SkyPilot client %s, with its own uv and Python, into %s.\n", version, tools)
+	fmt.Fprintln(progress, "devenv: your system's Python and packages are not changed.")
+
+	uv, err := ensureUV(ctx, tools, progress)
+	if err != nil {
+		return "", "", err
+	}
+	env := uvEnv(tools)
+
+	err = step(progress, "Python "+pythonVersion, true, func(io.Writer) error {
+		return runUV(ctx, uv, env, "python", "install", pythonVersion, "--no-bin")
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("install Python %s: %w", pythonVersion, err)
+	}
+
+	err = step(progress, "SkyPilot "+version, true, func(io.Writer) error {
+		return installClient(ctx, uv, env, tools, version)
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("install SkyPilot %s (%s): %w", version, skypilotPackage, err)
+	}
+	fmt.Fprintf(progress, "devenv: installed the SkyPilot client %s\n", version)
+	return from, version, nil
+}
+
+// installClient builds the virtual environment for version, records it as
+// the installed client, and removes every other version. The environment is
+// built at its final path, since a virtual environment's scripts name its
+// absolute path; the record is what switches from one client to the next.
+func installClient(ctx context.Context, uv string, env []string, tools, version string) error {
+	root := filepath.Join(tools, skypilotDir)
+	venv := filepath.Join(root, version)
+	if err := os.MkdirAll(root, dirMode); err != nil {
+		return err
+	}
+	// Anything at venv is a partial install from an earlier attempt, or a
+	// client whose sky is missing.
+	if err := os.RemoveAll(venv); err != nil {
+		return err
+	}
+	if err := runUV(ctx, uv, env, "venv", "--python", pythonVersion, venv); err != nil {
+		return err
+	}
+	python := filepath.Join(venv, "bin", "python")
+	if err := runUV(ctx, uv, env, "pip", "install", "--python", python, skypilotPackage+"=="+version); err != nil {
+		return err
+	}
+	if !isExecutable(filepath.Join(venv, "bin", "sky")) {
+		return errors.New("the package installed no sky executable")
+	}
+	if err := writeFile(filepath.Join(root, currentFile), version+"\n"); err != nil {
+		return err
+	}
+	removeOthers(root, version, currentFile)
+	return nil
+}
+
+// Version returns the version of the installed client without installing
+// anything. The boolean is false when no client is installed.
+func Version(dir axondir.Dir) (version string, installed bool, err error) {
+	tools, err := dir.ToolsDir()
+	if err != nil {
+		return "", false, err
+	}
+	path := filepath.Join(tools, skypilotDir, currentFile)
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("read %s: %w", path, err)
+	}
+	version = strings.TrimSpace(string(data))
+	if !versionPattern.MatchString(version) {
+		return "", false, fmt.Errorf("read %s: %q is not a release version", path, version)
+	}
+	if !isExecutable(skyPath(tools, version)) {
+		return "", false, nil
+	}
+	return version, true, nil
+}
+
+// Path returns the absolute path of the client's sky executable.
+func Path(dir axondir.Dir) (string, error) {
+	version, installed, err := Version(dir)
+	if err != nil {
+		return "", err
+	}
+	if !installed {
+		return "", errors.New("the SkyPilot client is not installed. Run `axon login`")
+	}
+	tools, err := dir.ToolsDir()
+	if err != nil {
+		return "", err
+	}
+	return skyPath(tools, version), nil
+}
+
+// Command returns a command that runs the client's sky with args. The
+// command names sky by absolute path, so a sky on PATH is never run.
+func Command(ctx context.Context, dir axondir.Dir, args ...string) (*exec.Cmd, error) {
+	path, err := Path(dir)
+	if err != nil {
+		return nil, err
+	}
+	return exec.CommandContext(ctx, path, args...), nil
+}
+
+func skyPath(tools, version string) string {
+	return filepath.Join(tools, skypilotDir, version, "bin", "sky")
+}
+
+// runUV runs uv quietly with args, so that it writes nothing but warnings
+// and errors, and keeps none of its output. On failure the error carries
+// what uv wrote to standard error.
+func runUV(ctx context.Context, uv string, env []string, args ...string) error {
+	var stderr tail
+	cmd := exec.CommandContext(ctx, uv, append(args, "--quiet")...)
+	cmd.Env = env
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if text := stderr.text(); text != "" {
+			return fmt.Errorf("uv %s: %w: %s", args[0], err, text)
+		}
+		return fmt.Errorf("uv %s: %w", args[0], err)
+	}
+	return nil
+}
+
+// tail keeps the last few kilobytes written to it.
+type tail struct{ buf []byte }
+
+const tailSize = 4096
+
+func (t *tail) Write(p []byte) (int, error) {
+	t.buf = append(t.buf, p...)
+	if len(t.buf) > tailSize {
+		t.buf = t.buf[len(t.buf)-tailSize:]
+	}
+	return len(p), nil
+}
+
+// text returns what was kept, trimmed, with every line after the first
+// indented so that it reads as part of the line it follows.
+func (t *tail) text() string {
+	return strings.ReplaceAll(strings.TrimSpace(string(t.buf)), "\n", "\n    ")
+}
+
+// removeOthers removes every entry of dir except those named in keep. It is
+// cleanup: a failure leaves only unused files behind, so it is ignored.
+func removeOthers(dir string, keep ...string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !slices.Contains(keep, e.Name()) {
+			os.RemoveAll(filepath.Join(dir, e.Name()))
+		}
+	}
+}
+
+// writeFile replaces path with data, readable by the user only.
+func writeFile(path, data string) error {
+	return replaceFile(path, strings.NewReader(data), 0o600)
+}
+
+func isExecutable(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular() && info.Mode()&0o111 != 0
+}

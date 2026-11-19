@@ -1,0 +1,31 @@
+name: Docs
+
+# Builds the documentation site on every pull request that touches it. The
+# build fails on a broken internal link.
+on:
+  pull_request:
+    paths:
+      - "docs/site/**"
+      - ".github/workflows/docs.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the documentation site
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs/site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: docs/site/.nvmrc
+          cache: npm
+          cache-dependency-path: docs/site/package-lock.json
+      - name: Install the dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build

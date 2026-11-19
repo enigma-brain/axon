@@ -1,0 +1,81 @@
+name: Pages
+
+# Publishes the documentation site to GitHub Pages on each push to the
+# default branch. Where Pages is not switched on, the site is still built, the
+# publishing steps are skipped, and the run is green with a summary that says
+# so. Where Pages is on, a failure to publish fails the run.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the documentation site
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    outputs:
+      pages_enabled: ${{ steps.detect.outputs.pages_enabled }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect whether Pages is switched on
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # The Pages API answers 404 when the repository has no Pages site.
+          # Any other failure is a real error and fails the step.
+          if out=$(gh api "repos/$REPO/pages" 2>&1); then
+            echo "pages_enabled=true" >> "$GITHUB_OUTPUT"
+          elif echo "$out" | grep -q 'HTTP 404'; then
+            echo "pages_enabled=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Publishing skipped"
+              echo
+              echo "GitHub Pages is not switched on for this repository, so the site was built but not published."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "$out"
+            exit 1
+          fi
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: docs/site/.nvmrc
+          cache: npm
+          cache-dependency-path: docs/site/package-lock.json
+      - name: Install the dependencies
+        working-directory: docs/site
+        run: npm ci
+      - name: Build
+        working-directory: docs/site
+        run: npm run build
+      - name: Upload the site
+        if: steps.detect.outputs.pages_enabled == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/site/dist
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    if: needs.build.outputs.pages_enabled == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
