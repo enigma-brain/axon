@@ -38,9 +38,9 @@ jobs:
           # push, the commits the push added. When that cannot be worked
           # out, such as for the first push of a branch, everything runs.
           if [ "$EVENT" = "pull_request" ]; then
-            changed=$(git diff --name-only "$PR_BASE...$PR_HEAD")
+            changed=$(git diff --name-only --no-renames "$PR_BASE...$PR_HEAD")
           elif [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ] \
-              && changed=$(git diff --name-only "$PUSH_BEFORE" "$PUSH_AFTER" 2>/dev/null); then
+              && changed=$(git diff --name-only --no-renames "$PUSH_BEFORE" "$PUSH_AFTER" 2>/dev/null); then
             :
           else
             changed=".github/workflows/ci.yml"
