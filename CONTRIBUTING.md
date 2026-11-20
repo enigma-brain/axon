@@ -156,6 +156,60 @@ The site holds no organisation detail, under the rule in
 [What stays out](#what-stays-out). It has no links to SkyPilot's
 documentation.
 
+## Continuous integration
+
+Every job runs on a standard GitHub-hosted runner. The release is built for
+Linux on x86-64, macOS on Apple silicon and macOS on Intel, and the jobs that
+run `axon` run on one runner for each: `ubuntu-latest`, `macos-latest` and
+`macos-15-intel`.
+
+A job that runs on a Mac, downloads real software or builds the release runs
+only when the paths it tests have changed. In `.github/workflows/ci.yml`, the
+first job reads the change, the pull request's diff or the commits a push to
+`main` added, and sets three flags:
+
+- **code**: any `.go` file, `go.mod`, `go.sum`, anything under `internal/`,
+  `install.sh`, `.goreleaser.yaml` or `ci.yml` itself;
+- **skyclient**: anything under `internal/skyclient/`, or `ci.yml`;
+- **tsh**: anything under `internal/tsh/`, or `ci.yml`.
+
+When the change cannot be read, as on the first push of a branch, every
+flag is set. A change to documentation alone sets none.
+
+| Workflow | Job | Runners | Runs |
+|---|---|---|---|
+| CI | Build and test: `gofmt`, build, vet, `go test -race` | `ubuntu-latest` | For every pull request and push to `main` |
+| CI | Build and test | `macos-latest` | When **code** |
+| CI | `shellcheck` on `install.sh` | `ubuntu-latest` | When **code** |
+| CI | GoReleaser in snapshot mode, checking the archives | `ubuntu-latest` | When **code** |
+| CI | The smoke test | All three | When **code** |
+| CI | The real install of the SkyPilot client | All three, in the smoke test's job | When **skyclient** |
+| CI | The real install of `tsh` | All three, in the smoke test's job | When **tsh** |
+| Docs | The site build | `ubuntu-latest` | For every pull request that touches `docs/site` or `docs.yml` |
+| Pages | The site build and publishing | `ubuntu-latest` | For every push to `main` |
+| Release | GoReleaser publishes the release | `ubuntu-latest` | For every pushed tag `v*` |
+| Release | The install line, `axon --version` and the smoke test against the installed binary | All three | After the release is published |
+
+A job that does not run is reported as skipped, which a required check
+accepts.
+
+The smoke test, `TestSmokeLogin` in `smoke_test.go`, runs `axon` as a user
+would, in an empty home directory with an empty `PATH`: `axon login --org`
+adds a made-up organisation file, installs the SkyPilot client for real, and
+stops at the endpoint's reachability check, the step before the browser
+login. The endpoint is on the loopback address where nothing listens, so the
+test reaches no server. It runs only with `AXON_REAL_INSTALL=1`, as the real
+installs do, and runs the binary `AXON_SMOKE_BIN` names instead of building
+one when that is set.
+
+The release's own checks run after it is published, so a failure there
+cannot withdraw it; it fails the workflow. A maintainer reads the failing
+job's log. A failure of the runner or the network is re-run. A release that
+does not install or run on a platform is edited on GitHub to be a
+pre-release, which the install line does not pick up, so that the line
+installs the previous release again; the fix is released under a new
+version, and the tag is never moved.
+
 ## Contributing from outside
 
 A change is proposed as a pull request against `main`. For a change to

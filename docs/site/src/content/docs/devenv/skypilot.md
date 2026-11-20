@@ -100,6 +100,8 @@ opens for this: Teleport supplies your identity. The
 
 `axon` uses a SkyPilot client of its own, which `axon login` installs under
 `~/.axon/tools/`. It ignores any `sky` on your `PATH` and does not touch it.
+The client is installed from pre-built packages only, so your laptop needs no
+compiler.
 
 The first install of the client downloads a few hundred megabytes. Before
 it downloads anything, `axon` says where the client goes: under

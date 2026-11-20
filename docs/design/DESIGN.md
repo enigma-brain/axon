@@ -286,7 +286,8 @@ stops at the first that fails:
 2. Determine the pathway.
 3. Refresh the pathway's file, as "Updating an organisation file" sets out.
 4. Establish the pathway's session.
-5. Connect each command group, by that group's own steps.
+5. Connect each command group, by that group's own steps
+   [{Q?}](questions/command-group-login.md).
 
 `axon login` is idempotent. Running it when everything is in place changes
 nothing and reports each connection as good.
@@ -497,7 +498,9 @@ recorded process ID and command line alone.
 `axon` keeps its own SkyPilot client, separate from any other on the laptop
 [{D!}](decisions/client-install-location.md). It downloads a pinned `uv`
 into `~/.axon/tools/` and verifies its checksum; that `uv` installs Python
-and `skypilot[kubernetes]` into the same directory. The install needs no
+and `skypilot[kubernetes]` into the same directory, from pre-built packages
+only, taking for each package the newest version that has a build for the
+laptop. The install needs no
 Python, no `uv` and no `sudo` on the laptop beforehand.
 
 `axon` runs this client by absolute path and ignores any `sky` on `PATH`.
@@ -631,6 +634,19 @@ of:
 - macOS on Apple silicon
 - macOS on Intel
 - Linux on x86-64
+
+`axon` itself runs on every platform it is released for. The platforms a
+release is built for do not depend on what any command group's backend
+supports.
+
+A command group whose backend needs a client on the laptop installs that
+client from pre-built packages only, and never builds one from source, so no
+compiler is needed on the laptop
+[{D!}](decisions/client-prebuilt-packages.md). Where a backend's client
+cannot be installed on a platform, connecting that command group fails there
+with a message that carries the installer's reason. The failure is that
+command group's alone: `axon` itself and the pathway's session are not
+affected, and no other command group depends on it.
 
 A Windows user runs the Linux binary inside WSL. There is no native Windows
 build.

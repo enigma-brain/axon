@@ -26,7 +26,7 @@ jobs:
     outputs:
       pages_enabled: ${{ steps.detect.outputs.pages_enabled }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Detect whether Pages is switched on
         id: detect
         env:

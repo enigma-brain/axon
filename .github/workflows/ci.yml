@@ -1,5 +1,9 @@
 name: CI
 
+# Which job runs when is set out in CONTRIBUTING.md, under "Continuous
+# integration". Build and test on Linux runs for every change. Every job
+# that runs on a Mac, downloads real software or builds the release runs
+# only when the paths it tests have changed; the changes job decides.
 on:
   pull_request:
   push:
@@ -9,16 +13,77 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect what changed
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      skyclient: ${{ steps.filter.outputs.skyclient }}
+      tsh: ${{ steps.filter.outputs.tsh }}
+      test_os: ${{ steps.filter.outputs.test_os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: filter
+        name: Check the changed paths
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          # On a pull request, the change is the pull request's diff; on a
+          # push, the commits the push added. When that cannot be worked
+          # out, such as for the first push of a branch or a commit a
+          # force-push removed, everything runs. Paths are printed as they
+          # are, not quoted, so that a name with non-ASCII characters still
+          # matches the patterns below.
+          changed_paths() { git -c core.quotePath=false diff --name-only --no-renames "$@" 2>/dev/null; }
+          if [ "$EVENT" = "pull_request" ] && changed=$(changed_paths "$PR_BASE...$PR_HEAD"); then
+            :
+          elif [ "$EVENT" = "push" ] && [ -n "$PUSH_BEFORE" ] \
+              && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ] \
+              && changed=$(changed_paths "$PUSH_BEFORE" "$PUSH_AFTER"); then
+            :
+          else
+            changed=".github/workflows/ci.yml"
+          fi
+          echo "Changed paths:"
+          echo "$changed"
+
+          matches() { echo "$changed" | grep -qE "$1"; }
+          workflow='^\.github/workflows/ci\.yml$'
+          code=false skyclient=false tsh=false
+          if matches "\.go\$|^go\.(mod|sum)\$|^internal/|^install\.sh\$|^\.goreleaser\.yaml\$|$workflow"; then
+            code=true
+          fi
+          if matches "^internal/skyclient/|$workflow"; then skyclient=true; fi
+          if matches "^internal/tsh/|$workflow"; then tsh=true; fi
+          if [ "$code" = true ]; then
+            test_os='["ubuntu-latest","macos-latest"]'
+          else
+            test_os='["ubuntu-latest"]'
+          fi
+          {
+            echo "code=$code"
+            echo "skyclient=$skyclient"
+            echo "tsh=$tsh"
+            echo "test_os=$test_os"
+          } >> "$GITHUB_OUTPUT"
+
   test:
     name: Build and test (${{ matrix.os }})
+    needs: changes
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: ${{ fromJSON(needs.changes.outputs.test_os) }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Check formatting
@@ -38,20 +103,24 @@ jobs:
 
   shellcheck:
     name: Check install.sh with shellcheck
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: shellcheck
         run: shellcheck install.sh
 
   goreleaser-snapshot:
     name: Build the release archives in snapshot mode
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - uses: goreleaser/goreleaser-action@v7
@@ -91,75 +160,30 @@ jobs:
           ls dist
           exit "$missing"
 
-  changes:
-    name: Detect install changes
-    runs-on: ubuntu-latest
-    outputs:
-      skyclient: ${{ steps.filter.outputs.skyclient }}
-      tsh: ${{ steps.filter.outputs.tsh }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - id: filter
-        name: Check the changed paths
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if [ "$EVENT" != "pull_request" ]; then
-            echo "skyclient=true" >> "$GITHUB_OUTPUT"
-            echo "tsh=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed=$(git diff --name-only "$BASE...$HEAD")
-          if echo "$changed" | grep -qE '^(internal/skyclient/|\.github/workflows/ci\.yml$)'; then
-            echo "skyclient=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skyclient=false" >> "$GITHUB_OUTPUT"
-          fi
-          if echo "$changed" | grep -qE '^(internal/tsh/|\.github/workflows/ci\.yml$)'; then
-            echo "tsh=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "tsh=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  real-install:
-    name: Install the SkyPilot client for real (${{ matrix.os }})
+  real:
+    name: Real installs and smoke test (${{ matrix.os }})
     needs: changes
-    if: needs.changes.outputs.skyclient == 'true'
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Install into an empty home and run sky --version
-        env:
-          AXON_REAL_INSTALL: "1"
-        run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
-
-  tsh-real-install:
-    name: Install tsh for real (${{ matrix.os }})
-    needs: changes
-    if: needs.changes.outputs.tsh == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        # macos-latest is Apple silicon; macos-15-intel is Intel.
+        # One runner per platform the release is built for: Linux on
+        # x86-64, macOS on Apple silicon (macos-latest) and macOS on Intel
+        # (macos-15-intel).
         os: [ubuntu-latest, macos-latest, macos-15-intel]
     runs-on: ${{ matrix.os }}
+    env:
+      AXON_REAL_INSTALL: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Install into an empty home and run tsh version
-        env:
-          AXON_REAL_INSTALL: "1"
+      - name: Install the SkyPilot client into an empty home and run sky --version
+        if: needs.changes.outputs.skyclient == 'true'
+        run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
+      - name: Run axon login with an example organisation file in an empty home
+        run: go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
+      - name: Install tsh into an empty home and run tsh version
+        if: needs.changes.outputs.tsh == 'true'
         run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/tsh
