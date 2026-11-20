@@ -9,6 +9,7 @@
 package skyclient
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -235,7 +236,7 @@ func runUV(ctx context.Context, uv string, env []string, args ...string) error {
 	if err := cmd.Run(); err != nil {
 		if text := stderr.text(); text != "" {
 			err = fmt.Errorf("uv %s: %w: %s", args[0], err, text)
-			if strings.Contains(text, uvNoSolution) {
+			if stderr.noSolution {
 				return unavailableError{err}
 			}
 			return err
@@ -245,12 +246,29 @@ func runUV(ctx context.Context, uv string, env []string, args ...string) error {
 	return nil
 }
 
-// tail keeps the last few kilobytes written to it.
-type tail struct{ buf []byte }
+// tail keeps the last few kilobytes written to it, and notes whether
+// uvNoSolution was ever written, since a long explanation from uv's resolver
+// can push the line that holds it out of what is kept.
+type tail struct {
+	buf []byte
+	// noSolution is set once uvNoSolution has been written.
+	noSolution bool
+	// edge holds the end of what was written, one byte shorter than
+	// uvNoSolution, so that a match split across writes is found.
+	edge []byte
+}
 
 const tailSize = 4096
 
 func (t *tail) Write(p []byte) (int, error) {
+	if !t.noSolution {
+		t.edge = append(t.edge, p...)
+		if bytes.Contains(t.edge, []byte(uvNoSolution)) {
+			t.noSolution, t.edge = true, nil
+		} else if keep := len(uvNoSolution) - 1; len(t.edge) > keep {
+			t.edge = append([]byte(nil), t.edge[len(t.edge)-keep:]...)
+		}
+	}
 	t.buf = append(t.buf, p...)
 	if len(t.buf) > tailSize {
 		t.buf = t.buf[len(t.buf)-tailSize:]

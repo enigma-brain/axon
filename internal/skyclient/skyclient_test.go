@@ -25,7 +25,7 @@ import (
 // invocation and uv's environment to $FAKEUV_LOG, fails the Python or the
 // package stage when $FAKEUV_FAIL_PYTHON or $FAKEUV_FAIL_PIP is set, fails
 // the package stage as uv's resolver does when no pre-built package exists
-// when $FAKEUV_NO_BUILD is set, sleeps
+// when $FAKEUV_NO_BUILD is set, at length when it is "long", sleeps
 // in the package stage for $FAKEUV_PIP_SLEEP seconds, and writes a sky that
 // prints its version and arguments. Like uv without --quiet, it writes the
 // virtual environment and package lines on success.
@@ -52,6 +52,13 @@ pip)
 	if [ -n "$FAKEUV_NO_BUILD" ]; then
 		echo "  × No solution found when resolving dependencies:" >&2
 		echo "  ╰─▶ Because $5 has no usable wheels and building from source is disabled, we can conclude that $5 cannot be used." >&2
+		if [ "$FAKEUV_NO_BUILD" = long ]; then
+			i=0
+			while [ $i -lt 100 ]; do
+				echo "      And because a dependency of $5 has no usable wheels, it cannot be used either." >&2
+				i=$((i + 1))
+			done
+		fi
 		exit 1
 	fi
 	if [ -n "$FAKEUV_FAIL_PIP" ]; then
@@ -406,6 +413,35 @@ func TestEnsureFailedPythonNamesPython(t *testing.T) {
 	}
 	if _, ok, _ := Version(f.dir); ok {
 		t.Error("a client is recorded after a failed install")
+	}
+}
+
+func TestEnsureLongResolverErrorIsUnavailable(t *testing.T) {
+	f := newFixture(t)
+	t.Setenv("FAKEUV_NO_BUILD", "long")
+	_, _, err := Ensure(context.Background(), f.dir, "0.14.1", nil)
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Ensure error = %v, want ErrUnavailable", err)
+	}
+	if strings.Contains(err.Error(), uvNoSolution) {
+		t.Fatalf("the resolver's header is still in the kept output; the test needs more lines after it")
+	}
+}
+
+func TestTailFindsResolverHeaderAcrossWrites(t *testing.T) {
+	var tl tail
+	for _, b := range []byte("error:\n  × " + uvNoSolution + ":\n") {
+		tl.Write([]byte{b})
+	}
+	tl.Write(bytes.Repeat([]byte("x"), 2*tailSize))
+	if !tl.noSolution {
+		t.Error("tail missed the resolver's header written a byte at a time")
+	}
+
+	var other tail
+	other.Write([]byte("error: failed to fetch: connection reset\n"))
+	if other.noSolution {
+		t.Error("tail found the resolver's header in a network error")
 	}
 }
 
