@@ -44,6 +44,26 @@ const (
 	currentFile = "current"
 )
 
+// ErrUnavailable is matched, with errors.Is, by an install error that no
+// download can fix: the platform has no build of uv, or no pre-built package
+// satisfies what the client needs at the version asked for. The error's text
+// is the installer's own reason; ErrUnavailable adds nothing to it.
+var ErrUnavailable = errors.New("no pre-built package is available")
+
+// unavailableError marks err as ErrUnavailable without changing its text.
+type unavailableError struct{ err error }
+
+func (e unavailableError) Error() string        { return e.err.Error() }
+func (e unavailableError) Unwrap() error        { return e.err }
+func (e unavailableError) Is(target error) bool { return target == ErrUnavailable }
+
+// uvNoSolution begins the error uv prints when its resolver finds no set of
+// packages that satisfies the request. With --only-binary :all: this is how
+// uv reports that a package, or a version of one, has no pre-built package
+// for this platform. A failed download is reported differently, so a uv
+// error that holds this text is not one a retry fixes.
+const uvNoSolution = "No solution found when resolving dependencies"
+
 // versionPattern accepts a release version. It starts with a digit, so it is
 // never "." or "..", and holds no separator or requirement operator.
 var versionPattern = regexp.MustCompile(`^[0-9][0-9A-Za-z.+!-]*$`)
@@ -205,7 +225,8 @@ func skyPath(tools, version string) string {
 
 // runUV runs uv quietly with args, so that it writes nothing but warnings
 // and errors, and keeps none of its output. On failure the error carries
-// what uv wrote to standard error.
+// what uv wrote to standard error, and is ErrUnavailable when uv found no
+// pre-built package that satisfies the request.
 func runUV(ctx context.Context, uv string, env []string, args ...string) error {
 	var stderr tail
 	cmd := exec.CommandContext(ctx, uv, append(args, "--quiet")...)
@@ -213,7 +234,11 @@ func runUV(ctx context.Context, uv string, env []string, args ...string) error {
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if text := stderr.text(); text != "" {
-			return fmt.Errorf("uv %s: %w: %s", args[0], err, text)
+			err = fmt.Errorf("uv %s: %w: %s", args[0], err, text)
+			if strings.Contains(text, uvNoSolution) {
+				return unavailableError{err}
+			}
+			return err
 		}
 		return fmt.Errorf("uv %s: %w", args[0], err)
 	}

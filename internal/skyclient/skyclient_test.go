@@ -23,7 +23,9 @@ import (
 
 // fakeUV imitates the three uv commands the package runs. It appends each
 // invocation and uv's environment to $FAKEUV_LOG, fails the Python or the
-// package stage when $FAKEUV_FAIL_PYTHON or $FAKEUV_FAIL_PIP is set, sleeps
+// package stage when $FAKEUV_FAIL_PYTHON or $FAKEUV_FAIL_PIP is set, fails
+// the package stage as uv's resolver does when no pre-built package exists
+// when $FAKEUV_NO_BUILD is set, sleeps
 // in the package stage for $FAKEUV_PIP_SLEEP seconds, and writes a sky that
 // prints its version and arguments. Like uv without --quiet, it writes the
 // virtual environment and package lines on success.
@@ -47,6 +49,11 @@ pip)
 		while [ ! -e "$FAKEUV_PIP_RELEASE" ]; do sleep 0.05; done
 	fi
 	if [ -n "$FAKEUV_PIP_SLEEP" ]; then sleep "$FAKEUV_PIP_SLEEP"; fi
+	if [ -n "$FAKEUV_NO_BUILD" ]; then
+		echo "  × No solution found when resolving dependencies:" >&2
+		echo "  ╰─▶ Because $5 has no usable wheels and building from source is disabled, we can conclude that $5 cannot be used." >&2
+		exit 1
+	fi
 	if [ -n "$FAKEUV_FAIL_PIP" ]; then
 		echo "error: no matching distribution for $5" >&2
 		echo "  hint: $5 has no release for this platform" >&2
@@ -101,6 +108,7 @@ func newFixture(t *testing.T) *fixture {
 	t.Setenv("FAKEUV_LOG", f.log)
 	t.Setenv("FAKEUV_FAIL_PYTHON", "")
 	t.Setenv("FAKEUV_FAIL_PIP", "")
+	t.Setenv("FAKEUV_NO_BUILD", "")
 	t.Setenv("FAKEUV_PIP_RELEASE", "")
 	t.Setenv("FAKEUV_PIP_SLEEP", "")
 	return f
@@ -361,6 +369,9 @@ func TestEnsureFailedPackageKeepsPreviousClient(t *testing.T) {
 			t.Errorf("error %q lacks %q", err, want)
 		}
 	}
+	if errors.Is(err, ErrUnavailable) {
+		t.Errorf("a failed package install is ErrUnavailable: %v", err)
+	}
 	if v, ok, _ := Version(f.dir); !ok || v != "0.13.0" {
 		t.Errorf("Version = %q, %v after a failed reinstall; want 0.13.0", v, ok)
 	}
@@ -390,8 +401,39 @@ func TestEnsureFailedPythonNamesPython(t *testing.T) {
 			t.Errorf("error %q lacks %q", err, want)
 		}
 	}
+	if errors.Is(err, ErrUnavailable) {
+		t.Errorf("a failed Python download is ErrUnavailable: %v", err)
+	}
 	if _, ok, _ := Version(f.dir); ok {
 		t.Error("a client is recorded after a failed install")
+	}
+}
+
+func TestEnsureNoPrebuiltPackageIsUnavailable(t *testing.T) {
+	f := newFixture(t)
+	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FAKEUV_NO_BUILD", "1")
+
+	_, _, err := Ensure(context.Background(), f.dir, "0.14.1", nil)
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Ensure error = %v, want ErrUnavailable", err)
+	}
+	for _, want := range []string{
+		"install SkyPilot 0.14.1",
+		uvNoSolution,
+		"skypilot[kubernetes]==0.14.1 has no usable wheels",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q lacks %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), ErrUnavailable.Error()) {
+		t.Errorf("error %q carries ErrUnavailable's own text", err)
+	}
+	if v, ok, _ := Version(f.dir); !ok || v != "0.13.0" {
+		t.Errorf("Version = %q, %v after a failed reinstall; want 0.13.0", v, ok)
 	}
 }
 
@@ -414,6 +456,9 @@ func TestEnsureChecksumMismatchNamesUV(t *testing.T) {
 			t.Errorf("error %q lacks %q", err, want)
 		}
 	}
+	if errors.Is(err, ErrUnavailable) {
+		t.Errorf("a checksum mismatch is ErrUnavailable: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(f.tools, "uv", uvVersion, "uv")); !os.IsNotExist(err) {
 		t.Errorf("an unverified uv was kept: %v", err)
 	}
@@ -432,6 +477,9 @@ func TestEnsureDownloadFailureNamesUV(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "download uv "+uvVersion) {
 		t.Errorf("Ensure error = %v, want one naming the uv download", err)
 	}
+	if errors.Is(err, ErrUnavailable) {
+		t.Errorf("a failed download is ErrUnavailable: %v", err)
+	}
 }
 
 func TestEnsureUnsupportedPlatform(t *testing.T) {
@@ -440,6 +488,9 @@ func TestEnsureUnsupportedPlatform(t *testing.T) {
 	_, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil)
 	if err == nil || !strings.Contains(err.Error(), "plan9/386") {
 		t.Errorf("Ensure error = %v, want one naming the platform", err)
+	}
+	if !errors.Is(err, ErrUnavailable) {
+		t.Errorf("an unsupported platform is not ErrUnavailable: %v", err)
 	}
 	if f.requests.Load() != 0 {
 		t.Error("Ensure downloaded on an unsupported platform")

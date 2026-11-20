@@ -62,11 +62,16 @@ type fakeClient struct {
 	// paths, when set, gives the sky of each version; otherwise every
 	// version's is sky.
 	paths map[string]string
+	// fail, when set, gives the error an install of each version returns.
+	fail map[string]error
 }
 
 func (c *fakeClient) Version() (string, bool, error) { return c.version, c.installed, nil }
 
 func (c *fakeClient) Ensure(_ context.Context, v string, _ io.Writer) (string, string, error) {
+	if err := c.fail[v]; err != nil {
+		return "", "", err
+	}
 	from := c.version
 	if !c.installed {
 		from = ""
@@ -465,6 +470,68 @@ func TestClientInstalledAtDefault(t *testing.T) {
 	}
 	if got := strings.Join(h.client.moves, " "); got != "->"+skyclient.DefaultVersion {
 		t.Errorf("client moves = %q", got)
+	}
+}
+
+// errNoBuild is an install error that no download fixes, as skyclient
+// returns it: the installer's reason, matching skyclient.ErrUnavailable.
+type errNoBuild struct{}
+
+func (errNoBuild) Error() string        { return "uv pip: no pre-built package for this platform" }
+func (errNoBuild) Is(target error) bool { return target == skyclient.ErrUnavailable }
+
+func TestClientInstallFailureMessages(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		err     error
+		network bool
+	}{
+		{"failed download", errors.New("download uv 0.13.7: GET example: 502 Bad Gateway"), true},
+		{"no pre-built package", errNoBuild{}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.client.installed, h.client.version = false, ""
+			h.client.fail = map[string]error{skyclient.DefaultVersion: tc.err}
+			err := h.run("campus")
+			if err == nil || !strings.Contains(err.Error(), "install the SkyPilot client: "+tc.err.Error()) {
+				t.Fatalf("err = %v", err)
+			}
+			if got := strings.Contains(err.Error(), "Check your network"); got != tc.network {
+				t.Errorf("err = %q; mentions the network: %v, want %v", err, got, tc.network)
+			}
+			if !tc.network && !strings.HasSuffix(err.Error(), tc.err.Error()) {
+				t.Errorf("err = %q, want it to end with the installer's reason", err)
+			}
+		})
+	}
+}
+
+func TestClientUpdateFailureMessages(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		err     error
+		network bool
+	}{
+		{"failed download", errors.New("install SkyPilot 0.13.0: uv pip: exit status 2: error: connection reset"), true},
+		{"no pre-built package", errNoBuild{}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.client.version = "0.12.3"
+			h.client.fail = map[string]error{"0.13.0": tc.err}
+			h.logIn()
+			err := h.run("campus")
+			if err == nil || !strings.Contains(err.Error(), "update the SkyPilot client from 0.12.3 to 0.13.0: "+tc.err.Error()) {
+				t.Fatalf("err = %v", err)
+			}
+			if got := strings.Contains(err.Error(), "Check your network"); got != tc.network {
+				t.Errorf("err = %q; mentions the network: %v, want %v", err, got, tc.network)
+			}
+			if !tc.network && !strings.HasSuffix(err.Error(), tc.err.Error()) {
+				t.Errorf("err = %q, want it to end with the installer's reason", err)
+			}
+		})
 	}
 }
 
