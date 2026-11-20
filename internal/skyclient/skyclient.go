@@ -9,6 +9,7 @@
 package skyclient
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -43,6 +44,26 @@ const (
 	// after an install succeeds, so it always names a complete client.
 	currentFile = "current"
 )
+
+// ErrUnavailable is matched, with errors.Is, by an install error that no
+// download can fix: the platform has no build of uv, or no pre-built package
+// satisfies what the client needs at the version asked for. The error's text
+// is the installer's own reason; ErrUnavailable adds nothing to it.
+var ErrUnavailable = errors.New("no pre-built package is available")
+
+// unavailableError marks err as ErrUnavailable without changing its text.
+type unavailableError struct{ err error }
+
+func (e unavailableError) Error() string        { return e.err.Error() }
+func (e unavailableError) Unwrap() error        { return e.err }
+func (e unavailableError) Is(target error) bool { return target == ErrUnavailable }
+
+// uvNoSolution begins the error uv prints when its resolver finds no set of
+// packages that satisfies the request. With --only-binary :all: this is how
+// uv reports that a package, or a version of one, has no pre-built package
+// for this platform. A failed download is reported differently, so a uv
+// error that holds this text is not one a retry fixes.
+const uvNoSolution = "No solution found when resolving dependencies"
 
 // versionPattern accepts a release version. It starts with a digit, so it is
 // never "." or "..", and holds no separator or requirement operator.
@@ -205,7 +226,8 @@ func skyPath(tools, version string) string {
 
 // runUV runs uv quietly with args, so that it writes nothing but warnings
 // and errors, and keeps none of its output. On failure the error carries
-// what uv wrote to standard error.
+// what uv wrote to standard error, and is ErrUnavailable when uv found no
+// pre-built package that satisfies the request.
 func runUV(ctx context.Context, uv string, env []string, args ...string) error {
 	var stderr tail
 	cmd := exec.CommandContext(ctx, uv, append(args, "--quiet")...)
@@ -213,19 +235,40 @@ func runUV(ctx context.Context, uv string, env []string, args ...string) error {
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if text := stderr.text(); text != "" {
-			return fmt.Errorf("uv %s: %w: %s", args[0], err, text)
+			err = fmt.Errorf("uv %s: %w: %s", args[0], err, text)
+			if stderr.noSolution {
+				return unavailableError{err}
+			}
+			return err
 		}
 		return fmt.Errorf("uv %s: %w", args[0], err)
 	}
 	return nil
 }
 
-// tail keeps the last few kilobytes written to it.
-type tail struct{ buf []byte }
+// tail keeps the last few kilobytes written to it, and notes whether
+// uvNoSolution was ever written, since a long explanation from uv's resolver
+// can push the line that holds it out of what is kept.
+type tail struct {
+	buf []byte
+	// noSolution is set once uvNoSolution has been written.
+	noSolution bool
+	// edge holds the end of what was written, one byte shorter than
+	// uvNoSolution, so that a match split across writes is found.
+	edge []byte
+}
 
 const tailSize = 4096
 
 func (t *tail) Write(p []byte) (int, error) {
+	if !t.noSolution {
+		t.edge = append(t.edge, p...)
+		if bytes.Contains(t.edge, []byte(uvNoSolution)) {
+			t.noSolution, t.edge = true, nil
+		} else if keep := len(uvNoSolution) - 1; len(t.edge) > keep {
+			t.edge = append([]byte(nil), t.edge[len(t.edge)-keep:]...)
+		}
+	}
 	t.buf = append(t.buf, p...)
 	if len(t.buf) > tailSize {
 		t.buf = t.buf[len(t.buf)-tailSize:]

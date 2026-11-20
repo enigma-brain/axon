@@ -11,15 +11,35 @@ hero:
 ---
 
 `axon` is the command-line entry point to a platform run by an organisation.
-You install one tool, log in once with `axon login`, and reach the platform
-through a command group named for each part of it. The first group is
-`axon devenv`, which is your way to the organisation's SkyPilot API server:
-dev environments, GPUs, jobs and volumes.
+You install one tool and log in once with `axon login`. Each part of the
+platform is a command group of `axon`, named for that part rather than for the
+tool behind it. For example, dev environments are the command group
+`axon devenv`, and the tool behind it is SkyPilot. So the tool behind a group
+can change, and groups can be added, without changing how you reach them.
 
-`axon` serves any organisation. What makes it serve yours is an
-**organisation file**, which your organisation gives you. It holds the
-addresses and names that `axon` needs, and `axon` itself names no
-organisation.
+Your organisation decides how your laptop reaches its platform. Each way in is
+a **pathway**, and your organisation describes its pathways in an
+**organisation file** that it gives you. `axon` logs in by the pathway you are
+on, and names no organisation itself.
+
+## What is built today
+
+One command group:
+
+| Command group | Part of the platform | Tool behind it |
+|---|---|---|
+| [`axon devenv`](/axon/devenv/) | Dev environments, GPUs, jobs and volumes | [SkyPilot](/axon/devenv/skypilot/) |
+
+Two kinds of pathway:
+
+| Kind | Reaches the platform | Login |
+|---|---|---|
+| [Direct](/axon/pathways/direct/) | At the server's own address | The server's own, in a browser |
+| [Teleport](/axon/pathways/teleport/) | Through Teleport, by a tunnel that `axon` runs for you | Teleport's, in a browser when your certificate is not valid |
+
+`axon devenv` sends your commands to your organisation's SkyPilot API server.
+`axon` installs the SkyPilot client it needs for its own use, and keeps
+everything it owns on your laptop in `~/.axon`.
 
 ## Where to start
 

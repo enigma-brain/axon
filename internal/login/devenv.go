@@ -2,6 +2,7 @@ package login
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -48,6 +49,9 @@ func (l *login) connectDevenv(ctx context.Context, p orgfile.Pathway, opts Optio
 		version = skyclient.DefaultVersion
 	}
 	if _, version, err = l.client.Ensure(ctx, version, opts.Out); err != nil {
+		if errors.Is(err, skyclient.ErrUnavailable) {
+			return fmt.Errorf("install the SkyPilot client: %w", err)
+		}
 		return fmt.Errorf("install the SkyPilot client: %w. Check your network and run `axon login` again.", err)
 	}
 	sky, err := l.client.Path()
@@ -97,6 +101,9 @@ func (l *login) connectDevenv(ctx context.Context, p orgfile.Pathway, opts Optio
 		fmt.Fprintf(opts.Out, "devenv: the server did not report its version; the SkyPilot client stays at %s\n", version)
 	case health.ServerVersion != version:
 		from, to, err := l.client.Ensure(ctx, health.ServerVersion, opts.Out)
+		if errors.Is(err, skyclient.ErrUnavailable) {
+			return fmt.Errorf("update the SkyPilot client from %s to %s: %w", version, health.ServerVersion, err)
+		}
 		if err != nil {
 			return fmt.Errorf("update the SkyPilot client from %s to %s: %w. Check your network and run `axon login` again.",
 				version, health.ServerVersion, err)

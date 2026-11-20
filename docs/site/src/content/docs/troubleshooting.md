@@ -25,6 +25,20 @@ axon install: there is no axon release for <os> on <arch>. axon is released for 
 
 The installer stops before it writes anything.
 
+### No release of axon was found
+
+```text
+axon install: no release of enigma-brain/axon was found. Name one with AXON_VERSION, for example AXON_VERSION=0.1.0-rc.1.
+axon install: could not look up the latest release at https://github.com/enigma-brain/axon/releases/latest; no release of enigma-brain/axon was found. Name one with AXON_VERSION, for example AXON_VERSION=0.1.0-rc.1.
+```
+
+The installer could not tell which release is the latest. The second message
+means the lookup itself failed: check your network, then run the install line
+again. The first means GitHub answered but named no release, which is the case
+while every release of `axon` is a pre-release, since GitHub never serves a
+pre-release as the latest. Install a named version instead, as
+[Installing](/axon/installing/) shows. Nothing was written to `~/.local/bin`.
+
 ### curl or a checksum tool is missing
 
 ```text
@@ -375,10 +389,24 @@ update the SkyPilot client from <old> to <new>: <reason>. Check your network and
 The server runs another SkyPilot version, and moving the client to it failed. Check your
 network and run `axon login` again.
 
+### No pre-built package of the SkyPilot client exists
+
+```text
+install the SkyPilot client: <reason>
+update the SkyPilot client from <old> to <new>: <reason>
+```
+
+When a message ends with the installer's reason and does not mention your network, the
+client cannot be installed as asked: the installer found no pre-built package, for your
+platform, of the client or of something it needs, at the version asked for. `axon` never
+builds one from source. The reason names the package. Running `axon login` again does not
+help; the person who sets `axon` up for your organisation can tell whether the server's
+SkyPilot version has packages for your platform.
+
 ### Your platform has no SkyPilot client
 
 ```text
-the SkyPilot client cannot be installed on <platform>; axon supports macOS on Apple silicon and Intel, and Linux on x86-64
+install the SkyPilot client: the SkyPilot client cannot be installed on <platform>; axon supports macOS on Apple silicon and Intel, and Linux on x86-64
 ```
 
 `axon` installs its client only on those platforms.

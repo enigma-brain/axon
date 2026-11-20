@@ -64,7 +64,7 @@ func ensureUV(ctx context.Context, tools string, progress io.Writer) (string, er
 
 	build, ok := uvBuilds[platform]
 	if !ok {
-		return "", fmt.Errorf("the SkyPilot client cannot be installed on %s; axon supports macOS on Apple silicon and Intel, and Linux on x86-64", platform)
+		return "", unavailableError{fmt.Errorf("the SkyPilot client cannot be installed on %s; axon supports macOS on Apple silicon and Intel, and Linux on x86-64", platform)}
 	}
 
 	fail := func(err error) (string, error) {

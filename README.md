@@ -1,10 +1,17 @@
 # axon
 
-`axon` is the command-line entry point to the platform. A user installs one
-tool, logs in once with `axon login`, and reaches the SkyPilot API server
-through `axon devenv`: dev environments, GPUs, jobs and volumes. `axon`
-installs the SkyPilot client it needs for its own use and keeps everything it
-owns on the laptop in `~/.axon`.
+`axon` is one command-line entry point to a platform that an organisation
+runs. A user installs one tool and logs in once, with `axon login`. Each part
+of the platform is then a command group of `axon`, named for that part rather
+than for the tool behind it. For example, dev environments are the command
+group `axon devenv`, and the tool behind it is SkyPilot. `axon` is built so
+that the tool behind a group can change, and groups can be added, without
+users learning a new way in.
+
+The organisation decides how a laptop reaches its platform. Each way in is a
+pathway, and the organisation describes its pathways in an organisation file
+that it gives its users. `axon` logs in by whichever pathway the user is on,
+and names no organisation itself.
 
 The design is in [docs/design/DESIGN.md](docs/design/DESIGN.md). The commands
 of `axon devenv` are described in
@@ -14,6 +21,25 @@ The documentation site, at <https://enigma-brain.github.io/axon/>, covers
 installing, logging in, dev environments, writing an organisation file and
 troubleshooting. This readme gives the short form of each; see the site for
 anything it does not cover.
+
+## What is built today
+
+One command group:
+
+| Command group | Part of the platform | Tool behind it |
+|---|---|---|
+| `axon devenv` | Dev environments, GPUs, jobs and volumes | SkyPilot |
+
+Two kinds of pathway:
+
+| Kind | Reaches the platform | Login |
+|---|---|---|
+| Direct | At the server's own address | The server's own, in a browser |
+| Teleport | Through Teleport, by a tunnel that `axon` runs | Teleport's, in a browser when the certificate is not valid |
+
+`axon devenv` sends its commands to the organisation's SkyPilot API server.
+`axon` installs the SkyPilot client it needs for its own use and keeps
+everything it owns on the laptop in `~/.axon`.
 
 ## Installing
 
@@ -195,8 +221,10 @@ A Teleport pathway reaches the API server through Teleport, from anywhere.
 
 - **It finds `tsh`**, Teleport's client, or offers to install it.
 - **It logs you in to Teleport** with `tsh login --proxy=<proxy>`, which
-  opens your organisation's sign-in page in a browser. When your Teleport
-  certificate is still valid, nothing opens. The certificate lasts as long
+  opens your organisation's sign-in page in a browser. Where no browser
+  opens by itself, as on WSL, `tsh` prints a link instead: open it in a
+  browser to finish the sign-in. When your Teleport certificate is still
+  valid, nothing opens. The certificate lasts as long
   as your organisation's Teleport sets.
 - **It brings up the tunnel**,
   `tsh --proxy=<proxy> proxy app <application> --port 46581`, after a fresh
@@ -228,8 +256,7 @@ to install one:
     Install tsh <proxy's version> into ~/.axon/tools? [Y/n]
 
 - **Press Enter to install.** `axon` downloads Teleport's archive at the
-  proxy's version, about 180 MB on Apple silicon and 200 MB on Intel Macs,
-  printing its size and each quarter of the progress, and checks it against
+  proxy's version, a few hundred megabytes, printing its size and each quarter of the progress, and checks it against
   the checksum Teleport publishes. It keeps `tsh` in `~/.axon/tools/` for its
   own use and does not put it on your `PATH`. Nothing asks for `sudo` or a
   password.

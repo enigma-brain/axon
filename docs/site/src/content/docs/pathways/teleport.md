@@ -12,8 +12,10 @@ so you run no `tsh` command by hand.
 1. **It finds `tsh`**, Teleport's client, or offers to install it
    ([below](#when-tsh-is-missing)).
 2. **It signs you in to Teleport** with `tsh login --proxy=<proxy>`, which opens
-   your organisation's sign-in page in a browser. When your Teleport certificate
-   is still valid, nothing opens. The certificate lasts as long as your
+   your organisation's sign-in page in a browser. Where no browser opens by
+   itself, as on WSL, `tsh` prints a link instead: open it in a browser to
+   finish the sign-in. When your Teleport certificate is still valid, nothing
+   opens. The certificate lasts as long as your
    organisation's Teleport sets.
 3. **It brings up a tunnel** to the API server, on port 46581 of your
    laptop. The tunnel runs in the background, outlives the terminal, and keeps
@@ -42,7 +44,7 @@ Install tsh <version> into ~/.axon/tools? [Y/n]
 ```
 
 - **Press Enter to install.** `axon` downloads Teleport's archive at the
-  version your organisation's Teleport runs, about 180 to 200 MB, prints its
+  version your organisation's Teleport runs, a few hundred megabytes, prints its
   size and each quarter of the progress, and checks it against the checksum
   Teleport publishes. It keeps `tsh` in `~/.axon/tools/` for its own use and
   does not put it on your `PATH`. Nothing asks for `sudo` or a password.
