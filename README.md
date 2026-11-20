@@ -195,8 +195,10 @@ A Teleport pathway reaches the API server through Teleport, from anywhere.
 
 - **It finds `tsh`**, Teleport's client, or offers to install it.
 - **It logs you in to Teleport** with `tsh login --proxy=<proxy>`, which
-  opens your organisation's sign-in page in a browser. When your Teleport
-  certificate is still valid, nothing opens. The certificate lasts as long
+  opens your organisation's sign-in page in a browser. Where no browser
+  opens by itself, as on WSL, `tsh` prints a link instead: open it in a
+  browser to finish the sign-in. When your Teleport certificate is still
+  valid, nothing opens. The certificate lasts as long
   as your organisation's Teleport sets.
 - **It brings up the tunnel**,
   `tsh --proxy=<proxy> proxy app <application> --port 46581`, after a fresh
@@ -228,8 +230,7 @@ to install one:
     Install tsh <proxy's version> into ~/.axon/tools? [Y/n]
 
 - **Press Enter to install.** `axon` downloads Teleport's archive at the
-  proxy's version, about 180 MB on Apple silicon and 200 MB on Intel Macs,
-  printing its size and each quarter of the progress, and checks it against
+  proxy's version, a few hundred megabytes, printing its size and each quarter of the progress, and checks it against
   the checksum Teleport publishes. It keeps `tsh` in `~/.axon/tools/` for its
   own use and does not put it on your `PATH`. Nothing asks for `sudo` or a
   password.
