@@ -637,7 +637,7 @@ func concurrentEnsure(t *testing.T, f *fixture, first, second string) (a, b ensu
 		secondDone <- ensureResult{from, to, err}
 	}()
 	waitFor("the second install to report that it waits", func() bool {
-		return strings.Contains(progress.String(), "Waiting for another axon")
+		return strings.Contains(progress.String(), "devenv: waiting for another axon")
 	})
 
 	releaseFirst()
@@ -657,7 +657,7 @@ func TestConcurrentEnsureSameVersionInstallsOnce(t *testing.T) {
 	if b.from != "0.13.0" || b.to != "0.13.0" {
 		t.Errorf("second Ensure moved from %q to %q, want no change", b.from, b.to)
 	}
-	if !strings.Contains(progress, "Waiting for another axon") {
+	if !strings.Contains(progress, "devenv: waiting for another axon") {
 		t.Errorf("the second Ensure did not say it waited: %q", progress)
 	}
 	if n := strings.Count(f.uvLog(t), "uv pip install"); n != 1 {
@@ -677,7 +677,7 @@ func TestConcurrentEnsureOtherVersionWaitsThenReinstalls(t *testing.T) {
 	if b.from != "0.13.0" || b.to != "0.14.1" {
 		t.Errorf("second Ensure moved from %q to %q, want 0.13.0 to 0.14.1", b.from, b.to)
 	}
-	if !strings.Contains(progress, "Waiting for another axon") {
+	if !strings.Contains(progress, "devenv: waiting for another axon") {
 		t.Errorf("the second Ensure did not say it waited: %q", progress)
 	}
 	if v, ok, err := Version(f.dir); err != nil || !ok || v != "0.14.1" {
@@ -707,7 +707,7 @@ func TestEnsureWaitHonoursCancellation(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Ensure error = %v, want the context's deadline", err)
 	}
-	if !strings.Contains(progress.String(), "Waiting for another axon") {
+	if !strings.Contains(progress.String(), "devenv: waiting for another axon") {
 		t.Errorf("Ensure did not say it waited: %q", progress.String())
 	}
 	if f.requests.Load() != 0 {
