@@ -340,8 +340,8 @@ Compile every package, vet and test:
 
 The tests never touch the real `~/.axon`: they run against temporary home
 directories. CI runs the same checks, and a `gofmt` check, on Linux for every
-pull request and every push to `main`, and on macOS when the change touches
-code. [CONTRIBUTING.md](CONTRIBUTING.md#continuous-integration) sets out which
+pull request and every push to `main`. They run on macOS in the Mac suite,
+which a maintainer starts by hand. [CONTRIBUTING.md](CONTRIBUTING.md#continuous-integration) sets out which
 CI job runs when.
 
 ### The SkyPilot client install
@@ -374,8 +374,8 @@ with:
 
     AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
 
-CI runs it on Linux, on macOS on Apple silicon and on macOS on Intel when a
-change touches `internal/skyclient/` or the workflow.
+CI runs it on Linux when a change touches `internal/skyclient/` or the
+workflow, and the Mac suite runs it on macOS on Apple silicon and on Intel.
 
 ### The smoke test
 
@@ -389,9 +389,10 @@ so it runs only with:
     AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
 
 With `AXON_SMOKE_BIN` set to a binary's path, it runs that binary instead of
-building one. CI runs it on Linux, on macOS on Apple silicon and on macOS on
-Intel when a change touches code, and the release runs it against the binary
-the install line installed.
+building one. CI runs it on Linux when a change touches code, and the Mac
+suite runs it on macOS on Apple silicon and on Intel. Before a release is
+published, it runs on all three against the binary the release's
+`install.sh` installed.
 
 ### The tsh install
 
@@ -424,8 +425,8 @@ runs on Linux on x86-64 or on macOS with no `tsh` on `PATH`:
 
     AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/tsh
 
-CI runs it on Linux, on macOS on Apple silicon and on macOS on Intel when a
-change touches `internal/tsh/` or the workflow.
+CI runs it on Linux when a change touches `internal/tsh/` or the workflow,
+and the Mac suite runs it on macOS on Apple silicon and on Intel.
 
 ### Command reference
 
