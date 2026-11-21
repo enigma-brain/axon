@@ -442,17 +442,22 @@ A test fails while the committed page differs from the generated one.
 
 Pushing a tag `v<version>` runs `.github/workflows/release.yml`. GoReleaser,
 configured in `.goreleaser.yaml`, builds an archive per platform,
-`axon_<version>_<os>_<arch>.tar.gz`, and `checksums.txt`, and publishes them
-as a GitHub release; the binary's `axon --version` prints `<version>`. A tag
-with a pre-release part, such as `v1.2.3-rc.1`, is published as a
-pre-release, which the install line does not pick up unless `AXON_VERSION`
-names it. Once the release is published, the workflow runs the install line
-on Linux, on macOS on Apple silicon and on macOS on Intel, checks the
-installed version, and runs the smoke test against the installed binary.
+`axon_<version>_<os>_<arch>.tar.gz`, and `checksums.txt`, and uploads them
+to a draft GitHub release; the binary's `axon --version` prints `<version>`.
+Before anything is published, the release's `install.sh` installs the
+draft's archive on Linux, on macOS on Apple silicon and on macOS on Intel,
+and the workflow checks the installed version and runs the smoke test
+against the installed binary. Only when all three pass is the draft
+published. A tag with a pre-release part, such as `v1.2.3-rc.1`, is
+published as a pre-release, which the install line does not pick up unless
+`AXON_VERSION` names it. Once the release is published, the workflow runs
+the install line on Linux and checks the installed version.
+[CONTRIBUTING.md](CONTRIBUTING.md#the-release-gate) says what a maintainer
+does when a check fails.
 
 For every change that touches code, CI runs GoReleaser in snapshot mode and checks that
 each archive and `checksums.txt` are built, and runs `shellcheck` on
-`install.sh`. To build the archives locally into `dist/`:
+`install.sh` and on the release gate's `curl` stand-in. To build the archives locally into `dist/`:
 
     goreleaser release --snapshot --clean
 
