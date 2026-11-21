@@ -1,5 +1,7 @@
 # GoReleaser configuration for axon. A pushed tag v<version> builds the
-# archives and checksums.txt and publishes them as a GitHub release.
+# archives and checksums.txt and uploads them to a draft GitHub release. The
+# release workflow publishes the draft once the archives install and run on
+# every platform they are built for.
 version: 2
 
 project_name: axon
@@ -40,6 +42,10 @@ release:
   github:
     owner: enigma-brain
     name: axon
+  # Nothing is public until the release workflow publishes the draft. A
+  # draft left by an earlier run for the same tag is replaced.
+  draft: true
+  replace_existing_draft: true
   # A tag such as v0.1.0-rc.1 is published as a pre-release, which GitHub
   # never serves as the latest release.
   prerelease: auto

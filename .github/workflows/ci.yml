@@ -57,7 +57,7 @@ jobs:
           matches() { echo "$changed" | grep -qE "$1"; }
           workflow='^\.github/workflows/ci\.yml$'
           code=false skyclient=false tsh=false
-          if matches "\.go\$|^go\.(mod|sum)\$|^internal/|^install\.sh\$|^\.goreleaser\.yaml\$|$workflow"; then
+          if matches "\.go\$|^go\.(mod|sum)\$|^internal/|^install\.sh\$|^\.goreleaser\.yaml\$|^\.github/release-gate/|$workflow"; then
             code=true
           fi
           if matches "^internal/skyclient/|$workflow"; then skyclient=true; fi
@@ -92,14 +92,14 @@ jobs:
         run: go test -race ./...
 
   shellcheck:
-    name: Check install.sh with shellcheck
+    name: Check install.sh and the release gate's curl with shellcheck
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: shellcheck
-        run: shellcheck install.sh
+        run: shellcheck install.sh .github/release-gate/curl
 
   goreleaser-snapshot:
     name: Build the release archives in snapshot mode
