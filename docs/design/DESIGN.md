@@ -652,8 +652,9 @@ A Windows user runs the Linux binary inside WSL. There is no native Windows
 build.
 
 A release is built by GoReleaser in GitHub Actions when a version tag is
-pushed, and holds the archives, a checksum file and `install.sh`. The
-binaries are not signed or notarised.
+pushed, and holds the archives, a checksum file and `install.sh`. A
+release is published only after its archives install and run on every
+platform it is built for. The binaries are not signed or notarised.
 
 A user installs `axon` with one line, which downloads `install.sh` from the
 latest release with `curl` and runs it [{D!}](decisions/install-method.md):

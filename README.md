@@ -340,8 +340,8 @@ Compile every package, vet and test:
 
 The tests never touch the real `~/.axon`: they run against temporary home
 directories. CI runs the same checks, and a `gofmt` check, on Linux for every
-pull request and every push to `main`, and on macOS when the change touches
-code. [CONTRIBUTING.md](CONTRIBUTING.md#continuous-integration) sets out which
+pull request and every push to `main`. They run on macOS in the Mac suite,
+which a maintainer starts by hand. [CONTRIBUTING.md](CONTRIBUTING.md#continuous-integration) sets out which
 CI job runs when.
 
 ### The SkyPilot client install
@@ -374,8 +374,8 @@ with:
 
     AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
 
-CI runs it on Linux, on macOS on Apple silicon and on macOS on Intel when a
-change touches `internal/skyclient/` or the workflow.
+CI runs it on Linux when a change touches `internal/skyclient/` or the
+workflow, and the Mac suite runs it on macOS on Apple silicon and on Intel.
 
 ### The smoke test
 
@@ -389,9 +389,10 @@ so it runs only with:
     AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
 
 With `AXON_SMOKE_BIN` set to a binary's path, it runs that binary instead of
-building one. CI runs it on Linux, on macOS on Apple silicon and on macOS on
-Intel when a change touches code, and the release runs it against the binary
-the install line installed.
+building one. CI runs it on Linux when a change touches code, and the Mac
+suite runs it on macOS on Apple silicon and on Intel. Before a release is
+published, it runs on all three against the binary the release's
+`install.sh` installed.
 
 ### The tsh install
 
@@ -424,8 +425,8 @@ runs on Linux on x86-64 or on macOS with no `tsh` on `PATH`:
 
     AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/tsh
 
-CI runs it on Linux, on macOS on Apple silicon and on macOS on Intel when a
-change touches `internal/tsh/` or the workflow.
+CI runs it on Linux when a change touches `internal/tsh/` or the workflow,
+and the Mac suite runs it on macOS on Apple silicon and on Intel.
 
 ### Command reference
 
@@ -441,17 +442,22 @@ A test fails while the committed page differs from the generated one.
 
 Pushing a tag `v<version>` runs `.github/workflows/release.yml`. GoReleaser,
 configured in `.goreleaser.yaml`, builds an archive per platform,
-`axon_<version>_<os>_<arch>.tar.gz`, and `checksums.txt`, and publishes them
-as a GitHub release; the binary's `axon --version` prints `<version>`. A tag
-with a pre-release part, such as `v1.2.3-rc.1`, is published as a
-pre-release, which the install line does not pick up unless `AXON_VERSION`
-names it. Once the release is published, the workflow runs the install line
-on Linux, on macOS on Apple silicon and on macOS on Intel, checks the
-installed version, and runs the smoke test against the installed binary.
+`axon_<version>_<os>_<arch>.tar.gz`, and `checksums.txt`, and uploads them
+to a draft GitHub release; the binary's `axon --version` prints `<version>`.
+Before anything is published, the release's `install.sh` installs the
+draft's archive on Linux, on macOS on Apple silicon and on macOS on Intel,
+and the workflow checks the installed version and runs the smoke test
+against the installed binary. Only when all three pass is the draft
+published. A tag with a pre-release part, such as `v1.2.3-rc.1`, is
+published as a pre-release, which the install line does not pick up unless
+`AXON_VERSION` names it. Once the release is published, the workflow runs
+the install line on Linux and checks the installed version.
+[CONTRIBUTING.md](CONTRIBUTING.md#the-release-gate) says what a maintainer
+does when a check fails.
 
 For every change that touches code, CI runs GoReleaser in snapshot mode and checks that
 each archive and `checksums.txt` are built, and runs `shellcheck` on
-`install.sh`. To build the archives locally into `dist/`:
+`install.sh` and on the release gate's `curl` stand-in. To build the archives locally into `dist/`:
 
     goreleaser release --snapshot --clean
 

@@ -1,9 +1,11 @@
 name: CI
 
 # Which job runs when is set out in CONTRIBUTING.md, under "Continuous
-# integration". Build and test on Linux runs for every change. Every job
-# that runs on a Mac, downloads real software or builds the release runs
-# only when the paths it tests have changed; the changes job decides.
+# integration". Every job here runs on Linux. Build and test runs for every
+# change; every job that downloads real software or builds the release runs
+# only when the paths it tests have changed, and the changes job decides.
+# The Mac jobs run in the release workflow, before a release is published,
+# and in the Mac workflow, which is started by hand.
 on:
   pull_request:
   push:
@@ -20,7 +22,6 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       skyclient: ${{ steps.filter.outputs.skyclient }}
       tsh: ${{ steps.filter.outputs.tsh }}
-      test_os: ${{ steps.filter.outputs.test_os }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -56,31 +57,20 @@ jobs:
           matches() { echo "$changed" | grep -qE "$1"; }
           workflow='^\.github/workflows/ci\.yml$'
           code=false skyclient=false tsh=false
-          if matches "\.go\$|^go\.(mod|sum)\$|^internal/|^install\.sh\$|^\.goreleaser\.yaml\$|$workflow"; then
+          if matches "\.go\$|^go\.(mod|sum)\$|^internal/|^install\.sh\$|^\.goreleaser\.yaml\$|^\.github/release-gate/|$workflow"; then
             code=true
           fi
           if matches "^internal/skyclient/|$workflow"; then skyclient=true; fi
           if matches "^internal/tsh/|$workflow"; then tsh=true; fi
-          if [ "$code" = true ]; then
-            test_os='["ubuntu-latest","macos-latest"]'
-          else
-            test_os='["ubuntu-latest"]'
-          fi
           {
             echo "code=$code"
             echo "skyclient=$skyclient"
             echo "tsh=$tsh"
-            echo "test_os=$test_os"
           } >> "$GITHUB_OUTPUT"
 
   test:
-    name: Build and test (${{ matrix.os }})
-    needs: changes
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ${{ fromJSON(needs.changes.outputs.test_os) }}
-    runs-on: ${{ matrix.os }}
+    name: Build and test
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -102,14 +92,14 @@ jobs:
         run: go test -race ./...
 
   shellcheck:
-    name: Check install.sh with shellcheck
+    name: Check install.sh and the release gate's curl with shellcheck
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: shellcheck
-        run: shellcheck install.sh
+        run: shellcheck install.sh .github/release-gate/curl
 
   goreleaser-snapshot:
     name: Build the release archives in snapshot mode
@@ -161,17 +151,10 @@ jobs:
           exit "$missing"
 
   real:
-    name: Real installs and smoke test (${{ matrix.os }})
+    name: Real installs and smoke test
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        # One runner per platform the release is built for: Linux on
-        # x86-64, macOS on Apple silicon (macos-latest) and macOS on Intel
-        # (macos-15-intel).
-        os: [ubuntu-latest, macos-latest, macos-15-intel]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     env:
       AXON_REAL_INSTALL: "1"
     steps:

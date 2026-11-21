@@ -1,0 +1,63 @@
+name: Mac
+
+# The Mac suite, started by hand on a chosen branch from the Actions page or
+# with:
+#
+#   gh workflow run mac.yml --ref <branch>
+#
+# It runs build and test on macOS on Apple silicon, and every real install
+# and the smoke test on macOS on Apple silicon and on Intel, whatever the
+# branch changes. CONTRIBUTING.md, under "Continuous integration", says
+# when to run it.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test (macos-latest)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race ./...
+
+  real:
+    name: Real installs and smoke test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS on Apple silicon (macos-latest) and macOS on Intel
+        # (macos-15-intel).
+        os: [macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    env:
+      AXON_REAL_INSTALL: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Install the SkyPilot client into an empty home and run sky --version
+        run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
+      - name: Run axon login with an example organization file in an empty home
+        run: go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
+      - name: Install tsh into an empty home and run tsh version
+        run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/tsh

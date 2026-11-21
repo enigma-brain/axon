@@ -159,17 +159,22 @@ documentation.
 ## Continuous integration
 
 Every job runs on a standard GitHub-hosted runner. The release is built for
-Linux on x86-64, macOS on Apple silicon and macOS on Intel, and the jobs that
-run `axon` run on one runner for each: `ubuntu-latest`, `macos-latest` and
-`macos-15-intel`.
+Linux on x86-64, macOS on Apple silicon and macOS on Intel. A pull request
+and a push to `main` run jobs on Linux only; a change that does not build
+for a Mac still fails there, since the release build cross-compiles every
+archive. The jobs on a Mac, `macos-latest` for Apple silicon and
+`macos-15-intel` for Intel, run in two places: in the release, as a gate
+that every release passes before it is published, and in the Mac suite,
+which a maintainer starts by hand.
 
-A job that runs on a Mac, downloads real software or builds the release runs
-only when the paths it tests have changed. In `.github/workflows/ci.yml`, the
+A job in CI that downloads real software or builds the release runs only
+when the paths it tests have changed. In `.github/workflows/ci.yml`, the
 first job reads the change, the pull request's diff or the commits a push to
 `main` added, and sets three flags:
 
 - **code**: any `.go` file, `go.mod`, `go.sum`, anything under `internal/`,
-  `install.sh`, `.goreleaser.yaml` or `ci.yml` itself;
+  `install.sh`, `.goreleaser.yaml`, anything under `.github/release-gate/`
+  or `ci.yml` itself;
 - **skyclient**: anything under `internal/skyclient/`, or `ci.yml`;
 - **tsh**: anything under `internal/tsh/`, or `ci.yml`.
 
@@ -179,16 +184,19 @@ flag is set. A change to documentation alone sets none.
 | Workflow | Job | Runners | Runs |
 |---|---|---|---|
 | CI | Build and test: `gofmt`, build, vet, `go test -race` | `ubuntu-latest` | For every pull request and push to `main` |
-| CI | Build and test | `macos-latest` | When **code** |
-| CI | `shellcheck` on `install.sh` | `ubuntu-latest` | When **code** |
+| CI | `shellcheck` on `install.sh` and the release gate's `curl` | `ubuntu-latest` | When **code** |
 | CI | GoReleaser in snapshot mode, checking the archives | `ubuntu-latest` | When **code** |
-| CI | The smoke test | All three | When **code** |
-| CI | The real install of the SkyPilot client | All three, in the smoke test's job | When **skyclient** |
-| CI | The real install of `tsh` | All three, in the smoke test's job | When **tsh** |
+| CI | The smoke test | `ubuntu-latest` | When **code** |
+| CI | The real install of the SkyPilot client | `ubuntu-latest`, in the smoke test's job | When **skyclient** |
+| CI | The real install of `tsh` | `ubuntu-latest`, in the smoke test's job | When **tsh** |
 | Docs | The site build | `ubuntu-latest` | For every pull request that touches `docs/site` or `docs.yml` |
 | Pages | The site build and publishing | `ubuntu-latest` | For every push to `main` |
-| Release | GoReleaser publishes the release | `ubuntu-latest` | For every pushed tag `v*` |
-| Release | The install line, `axon --version` and the smoke test against the installed binary | All three | After the release is published |
+| Release | GoReleaser builds the release as a draft | `ubuntu-latest` | For every pushed tag `v*` |
+| Release | The gate: the release's `install.sh`, `axon --version` and the smoke test against the installed binary | All three | After the draft is built |
+| Release | Publishing the draft | `ubuntu-latest` | When the gate passed on all three |
+| Release | The install line and `axon --version` against the published release | `ubuntu-latest` | After the release is published |
+| Mac | Build and test | `macos-latest` | When started by hand |
+| Mac | The real installs of the SkyPilot client and `tsh`, and the smoke test | `macos-latest` and `macos-15-intel` | When started by hand |
 
 A job that does not run is reported as skipped, which a required check
 accepts.
@@ -202,13 +210,48 @@ test reaches no server. It runs only with `AXON_REAL_INSTALL=1`, as the real
 installs do, and runs the binary `AXON_SMOKE_BIN` names instead of building
 one when that is set.
 
-The release's own checks run after it is published, so a failure there
-cannot withdraw it; it fails the workflow. A maintainer reads the failing
-job's log. A failure of the runner or the network is re-run. A release that
-does not install or run on a platform is edited on GitHub to be a
-pre-release, which the install line does not pick up, so that the line
-installs the previous release again; the fix is released under a new
-version, and the tag is never moved.
+### The Mac suite
+
+The Mac suite, `.github/workflows/mac.yml`, runs everything CI runs on Linux
+except the checks of the release build, on a Mac, whatever the branch
+changes. A maintainer starts it on a branch from the repository's Actions
+page, under "Mac", or with:
+
+    gh workflow run mac.yml --ref <branch>
+
+Run it on a pull request's branch before merging when the change touches
+`install.sh`, `internal/skyclient/`, `internal/tsh/`, or anything that
+behaves differently on macOS, and on `main` before tagging a release that
+holds such a change, so that the release gate does not find the failure
+first. Run it as well to reproduce a failure reported on a Mac.
+
+### The release gate
+
+A pushed tag `v*` is built by GoReleaser into a draft release, which only
+the repository's maintainers see and the install line never serves. The
+draft's archives, `checksums.txt` and `install.sh` are handed, as a workflow
+artifact, to a gate job on each of the three runners. There, the release's
+own `install.sh` runs unchanged with `AXON_VERSION` set to the tag and a
+stand-in for `curl`, `.github/release-gate/curl`, first on `PATH`: it
+serves this tag's files from the artifact and fails for any other address.
+The job then checks `axon --version` and runs the smoke test against the
+binary `install.sh` installed. When the gate passes on all three, the draft
+is published: a full release is marked as the latest unless a published
+full release has a higher version, and a pre-release never is. Last, the
+install line runs on Linux against the published release.
+
+When a gate job fails, nothing is published and the workflow fails, with a
+note in the run summary. A maintainer reads the failing job's log. A failure
+of the runner or the network is re-run; once the gate passes, the release is
+published. Tags publish one at a time; when a third waits behind two, GitHub
+cancels the publish that waited longer, and that run is re-run the same way. Otherwise the draft is deleted on GitHub, the tag is left where
+it is, and the fix is released under a new version.
+
+The check after publishing cannot withdraw the release; a failure there
+fails the workflow. A release that does not install from GitHub is edited
+on GitHub to be a pre-release, which the install line does not pick up, so
+that the line installs the previous release again; the fix is released
+under a new version, and the tag is never moved.
 
 ## Contributing from outside
 

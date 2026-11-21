@@ -1,0 +1,59 @@
+#!/bin/sh
+# A stand-in for curl, put first on PATH while the release workflow runs
+# install.sh against a release that is not yet published. install.sh
+# downloads each file with
+#
+#   curl <options> -o <file> https://github.com/<repo>/releases/download/<tag>/<name>
+#
+# and this copies <name> from GATE_DIR into <file> instead. It serves only
+# files directly in GATE_DIR, only for GATE_REPO and GATE_TAG, and only for
+# a call that names an output file; anything else fails as curl -f does on
+# an HTTP error, so install.sh cannot reach the network through it.
+
+set -eu
+
+fail() {
+	echo "release-gate curl: $*" >&2
+	exit 22
+}
+
+: "${GATE_DIR:?}" "${GATE_REPO:?}" "${GATE_TAG:?}"
+
+out=
+url=
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-o)
+		[ $# -ge 2 ] || fail "-o needs a file"
+		out=$2
+		shift 2
+		;;
+	# Options that take a value.
+	--proto | --retry | -w)
+		[ $# -ge 2 ] || fail "$1 needs a value"
+		shift 2
+		;;
+	-*) shift ;;
+	*)
+		[ -z "$url" ] || fail "more than one address: $url $1"
+		url=$1
+		shift
+		;;
+	esac
+done
+
+[ -n "$url" ] || fail "no address"
+[ -n "$out" ] || fail "no output file for $url"
+
+prefix="https://github.com/$GATE_REPO/releases/download/$GATE_TAG/"
+case "$url" in
+"$prefix"*) name=${url#"$prefix"} ;;
+*) fail "$url is not a file of release $GATE_TAG of $GATE_REPO" ;;
+esac
+case "$name" in
+"" | */* | .*) fail "$url does not name a file of the release" ;;
+esac
+[ -f "$GATE_DIR/$name" ] || fail "release $GATE_TAG has no $name"
+
+cp "$GATE_DIR/$name" "$out"
+echo "release-gate curl: served $name from $GATE_DIR" >&2
