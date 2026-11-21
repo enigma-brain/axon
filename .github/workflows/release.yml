@@ -114,6 +114,12 @@ jobs:
     name: Publish the release
     needs: gate
     runs-on: ubuntu-latest
+    # One tag publishes at a time, so the latest mark is decided against
+    # the releases published before it. A running publish is never
+    # canceled.
+    concurrency:
+      group: release-publish
+      cancel-in-progress: false
     permissions:
       contents: write
     env:
@@ -129,10 +135,10 @@ jobs:
           prerelease=$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease)
           latest=false
           if [ "$prerelease" = false ]; then
-            highest=$({
-              gh release list --exclude-drafts --exclude-pre-releases --limit 1000 --json tagName --jq '.[].tagName'
-              echo "$TAG"
-            } | sed 's/^v//' | sort -V | tail -n 1)
+            # A failed request stops the job here, leaving the draft to be
+            # published by a re-run.
+            published=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1000 --json tagName --jq '.[].tagName')
+            highest=$(printf '%s\n%s\n' "$published" "$TAG" | sed 's/^v//' | sort -V | tail -n 1)
             if [ "v$highest" = "$TAG" ]; then
               latest=true
             fi

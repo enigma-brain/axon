@@ -243,7 +243,8 @@ install line runs on Linux against the published release.
 When a gate job fails, nothing is published and the workflow fails, with a
 note in the run summary. A maintainer reads the failing job's log. A failure
 of the runner or the network is re-run; once the gate passes, the release is
-published. Otherwise the draft is deleted on GitHub, the tag is left where
+published. Tags publish one at a time; when a third waits behind two, GitHub
+cancels the publish that waited longer, and that run is re-run the same way. Otherwise the draft is deleted on GitHub, the tag is left where
 it is, and the fix is released under a new version.
 
 The check after publishing cannot withdraw the release; a failure there
