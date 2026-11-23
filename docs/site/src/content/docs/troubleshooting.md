@@ -29,15 +29,22 @@ The installer stops before it writes anything.
 
 ```text
 axon install: no release of enigma-brain/axon was found. Name one with AXON_VERSION, for example AXON_VERSION=0.1.0-rc.1.
+```
+
+GitHub answered, but named no latest release. GitHub never serves a pre-release
+as the latest, so this is the case while every release of `axon` is a
+pre-release. Install a named version instead, as
+[Installing](/axon/installing/) shows. Nothing was written to `~/.local/bin`.
+
+### The latest release could not be looked up
+
+```text
 axon install: could not look up the latest release at https://github.com/enigma-brain/axon/releases/latest; no release of enigma-brain/axon was found. Name one with AXON_VERSION, for example AXON_VERSION=0.1.0-rc.1.
 ```
 
-The installer could not tell which release is the latest. The second message
-means the lookup itself failed: check your network, then run the install line
-again. The first means GitHub answered but named no release, which is the case
-while every release of `axon` is a pre-release, since GitHub never serves a
-pre-release as the latest. Install a named version instead, as
-[Installing](/axon/installing/) shows. Nothing was written to `~/.local/bin`.
+The lookup of the latest release failed, usually because GitHub could not be
+reached. Check your network, then run the install line again. Nothing was
+written to `~/.local/bin`.
 
 ### curl or a checksum tool is missing
 
@@ -478,6 +485,24 @@ axon: Couldn't restart the Teleport tunnel. Run `axon login`.
 `axon sky` tried to restart a stopped tunnel, and the tunnel's process exited. The tail
 of the tunnel's log follows the message. Run `axon login`, which starts a fresh tunnel.
 
+### The cluster is in another workspace
+
+```text
+The cluster '<cluster>' is in workspace '<a>', but the active workspace is '<b>'.
+```
+
+This message is SkyPilot's. The cluster was launched in workspace `<a>`, and the
+command ran in your active workspace, `<b>`. Run the command again in the cluster's
+workspace, for example:
+
+```sh
+axon sky down -y --config active_workspace=<a> <cluster>
+```
+
+`axon sky launch`, `status` and `down` all take `--config active_workspace=<workspace>`.
+SkyPilot may suggest `--purge`; that is not the fix. It ignores errors and can
+remove the cluster from SkyPilot's records while its resources keep running.
+
 ### The SkyPilot client is missing
 
 ```text
@@ -499,3 +524,19 @@ axon: `axon sky api stop` is not available: axon connects to your organization's
 These four commands manage what `axon` itself sets up. Log in with `axon login` and
 log out with `axon logout`. Every other command runs; see the
 [sky page](/axon/sky/#the-commands-axon-refuses).
+
+## Logging out
+
+### A step of the logout failed
+
+```text
+axon: could not log out of SkyPilot: <reason>
+axon: could not stop the Teleport tunnel: <reason>
+axon: could not log out of Teleport: <reason>
+axon: could not remove the records of the connection: <reason>
+axon: logout did not finish. Run `axon logout` again.
+```
+
+One step of `axon logout` failed, and the others ran. `axon` keeps its record of the
+connection, so running `axon logout` again retries the step. The reason is the step's
+own error, such as the output of `sky api logout` or `tsh logout`.
