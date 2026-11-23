@@ -200,4 +200,6 @@ axon: logout did not finish. Run `axon logout` again.
 
 To clear a shared machine completely, run `axon logout`, then delete
 `~/.axon` and `~/.sky`. `~/.axon` holds your config files and the tools
-`axon` installed; `~/.sky` holds SkyPilot's settings.
+`axon` installed; `~/.sky` holds SkyPilot's settings. On a Teleport pathway,
+Teleport keeps your session in `~/.tsh`: when `axon logout` skipped the
+Teleport step, run `tsh logout` before you leave the machine.

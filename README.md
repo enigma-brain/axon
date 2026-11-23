@@ -255,7 +255,8 @@ stops before any login step:
     axon: establish the Teleport session: this pathway needs Teleport's client, tsh, and no tsh was found on PATH. Install it from https://goteleport.com/docs/installation/ and run `axon login` again.
 
 When the `tsh` on your `PATH` is too old or too new for the Teleport proxy,
-`axon` names both versions and stops, and you update that `tsh`. A `tsh`
+`axon` names both versions and stops; install a `tsh` whose major version is
+the proxy's or one behind it. A `tsh`
 that an earlier `axon` kept in `~/.axon/tools/tsh` is not used; delete that
 folder whenever you like.
 
@@ -301,7 +302,9 @@ again. It prints one line per step, and says why it skipped a step that does
 not apply, such as `tsh` not on `PATH`. A failed step is reported and the
 others still run; the records are then kept, and running `axon logout` again
 retries. To clear a shared machine completely, run `axon logout`, then
-delete `~/.axon` and `~/.sky`.
+delete `~/.axon` and `~/.sky`. On a Teleport pathway, Teleport keeps its
+session in `~/.tsh`: when `axon logout` skipped the Teleport step, run
+`tsh logout` before you leave the machine.
 
 ## Running commands
 

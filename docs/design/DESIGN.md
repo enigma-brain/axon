@@ -369,7 +369,8 @@ hand.
 
 `tsh` is a prerequisite of a `teleport` pathway. `axon` uses the `tsh` on
 `PATH`, and never installs or replaces one [{D!}](decisions/tsh-install.md).
-When no `tsh` is on `PATH`, `axon login` stops before any login step, with:
+When no `tsh` is on `PATH`, `axon login` stops before any login step, and
+before it leaves the pathway that was connected, with:
 "this pathway needs Teleport's client, tsh, and no tsh was found on PATH.
 Install it from https://goteleport.com/docs/installation/ and run `axon
 login` again." A `tsh` that an earlier `axon` kept in `~/.axon/tools/` is
@@ -392,8 +393,10 @@ gone. It runs these steps in order:
 2. Stop the recorded Teleport tunnel, when it runs.
 3. When the recorded pathway is a `teleport` pathway, end the Teleport
    session for its proxy with `tsh logout`
-   [{D!}](decisions/logout.md). When no `tsh` is on `PATH`, the step is
-   skipped.
+   [{D!}](decisions/logout.md), and check that the certificate is no
+   longer valid. When `tsh logout` leaves it valid, as with several
+   identities on the proxy, the step fails and names the `tsh logout`
+   command to run. When no `tsh` is on `PATH`, the step is skipped.
 4. Remove the record of the connected pathway and the logged-in email.
 
 It keeps the config files and the active pathway, so `axon login` with no
@@ -409,6 +412,9 @@ A record of the connected pathway that an earlier `axon` wrote is a
 connection to log out of: its tunnel is stopped by the tunnel's own record,
 the Teleport step is skipped with a line that names `tsh logout`, and the
 record is removed.
+
+On a `teleport` pathway, Teleport keeps its session in `~/.tsh`; when the
+Teleport step was skipped, `tsh logout` ends it.
 
 Clearing a shared machine completely is deleting `~/.axon` and `~/.sky`
 after `axon logout`.

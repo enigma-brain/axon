@@ -298,7 +298,8 @@ tsh <version> at <path> does not work with the Teleport proxy <proxy>, which run
 ```
 
 The `tsh` on your `PATH` is too old or too new for your organization's Teleport. `axon`
-never replaces a `tsh` you installed. Update it from the link.
+never replaces a `tsh` you installed. Install a `tsh` whose major version is the
+proxy's, `<n>`, or one behind it, `<n-1>`, from the link.
 
 ### tsh is not on PATH
 
@@ -533,6 +534,7 @@ log out with `axon logout`. Every other command runs; see the
 axon: could not log out of SkyPilot: <reason>
 axon: could not stop the Teleport tunnel: <reason>
 axon: could not log out of Teleport: <reason>
+axon: could not log out of Teleport: the Teleport session is still valid after tsh logout. Run `tsh logout --proxy=<proxy> --user=<user>` for each user tsh lists
 axon: could not remove the records of the connection: <reason>
 axon: logout did not finish. Run `axon logout` again.
 ```
