@@ -22,7 +22,7 @@ const (
 	stateSub = "orgs"
 )
 
-// Store is the set of organisation files kept in an axon directory: each
+// Store is the set of config files kept in an axon directory: each
 // file in ~/.axon/orgs/<id>.toml, and its source in
 // ~/.axon/state/orgs/<id>.toml.
 type Store struct {
@@ -52,7 +52,7 @@ type sourceRecord struct {
 	Source string `toml:"source"`
 }
 
-// Add checks data as an organisation file from src and stores it, byte for
+// Add checks data as a config file from src and stores it, byte for
 // byte, replacing the stored file with the same id, and records src as its
 // source. It refuses data that fails the checks or that has a pathway
 // identifier held by another stored file. A refused file writes nothing.

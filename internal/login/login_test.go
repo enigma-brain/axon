@@ -90,9 +90,9 @@ func (c *fakeClient) Path() (string, error) {
 	return c.sky, nil
 }
 
-// exampleOrg is the organisation file the harness stores: a direct
+// exampleOrg is the config file the harness stores: a direct
 // pathway, campus, and a teleport pathway, remote. Every detail is made up.
-const exampleOrg = `format = 1
+const exampleOrg = `format = 2
 id = "example"
 
 [[pathway]]
@@ -102,7 +102,7 @@ name = "Campus"
 description = "Single sign-on in a browser. Needs the campus network."
 unreachable_hint = "Connect to the campus VPN and retry."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://sky.example.org"
 
 [[pathway]]
@@ -114,7 +114,7 @@ description = "Works from anywhere."
 [pathway.teleport]
 proxy = "teleport.example.org"
 
-[pathway.devenv]
+[pathway.sky]
 app = "skypilot"
 `
 
@@ -190,7 +190,7 @@ func newHarness(t *testing.T) *harness {
 	return h
 }
 
-// store adds data as an organisation file.
+// store adds data as a config file.
 func (h *harness) store(data string) {
 	h.t.Helper()
 	src, err := orgfile.ParseSource("-")

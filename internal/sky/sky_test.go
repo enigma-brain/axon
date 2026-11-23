@@ -44,9 +44,9 @@ func clearSkyPilotEnv(t *testing.T) {
 	}
 }
 
-// exampleOrg is the organisation file the tests store: a direct pathway,
+// exampleOrg is the config file the tests store: a direct pathway,
 // campus, and a teleport pathway, remote. Every detail is made up.
-const exampleOrg = `format = 1
+const exampleOrg = `format = 2
 id = "example"
 
 [[pathway]]
@@ -56,7 +56,7 @@ name = "Campus"
 description = "Single sign-on in a browser."
 unreachable_hint = "Connect to the campus VPN and retry."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://sky.example.org"
 
 [[pathway]]
@@ -68,7 +68,7 @@ description = "Works from anywhere."
 [pathway.teleport]
 proxy = "teleport.example.org"
 
-[pathway.devenv]
+[pathway.sky]
 app = "skypilot"
 `
 
@@ -363,14 +363,14 @@ func TestNoLogin(t *testing.T) {
 			}
 			return d.SetEmail("ada@example.org")
 		},
-		// The file was replaced after the login, as by an --org that
+		// The file was replaced after the login, as by an --config that
 		// stopped before connecting: the pathway is not the one connected.
 		"connected with other settings": func(d axondir.Dir) error {
 			if err := d.SetPathway("campus"); err != nil {
 				return err
 			}
 			old := pathwayOf(t, "campus")
-			old.Devenv.Endpoint = "https://old.example.org"
+			old.Sky.Endpoint = "https://old.example.org"
 			if err := connected.Write(d, old); err != nil {
 				return err
 			}
@@ -501,7 +501,7 @@ func TestNoLoginStopsBeforeSky(t *testing.T) {
 	}
 }
 
-// axon sky uses the stored organisation file and never fetches it, even
+// axon sky uses the stored config file and never fetches it, even
 // when its recorded source is an address.
 func TestSkyNeverFetchesTheOrganisationFile(t *testing.T) {
 	var conns atomic.Int32

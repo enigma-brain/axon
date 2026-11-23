@@ -12,7 +12,7 @@ import (
 )
 
 // ErrNoLogin reports that axon sky has nothing to connect to: no
-// organisation file, no active pathway, an active pathway no stored file
+// config file, no active pathway, an active pathway no stored file
 // has, or no recorded login.
 var ErrNoLogin = errors.New("Run `axon login` first.")
 
@@ -23,7 +23,7 @@ func Endpoint(p orgfile.Pathway) string {
 	if p.Kind == orgfile.KindTeleport {
 		return "http://localhost:" + strconv.Itoa(tunnel.Port)
 	}
-	return p.Devenv.Endpoint
+	return p.Sky.Endpoint
 }
 
 // Host returns the host of endpoint, as a message names it.

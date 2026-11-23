@@ -13,8 +13,8 @@ import (
 	"github.com/enigma-brain/axon/internal/sky"
 )
 
-// twoPathways is an organisation file with two made-up pathways.
-const twoPathways = `format = 1
+// twoPathways is a config file with two made-up pathways.
+const twoPathways = `format = 2
 id = "example"
 
 [[pathway]]
@@ -23,7 +23,7 @@ kind = "direct"
 name = "Campus"
 description = "On campus."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://sky.example.org"
 
 [[pathway]]
@@ -32,12 +32,12 @@ kind = "direct"
 name = "Lab"
 description = "In the lab."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://lab.example.org"
 `
 
 // storeOrg sets HOME to a new directory holding twoPathways as a stored
-// organisation file. The login tests below stop before any network request.
+// config file. The login tests below stop before any network request.
 func storeOrg(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
@@ -107,7 +107,7 @@ func TestLoginHelpNamesItsFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"--org", "--pathway", "https address", "standard input"} {
+	for _, want := range []string{"--config", "--pathway", "https address", "standard input"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("login --help lacks %q:\n%s", want, out)
 		}
@@ -117,7 +117,7 @@ func TestLoginHelpNamesItsFlags(t *testing.T) {
 func TestLoginWithoutAFileStops(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	_, err := run(t, "login")
-	if err == nil || !strings.HasPrefix(err.Error(), "no organisation configuration. Run `axon login --org <source>`") {
+	if err == nil || !strings.HasPrefix(err.Error(), "no config file. Run `axon login --config <source>`") {
 		t.Errorf("login with no file: err = %v", err)
 	}
 }

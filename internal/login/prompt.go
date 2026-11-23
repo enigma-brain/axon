@@ -15,7 +15,7 @@ import (
 // not store it.
 //
 //   - --pathway names any stored pathway, and an unknown one is refused.
-//   - A file added with --org gives the pathway, unless the active pathway
+//   - A file added with --config gives the pathway, unless the active pathway
 //     is already in it: its only pathway, or one of its pathways the user
 //     picks.
 //   - Otherwise the active pathway, when a stored file has it.
@@ -30,7 +30,7 @@ func (l *login) determinePathway(files []orgfile.File, added *orgfile.File, opts
 		if p, ok := find(all, opts.Pathway); ok {
 			return p, nil
 		}
-		return orgfile.Pathway{}, fmt.Errorf("no stored organisation file has the pathway %q. The stored pathways are %s.",
+		return orgfile.Pathway{}, fmt.Errorf("no stored config file has the pathway %q. The stored pathways are %s.",
 			opts.Pathway, idList(all))
 	}
 

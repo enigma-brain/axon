@@ -59,7 +59,7 @@ func (l *login) disconnect(opts Options) error {
 
 // disconnectAll disconnects the pathway that was connected and removes its
 // record, so that nothing is recorded as connected. It is how a login with
-// no stored organisation file leaves the active pathway.
+// no stored config file leaves the active pathway.
 func (l *login) disconnectAll(opts Options) error {
 	if err := l.disconnect(opts); err != nil {
 		return err

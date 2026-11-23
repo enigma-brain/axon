@@ -23,10 +23,10 @@ func newStore(t *testing.T) (Store, string) {
 // oneDirect returns a file with id fileID and one direct pathway per
 // pathway id.
 func oneDirect(fileID string, pathwayIDs ...string) string {
-	s := "format = 1\nid = \"" + fileID + "\"\n"
+	s := "format = 2\nid = \"" + fileID + "\"\n"
 	for _, id := range pathwayIDs {
 		s += "\n[[pathway]]\nid = \"" + id + "\"\nkind = \"direct\"\nname = \"N\"\ndescription = \"D\"\n" +
-			"[pathway.devenv]\nendpoint = \"https://" + id + ".example.org\"\n"
+			"[pathway.sky]\nendpoint = \"https://" + id + ".example.org\"\n"
 	}
 	return s
 }
@@ -194,7 +194,7 @@ func TestAddRefusedChangesNothing(t *testing.T) {
 func TestAddRestoresTheFileWhenTheSourceCannotBeRecorded(t *testing.T) {
 	s, home := newStore(t)
 	// A file where the source records' directory belongs makes recording
-	// the source fail after the organisation file is written.
+	// the source fail after the config file is written.
 	state := filepath.Join(home, ".axon", "state")
 	if err := os.MkdirAll(state, 0o700); err != nil {
 		t.Fatal(err)
@@ -256,7 +256,7 @@ func TestAddIgnoresBadStoredFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A stored file that fails the checks does not hold its identifiers.
-	broken := strings.Replace(oneDirect("broken", "campus"), "format = 1", "format = 9", 1)
+	broken := strings.Replace(oneDirect("broken", "campus"), "format = 2", "format = 9", 1)
 	if err := os.WriteFile(filepath.Join(orgs, "broken.toml"), []byte(broken), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +282,7 @@ func TestListOrderAndProblems(t *testing.T) {
 	write("a.toml", oneDirect("a", "one", "two"))
 	write("a-b.toml", oneDirect("a-b", "three"))
 	write("c.toml", oneDirect("c", "four", "two"))   // clashes with a
-	write("d.toml", "format = 1\n")                  // fails the checks
+	write("d.toml", "format = 2\n")                  // fails the checks
 	write("e.toml", oneDirect("other", "five"))      // id is not the name
 	write(".a.toml.123", oneDirect("a", "six"))      // a temporary file
 	write("README", "notes")                         // not a file name of an id
@@ -428,7 +428,8 @@ func TestRefreshRefusals(t *testing.T) {
 	}{
 		{"another id", oneDirect("elsewhere", "a"), `id: is "elsewhere", not "org", the id of the stored file`},
 		{"a taken pathway", oneDirect("org", "a", "lab"), `already used by the stored file`},
-		{"a failed check", "format = 2\n", "format"},
+		{"a failed check", "format = 3\n", "format"},
+		{"an older format", "format = 1\n", "older format"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, home := newStore(t)
@@ -457,5 +458,27 @@ func TestRefreshOfADeletedFileStoresNothing(t *testing.T) {
 	}
 	if _, err := os.Stat(s.Path("org")); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the file is back: %v", err)
+	}
+}
+
+// A stored file of an older format is left out as older, and the other
+// stored files are listed.
+func TestListLeavesOutOlderFormat(t *testing.T) {
+	s, home := newStore(t)
+	add(t, s, oneDirect("example", "campus"), "-")
+	older := strings.Replace(oneDirect("older", "lab"), "format = 2", "format = 1", 1)
+	older = strings.Replace(older, "[pathway.sky]", "[pathway.devenv]", 1)
+	if err := os.WriteFile(filepath.Join(home, ".axon", "orgs", "older.toml"), []byte(older), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	files, problems, err := s.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0].ID != "example" {
+		t.Errorf("files = %v, want example only", pathwayIDs(files))
+	}
+	if len(problems) != 1 || !errors.Is(problems[0].Err, ErrOlderFormat) {
+		t.Errorf("problems = %v, want the older file", problems)
 	}
 }

@@ -34,19 +34,19 @@ func Execute(ctx context.Context, version string) error {
 }
 
 func newLogin() *cobra.Command {
-	var org, pathway string
+	var config, pathway string
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Log in and connect every command group",
 		Long: `Log in and connect every command group.
 
-The first login needs your organisation's file, which --org adds. With
+The first login needs your organization's config file, which --config adds. With
 more than one pathway in the stored files, login asks which one you are
 on, once; --pathway chooses without asking, and is how you switch.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return login.Run(cmd.Context(), login.Options{
-				Org:     org,
+				Config:  config,
 				Pathway: pathway,
 				In:      cmd.InOrStdin(),
 				Out:     cmd.OutOrStdout(),
@@ -54,7 +54,7 @@ on, once; --pathway chooses without asking, and is how you switch.`,
 			})
 		},
 	}
-	cmd.Flags().StringVar(&org, "org", "", "add your organisation's file from an https address, a file path, or - for standard input")
-	cmd.Flags().StringVar(&pathway, "pathway", "", "the identifier of the pathway to log in by, from any stored organisation file")
+	cmd.Flags().StringVar(&config, "config", "", "add your organization's config file from an https address, a file path, or - for standard input")
+	cmd.Flags().StringVar(&pathway, "pathway", "", "the identifier of the pathway to log in by, from any stored config file")
 	return cmd
 }

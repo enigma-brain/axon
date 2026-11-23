@@ -77,7 +77,7 @@ func (l *login) establishTeleportSession(ctx context.Context, p orgfile.Pathway,
 // identity. The last step, pointClient, runs later.
 func (l *login) connectTeleport(ctx context.Context, p orgfile.Pathway, opts Options, clientVersion string) (apiserver.Health, error) {
 	endpoint := l.endpoint(p)
-	proxy, app := p.Teleport.Proxy, p.Devenv.App
+	proxy, app := p.Teleport.Proxy, p.Sky.App
 	stateDir, err := l.dir.StateDir()
 	if err != nil {
 		return apiserver.Health{}, err

@@ -13,7 +13,7 @@ func remote() orgfile.Pathway {
 		File: "example", ID: "remote", Kind: orgfile.KindTeleport,
 		Name: "Remote", Description: "From anywhere.",
 		Teleport: &orgfile.Teleport{Proxy: "teleport.example.org"},
-		Devenv:   orgfile.Devenv{App: "skypilot"},
+		Sky:      orgfile.Sky{App: "skypilot"},
 	}
 }
 
@@ -56,7 +56,7 @@ func TestIs(t *testing.T) {
 	for name, change := range map[string]func(*orgfile.Pathway){
 		"id":    func(p *orgfile.Pathway) { p.ID = "elsewhere" },
 		"proxy": func(p *orgfile.Pathway) { p.Teleport = &orgfile.Teleport{Proxy: "teleport.example.org:3080"} },
-		"app":   func(p *orgfile.Pathway) { p.Devenv.App = "other" },
+		"app":   func(p *orgfile.Pathway) { p.Sky.App = "other" },
 	} {
 		p := remote()
 		change(&p)

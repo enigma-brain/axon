@@ -397,7 +397,7 @@ func TestSwitchStopsRecordedTunnelByItsRecord(t *testing.T) {
 	if !st.Running {
 		t.Fatal("no tunnel after the teleport login")
 	}
-	// Disconnecting needs no organisation file: with the file that named
+	// Disconnecting needs no config file: with the file that named
 	// the pathway gone, the records are enough.
 	if err := os.Remove(filepath.Join(h.home, ".axon", "orgs", "example.toml")); err != nil {
 		t.Fatal(err)
@@ -533,7 +533,7 @@ func TestTeleportSyncsClientBeforeSkyLogin(t *testing.T) {
 
 // lastFileGone runs a teleport login, then has orgs change as gone, and
 // checks that the next login disconnects by the records, stopping the
-// tunnel, before it asks for --org.
+// tunnel, before it asks for --config.
 func lastFileGone(t *testing.T, gone func(h *metaHarness)) {
 	h := newMetaHarness(t)
 	if err := h.run("remote"); err != nil {

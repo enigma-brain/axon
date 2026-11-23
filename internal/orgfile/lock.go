@@ -9,10 +9,10 @@ import (
 )
 
 // lockFile, under axon's state directory, is the file that serialises
-// adding organisation files.
+// adding config files.
 const lockFile = "orgs.lock"
 
-// lock takes the exclusive lock on adding organisation files, waiting while
+// lock takes the exclusive lock on adding config files, waiting while
 // another process or goroutine holds it. The returned function releases it.
 //
 // The lock is a flock on the file, not the file's existence: the kernel

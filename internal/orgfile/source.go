@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// MaxSize is the largest organisation file read from any source, in bytes.
+// MaxSize is the largest config file read from any source, in bytes.
 const MaxSize = 1 << 20
 
 var (
@@ -36,7 +36,7 @@ const (
 	sourceStdin
 )
 
-// Source is where an organisation file comes from: an https address, a
+// Source is where a config file comes from: an https address, a
 // file path or standard input.
 type Source struct {
 	kind  sourceKind
@@ -54,7 +54,7 @@ const stdinValue = "-"
 func ParseSource(s string) (Source, error) {
 	switch {
 	case s == "":
-		return Source{}, errors.New("the organisation file's source is empty")
+		return Source{}, errors.New("the config file's source is empty")
 	case s == stdinValue:
 		return Source{kind: sourceStdin, value: stdinValue}, nil
 	case schemePattern.MatchString(s):
@@ -62,7 +62,7 @@ func ParseSource(s string) (Source, error) {
 		// nothing of an address that does not parse, since it can hold one.
 		u, err := url.Parse(s)
 		if err != nil {
-			return Source{}, errors.New("the organisation file's address is not a valid URL")
+			return Source{}, errors.New("the config file's address is not a valid URL")
 		}
 		if u.Scheme != "https" {
 			return Source{}, fmt.Errorf("%s: an address must start with https://", u.Redacted())
@@ -98,7 +98,7 @@ func (s Source) String() string { return s.value }
 // source that can be read again without the user.
 func (s Source) IsAddress() bool { return s.kind == sourceAddress }
 
-// Read returns the bytes of the organisation file at src, exactly as the
+// Read returns the bytes of the config file at src, exactly as the
 // source gives them. stdin is read for the standard-input source. A file
 // larger than MaxSize is refused. Every error names the source.
 func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
@@ -106,7 +106,7 @@ func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
 	case sourceStdin:
 		data, err := readLimited(stdin)
 		if err != nil {
-			return nil, fmt.Errorf("read the organisation file from standard input: %w", err)
+			return nil, fmt.Errorf("read the config file from standard input: %w", err)
 		}
 		return data, nil
 	case sourceAddress:
@@ -123,7 +123,7 @@ func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
 		}
 		return data, nil
 	}
-	return nil, errors.New("read the organisation file: no source given")
+	return nil, errors.New("read the config file: no source given")
 }
 
 // fetch gets address without credentials or cookies, following redirects

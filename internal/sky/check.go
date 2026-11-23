@@ -110,7 +110,7 @@ func Check(ctx context.Context, dir axondir.Dir, w io.Writer) (orgfile.Pathway, 
 
 func (p probes) run(ctx context.Context, dir axondir.Dir, pw orgfile.Pathway, w io.Writer) error {
 	// A pathway whose settings changed after it was connected, such as by
-	// a file that --org replaced, is not the one connected.
+	// a file that --config replaced, is not the one connected.
 	same, err := connected.Is(dir, pw)
 	if err != nil {
 		return err
@@ -192,7 +192,7 @@ func (p probes) restartTunnel(ctx context.Context, dir axondir.Dir, pw orgfile.P
 	}
 
 	fmt.Fprintln(w, restartLine)
-	err = p.startTunnel(ctx, stateDir, tshPath, pw.Teleport.Proxy, pw.Devenv.App)
+	err = p.startTunnel(ctx, stateDir, tshPath, pw.Teleport.Proxy, pw.Sky.App)
 	var startErr *tunnel.StartError
 	var busy *tunnel.PortBusyError
 	switch {

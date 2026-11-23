@@ -1,17 +1,17 @@
 ---
-title: Writing an organisation file
+title: Writing a config file
 description: How an organisation describes itself to axon, with a complete example for each kind of pathway.
 ---
 
 `axon` names no organisation and has no default for any detail of one. It
-takes every such detail from an **organisation file**: a small TOML file that
+takes every such detail from a **config file**: a small TOML file that
 your organisation writes and gives to its members. This page is for the person
 who writes it.
 
-An organisation file holds the pathways your members use to reach your
+A config file holds the pathways your members use to reach your
 SkyPilot API server, the addresses and names those pathways need, and the text
 `axon` shows your members about them. Your members add the file with
-`axon login --org`, as [Logging in](/axon/logging-in/) describes.
+`axon login --config`, as [Logging in](/axon/logging-in/) describes.
 
 ## What you decide first
 
@@ -30,15 +30,15 @@ identifiers must be different across every file a laptop holds.
 
 | Source | Fits when | Members run |
 |---|---|---|
-| An `https` address | You can publish the file where members reach it, without credentials | `axon login --org https://example.org/axon.toml` |
-| A file path | You send the file by e-mail, chat or a shared drive | `axon login --org ~/Downloads/axon.toml` |
-| Standard input | You hand the file out with a tool your members are already signed in to | `<command that prints the file> \| axon login --org -` |
+| An `https` address | You can publish the file where members reach it, without credentials | `axon login --config https://example.org/axon.toml` |
+| A file path | You send the file by e-mail, chat or a shared drive | `axon login --config ~/Downloads/axon.toml` |
+| Standard input | You hand the file out with a tool your members are already signed in to | `<command that prints the file> \| axon login --config -` |
 
 The address is fetched without credentials, and must start with `https://`. It
 matters for updates: a file added from an address is fetched again at each
 login, so a change you publish reaches your members at their next login. A
 file from a path or standard input is read once; a member updates it by
-running `axon login --org` again with the new file.
+running `axon login --config` again with the new file.
 
 Whatever the source, the file is trusted input. It decides which servers your
 members' logins and requests go to, so publish it where only you can change it.
@@ -52,7 +52,7 @@ members what to do when it does not.
 
 ```toml
 # campus.toml
-format = 1
+format = 2
 id = "example-campus"
 
 [[pathway]]
@@ -62,7 +62,7 @@ name = "Campus"
 description = "Single sign-on in a browser. Needs the campus network or VPN."
 unreachable_hint = "Connect to the campus VPN and retry."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://sky.example.org"
 ```
 
@@ -75,7 +75,7 @@ name of the Teleport application that serves the SkyPilot API server.
 
 ```toml
 # remote.toml
-format = 1
+format = 2
 id = "example-remote"
 
 [[pathway]]
@@ -87,19 +87,19 @@ description = "Teleport. Works from anywhere."
 [pathway.teleport]
 proxy = "teleport.example.org"
 
-[pathway.devenv]
+[pathway.sky]
 app = "skypilot"
 ```
 
 ## Several pathways in one file
 
-Each pathway is a `[[pathway]]` entry. A table such as `[pathway.devenv]`
+Each pathway is a `[[pathway]]` entry. A table such as `[pathway.sky]`
 belongs to the `[[pathway]]` above it, so each pathway's tables follow its own
 `[[pathway]]` line and come before the next one.
 
 ```toml
 # both.toml
-format = 1
+format = 2
 id = "example-both"
 
 [[pathway]]
@@ -109,7 +109,7 @@ name = "Campus"
 description = "Single sign-on in a browser. Needs the campus network or VPN."
 unreachable_hint = "Connect to the campus VPN and retry."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://sky.example.org"
 
 [[pathway]]
@@ -121,7 +121,7 @@ description = "Teleport. Works from anywhere."
 [pathway.teleport]
 proxy = "teleport.example.org:443"
 
-[pathway.devenv]
+[pathway.sky]
 app = "skypilot"
 ```
 
@@ -140,7 +140,7 @@ At the top of the file:
 
 | Field | Holds |
 |---|---|
-| `format` | The file's format. It is `1`. |
+| `format` | The file's format. It is `2`. |
 | `id` | The file's identifier: lowercase letters, digits and hyphens, starting with a letter, at most 32 characters. `axon` stores the file as `~/.axon/orgs/<id>.toml`. A file with the same `id` replaces the stored one. |
 
 Then one `[[pathway]]` entry for each pathway. Every pathway has these:
@@ -160,9 +160,9 @@ A direct pathway has one more table, and a Teleport pathway two:
 
 | Field | Kind | Required | Holds |
 |---|---|---|---|
-| `devenv.endpoint` | `direct` | Yes | The SkyPilot API server's `https` address. |
+| `sky.endpoint` | `direct` | Yes | The SkyPilot API server's `https` address. |
 | `teleport.proxy` | `teleport` | Yes | Your Teleport proxy: a hostname, optionally with a port. |
-| `devenv.app` | `teleport` | Yes | The name of the Teleport application that serves the SkyPilot API server. |
+| `sky.app` | `teleport` | Yes | The name of the Teleport application that serves the SkyPilot API server. |
 
 A table that does not belong to the pathway's kind, such as `teleport` on a
 direct pathway, is refused.
@@ -171,13 +171,13 @@ direct pathway, is refused.
 
 `axon` accepts a file only when:
 
-- `format` is `1`;
+- `format` is `2`;
 - it has an `id` of the allowed form;
 - it has at least one pathway;
 - every pathway has an `id` of the allowed characters, a `kind` of `direct` or
   `teleport`, a `name` and a `description`;
-- every `direct` pathway has `devenv.endpoint`, and it is an `https` address;
-- every `teleport` pathway has `teleport.proxy` and `devenv.app`;
+- every `direct` pathway has `sky.endpoint`, and it is an `https` address;
+- every `teleport` pathway has `teleport.proxy` and `sky.app`;
 - it has no field or table that this page does not list;
 - no pathway identifier appears twice in it, or in any other file stored on
   the laptop, apart from the one it replaces;
@@ -185,27 +185,28 @@ direct pathway, is refused.
 
 A file that fails a check is refused whole, with a message that names the
 field and the check, and nothing changes. When a member adds the file with
-`--org`, the message begins `axon: add the organisation file:`. For example:
+`--config`, the message begins `axon: add the config file:`. For example:
 
 ```text
-axon: add the organisation file: pathway "campus": name: is required and must be text
-axon: add the organisation file: pathway "campus": devenv.endpoint: must be an https address
-axon: add the organisation file: colour: not a field of an organisation file
-axon: add the organisation file: format: must be 1
+axon: add the config file: pathway "campus": name: is required and must be text
+axon: add the config file: pathway "campus": sky.endpoint: must be an https address
+axon: add the config file: colour: not a field of a config file
+axon: add the config file: format: must be 2
+axon: add the config file: the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.
 ```
 
-[Troubleshooting](/axon/troubleshooting/#a-refused-organisation-file) lists the
+[Troubleshooting](/axon/troubleshooting/#a-refused-config-file) lists the
 others.
 
 ## Before you hand the file out
 
-1. Try it yourself with `axon login --org <path>`. `axon` checks the file before
+1. Try it yourself with `axon login --config <path>`. `axon` checks the file before
    it does anything else, so a mistake is refused at once, with the field
    named.
 2. Publish the file, or hand it out, with the line your members run:
 
    ```sh
-   axon login --org https://example.org/axon.toml
+   axon login --config https://example.org/axon.toml
    ```
 
 Your members need to [install `axon`](/axon/installing/) first.

@@ -1,7 +1,7 @@
 // Package connected records the pathway that axon login connected, with
 // the settings for machines it had then, in ~/.axon/state/pathway.toml.
 //
-// Disconnecting goes by this record, never by an organisation file, so it
+// Disconnecting goes by this record, never by a config file, so it
 // works when the file that named the pathway has changed or is gone; and a
 // command group runs only while the active pathway's settings are the ones
 // recorded.
@@ -47,8 +47,8 @@ func Of(p orgfile.Pathway) Record {
 		Format:      format,
 		ID:          p.ID,
 		Kind:        string(p.Kind),
-		SkyEndpoint: p.Devenv.Endpoint,
-		SkyApp:      p.Devenv.App,
+		SkyEndpoint: p.Sky.Endpoint,
+		SkyApp:      p.Sky.App,
 	}
 	if p.Teleport != nil {
 		r.TeleportProxy = p.Teleport.Proxy

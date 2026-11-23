@@ -9,7 +9,7 @@ import (
 )
 
 // refresh fetches the file that holds p again, when its recorded source is
-// an address and --org did not add it in this login, and replaces the
+// an address and --config did not add it in this login, and replaces the
 // stored copy when the fetched file passes the checks and keeps its id. It
 // returns the pathway the login goes on with:
 //
@@ -49,7 +49,7 @@ func (l *login) refresh(ctx context.Context, p orgfile.Pathway, added *orgfile.F
 		return p, nil
 	}
 	if changed {
-		fmt.Fprintf(opts.Out, "Updated the organisation file %s\n", path)
+		fmt.Fprintf(opts.Out, "Updated the config file %s\n", path)
 	}
 	if fresh, ok := find(f.Pathways, p.ID); ok {
 		return fresh, nil
@@ -70,9 +70,9 @@ func (l *login) refresh(ctx context.Context, p orgfile.Pathway, added *orgfile.F
 		return orgfile.Pathway{}, errNoOrg
 	}
 	if opts.Pathway != "" {
-		return orgfile.Pathway{}, fmt.Errorf("the pathway %q is no longer in its organisation file. The stored pathways are %s.", p.ID, idList(all))
+		return orgfile.Pathway{}, fmt.Errorf("the pathway %q is no longer in its config file. The stored pathways are %s.", p.ID, idList(all))
 	}
-	gone := fmt.Sprintf("The pathway %q is no longer in its organisation file.", p.ID)
+	gone := fmt.Sprintf("The pathway %q is no longer in its config file.", p.ID)
 	if len(all) == 1 {
 		fmt.Fprintf(opts.Out, "%s Using the pathway %q.\n", gone, all[0].ID)
 		return all[0], nil
