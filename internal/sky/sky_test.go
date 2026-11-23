@@ -252,6 +252,8 @@ func TestRefused(t *testing.T) {
 		{[]string{"api", "stop"}, "`axon sky api stop` is not available: axon connects to your organization's API server and does not start one on this computer."},
 		{[]string{"api", "login", "--help"}, "`axon sky api login` is not available."},
 		{[]string{"--help", "api", "stop"}, "`axon sky api stop` is not available:"},
+		{[]string{"api", "--", "logout"}, "`axon sky api logout` is not available."},
+		{[]string{"--", "api", "login"}, "`axon sky api login` is not available."},
 	} {
 		calls := capture(t)
 		_, _, err := runSky(tc.args...)
@@ -337,6 +339,8 @@ func TestWantsHelp(t *testing.T) {
 		{[]string{"launch"}, false},
 		{[]string{"exec", "dev", "--", "--help"}, false},
 		{[]string{"launch", "--helpful"}, false},
+		{[]string{"--", "status", "--help"}, true},
+		{[]string{"exec", "dev", "--", "echo", "-h"}, false},
 	} {
 		if got := wantsHelp(tc.args); got != tc.want {
 			t.Errorf("wantsHelp(%q) = %v, want %v", tc.args, got, tc.want)

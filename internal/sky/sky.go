@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -72,12 +71,15 @@ func refusal(args []string) error {
 	return nil
 }
 
-// commandWords returns up to n of the leading arguments that are not flags,
-// stopping at "--".
+// commandWords returns up to n of the leading arguments that are not flags.
+// A "--" is skipped, not taken as the end of the command's words: before a
+// subcommand's name, sky's command groups take "--" for the end of their
+// own options and still read the name after it, so "api -- logout" names
+// api logout.
 func commandWords(args []string, n int) []string {
 	var words []string
 	for _, a := range args {
-		if a == "--" || len(words) == n {
+		if len(words) == n {
 			break
 		}
 		if len(a) > 0 && a[0] == '-' {
@@ -89,16 +91,25 @@ func commandWords(args []string, n int) []string {
 }
 
 // wantsHelp reports whether sky would print help for args: when there are
-// none, or when --help or -h comes before "--".
+// none, or when --help or -h comes before the "--" that ends a command's
+// options. A "--" before the first word is the root group's, and sky reads
+// the options after it.
 func wantsHelp(args []string) bool {
 	if len(args) == 0 {
 		return true
 	}
-	end := len(args)
-	if i := slices.Index(args, "--"); i >= 0 {
-		end = i
+	seenWord := false
+	for _, a := range args {
+		switch {
+		case a == "--" && seenWord:
+			return false
+		case a == "--help" || a == "-h":
+			return true
+		case len(a) > 0 && a[0] != '-':
+			seenWord = true
+		}
 	}
-	return slices.Contains(args[:end], "--help") || slices.Contains(args[:end], "-h")
+	return false
 }
 
 // help replaces the axon process with sky's own help for args. It needs the
