@@ -36,7 +36,7 @@ import (
 )
 
 // Port is the local port the tunnel listens on, the same for every
-// organisation. It is not 46580, the address SkyPilot reserves for an API
+// organization. It is not 46580, the address SkyPilot reserves for an API
 // server on the laptop.
 const Port = 46581
 
@@ -441,8 +441,8 @@ func (t *Tunnel) launch(ctx context.Context) error {
 }
 
 // stopAll stops each of pids that is a tunnel, as isTunnel says. A process
-// is identified by its ID and start time, captured before it is signalled:
-// it is signalled only while both still match, and when it has not exited
+// is identified by its ID and start time, captured before it is signaled:
+// it is signaled only while both still match, and when it has not exited
 // and still matches after the wait, stopAll returns an error, and the
 // caller keeps the record.
 func stopAll(pids []int, isTunnel func(process) bool) error {
@@ -644,7 +644,7 @@ func removeRecord(stateDir string) error {
 }
 
 // removeOldRecord deletes the old form of record in stateDir, when there is
-// one. Its process is never signalled.
+// one. Its process is never signaled.
 func removeOldRecord(stateDir string) error {
 	return removeFile(filepath.Join(stateDir, oldRecordFile))
 }

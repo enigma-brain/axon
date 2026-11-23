@@ -134,7 +134,7 @@ func TestOldFormTunnelIsAnotherProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !alive(t, pid) {
-		t.Error("a stop signalled the old-form tunnel")
+		t.Error("a stop signaled the old-form tunnel")
 	}
 	if !gone(old) {
 		t.Error("the old record was kept by Stop")

@@ -24,7 +24,7 @@ import (
 )
 
 // fakeSky is a sky executable that records each run and acts out the
-// behaviour given for it: one line per run in the file "script".
+// behavior given for it: one line per run in the file "script".
 //
 //	ok      the login succeeds: the fake server now reports a user
 //	silent  sky exits 0 but the server still sees no login
@@ -38,8 +38,8 @@ n=$((n + 1))
 echo "$n" > "$dir/count"
 echo "$*" >> "$dir/args"
 env > "$dir/env.$n"
-behaviour=$(sed -n "${n}p" "$dir/script" 2>/dev/null)
-case "$behaviour" in
+behavior=$(sed -n "${n}p" "$dir/script" 2>/dev/null)
+case "$behavior" in
 silent) echo "Logged in" ;;
 needs) echo "Failed to log in (status: needs_auth)" >&2; exit 1 ;;
 fail) echo "boom" >&2; exit 2 ;;

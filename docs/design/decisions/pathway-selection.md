@@ -2,10 +2,10 @@
 
 ## Context
 
-A user reaches an organisation's SkyPilot API server by one of the pathways
+A user reaches an organization's SkyPilot API server by one of the pathways
 named in the config files stored on the laptop. A pathway works only
 from where its kind allows: a direct pathway from the network the
-organisation's server answers on, a teleport pathway from anywhere. Most
+organization's server answers on, a teleport pathway from anywhere. Most
 users have an account on one pathway, and it rarely changes. `axon login`
 runs different steps on each kind, so it has to know which pathway applies
 before it does anything else.
@@ -16,7 +16,7 @@ When no pathway is active, `axon login` asks which of the stored pathways
 the user is on, offering each by its name with the one-line description its
 file gives, and saves the answer in `axon`'s own configuration file. A user
 who follows the setup instructions with no prior knowledge gets a question
-they are able to answer, in the organisation's own words, not an error. The
+they are able to answer, in the organization's own words, not an error. The
 answer is asked for once, because it is a fact about the user and not about
 the session. When the stored files hold a single pathway there is nothing
 to ask.
@@ -37,8 +37,8 @@ already stored.
   every new user meets an error before anything works.
 - **Detect the pathway from an existing `tsh` profile.** A teleport user who
   has no `tsh` profile yet is sent down a direct pathway without being told,
-  where login hangs off the organisation's network.
+  where login hangs off the organization's network.
 - **Adding a file never changes the active pathway.** A user who adds a
   file to use it runs a second command, `--pathway`, to reach it.
-- **Fixed pathway names in `axon`.** Every organisation's users meet another
-  organisation's names in the prompt and in `--pathway`.
+- **Fixed pathway names in `axon`.** Every organization's users meet another
+  organization's names in the prompt and in `--pathway`.

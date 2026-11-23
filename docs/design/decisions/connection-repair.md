@@ -5,7 +5,7 @@
 Before it forwards a command, `axon sky` checks that the API server
 answers and that the login is good. The check fails for several reasons: the
 tunnel has stopped, the Teleport certificate or the server's own login
-session has expired, the organisation's network is out of reach, or the
+session has expired, the organization's network is out of reach, or the
 client's version differs from the server's.
 
 Some of these are fixed in under a second with no one present. Others need a

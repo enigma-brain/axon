@@ -51,7 +51,7 @@ func (h *harness) active() string {
 	return id
 }
 
-func TestNoOrganisationFileStops(t *testing.T) {
+func TestNoOrganizationFileStops(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
 	err := h.run("")

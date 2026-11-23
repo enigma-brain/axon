@@ -3,18 +3,18 @@ title: Direct
 description: A direct pathway reaches the API server at its own address, and its login is the server's own, in a browser.
 ---
 
-A direct pathway reaches your organisation's API server at its own address.
-The server may answer only from your organisation's network. Its login is
+A direct pathway reaches your organization's API server at its own address.
+The server may answer only from your organization's network. Its login is
 the API server's own, in a browser.
 
 ## Logging in
 
-1. **Connect to the network your organisation names first.** When the server
+1. **Connect to the network your organization names first.** When the server
    does not answer, `axon login` says `Can't reach <host>.`, followed by your
-   organisation's hint when its file gives one, and stops without opening a
+   organization's hint when its file gives one, and stops without opening a
    browser.
 2. **The sign-in opens in your default browser.** Sign in with your
-   organisation's account and click "Authorize". `axon` waits for the page to
+   organization's account and click "Authorize". `axon` waits for the page to
    complete, and prints `sky: logging in to <address> in your browser`.
    When your session is still good, no browser opens.
 3. **The wait ends after five minutes.** If the login is not completed in the

@@ -503,7 +503,7 @@ func TestNoLoginStopsBeforeSky(t *testing.T) {
 
 // axon sky uses the stored config file and never fetches it, even
 // when its recorded source is an address.
-func TestSkyNeverFetchesTheOrganisationFile(t *testing.T) {
+func TestSkyNeverFetchesTheOrganizationFile(t *testing.T) {
 	var conns atomic.Int32
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, exampleOrg)

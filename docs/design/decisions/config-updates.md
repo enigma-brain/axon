@@ -2,7 +2,7 @@
 
 ## Context
 
-An organisation changes its configuration from time to time: a server
+An organization changes its configuration from time to time: a server
 moves, a pathway is added or retired. Every member's laptop has to follow.
 The configuration reaches a laptop from a URL, a file or standard input.
 Only a URL can be read again without the user.
@@ -22,10 +22,10 @@ drops the pathway, the pathway chosen in its place is used from its stored
 copy, so a login refreshes at most one stored file, apart from adding the
 one `--config` gives. When the fetch fails or the file is refused, `axon` says
 so in one line and logs in with the stored file. A file or standard input is
-read once; the user runs `axon login --config` again when the organisation
+read once; the user runs `axon login --config` again when the organization
 hands out a new file.
 
-- A change the organisation publishes to a file reaches each laptop at
+- A change the organization publishes to a file reaches each laptop at
   the next login that uses a pathway of that file and fetches it
   successfully, with nothing for the user to do.
 - A login does not fail because the configuration's host is briefly out of

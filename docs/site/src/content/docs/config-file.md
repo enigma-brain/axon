@@ -1,11 +1,11 @@
 ---
 title: Writing a config file
-description: How an organisation describes itself to axon, with a complete example for each kind of pathway.
+description: How an organization describes itself to axon, with a complete example for each kind of pathway.
 ---
 
-`axon` names no organisation and has no default for any detail of one. It
+`axon` names no organization and has no default for any detail of one. It
 takes every such detail from a **config file**: a small TOML file that
-your organisation writes and gives to its members. This page is for the person
+your organization writes and gives to its members. This page is for the person
 who writes it.
 
 A config file holds the pathways your members use to reach your
@@ -47,7 +47,7 @@ members' logins and requests go to, so publish it where only you can change it.
 
 A direct pathway reaches the SkyPilot API server at its own address, and
 signs in with the server's own login in a browser. The server may answer only
-from your organisation's network; the optional `unreachable_hint` tells your
+from your organization's network; the optional `unreachable_hint` tells your
 members what to do when it does not.
 
 ```toml
@@ -190,7 +190,7 @@ field and the check, and nothing changes. When a member adds the file with
 ```text
 axon: add the config file: pathway "campus": name: is required and must be text
 axon: add the config file: pathway "campus": sky.endpoint: must be an https address
-axon: add the config file: colour: not a field of a config file
+axon: add the config file: color: not a field of a config file
 axon: add the config file: format: must be 2
 axon: add the config file: the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.
 ```

@@ -44,7 +44,7 @@ func Unreachable(p orgfile.Pathway, endpoint string) string {
 	return msg
 }
 
-// activePathway returns the active pathway from the stored organisation
+// activePathway returns the active pathway from the stored organization
 // files. A stored file that fails the checks is left out without a word:
 // only axon login reports it. It returns ErrNoLogin when there is no active
 // pathway or no stored file has it.

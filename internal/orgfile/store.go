@@ -57,7 +57,7 @@ type sourceRecord struct {
 // source. It refuses data that fails the checks or that has a pathway
 // identifier held by another stored file. A refused file writes nothing.
 //
-// Adds are serialised by a lock, held from the check against the stored
+// Adds are serialized by a lock, held from the check against the stored
 // files to the source record, so two adds cannot both store a file that
 // claims the same pathway identifier.
 func (s Store) Add(data []byte, src Source) (File, error) {

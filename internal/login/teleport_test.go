@@ -23,7 +23,7 @@ import (
 )
 
 // fakeTsh is the path of the fake tsh, built by TestMain into a file named
-// tsh so that the tunnel package recognises its command line.
+// tsh so that the tunnel package recognizes its command line.
 var fakeTsh string
 
 // The made-up Teleport proxy and application the tests log in to.

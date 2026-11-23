@@ -13,7 +13,7 @@
 ## Purpose
 
 `axon` is the command-line entry point to a platform run by an
-organisation. A user installs one tool, logs in once, and reaches each part
+organization. A user installs one tool, logs in once, and reaches each part
 of the platform through a command group.
 
 A command group that passes a tool's own commands straight through is
@@ -23,21 +23,21 @@ behind it is free to change without the user learning a new path
 [{D!}](decisions/command-group-names.md).
 
 `axon` has one command group, `sky`, which passes SkyPilot's `sky` commands
-through to the organisation's SkyPilot API server: dev environments, GPUs,
+through to the organization's SkyPilot API server: dev environments, GPUs,
 jobs and volumes.
 
 `axon` is written in Go and is a single binary that runs on the user's
 laptop. It has no server component.
 
-One `axon` serves any organisation whose pathways are of the kinds below.
-What makes it serve an organisation is a config file that the
-organisation supplies.
+One `axon` serves any organization whose pathways are of the kinds below.
+What makes it serve an organization is a config file that the
+organization supplies.
 
-## Organisations
+## Organizations
 
-### Organisation details
+### Organization details
 
-An organisation's details are everything that names its deployment:
+An organization's details are everything that names its deployment:
 
 - the hostnames and addresses of its servers, including the SkyPilot API
   server;
@@ -54,30 +54,30 @@ The repository holds none of them. No file in it names one: not the code,
 the tests, the design documents or the readme, and no commit message. An
 example that needs a detail uses a made-up one under `example.org`.
 
-`axon` takes every organisation detail from a config file, and has no
-default for any of them. The name of the GitHub organisation that hosts
-`axon`'s own repository is not an organisation detail in this sense: it
+`axon` takes every organization detail from a config file, and has no
+default for any of them. The name of the GitHub organization that hosts
+`axon`'s own repository is not an organization detail in this sense: it
 names where `axon` comes from, not whom it serves.
 
 ### Pathway kinds
 
-A pathway is a way to reach the organisation's API server. Every pathway is
+A pathway is a way to reach the organization's API server. Every pathway is
 one of two kinds [{D!}](decisions/pathway-kinds.md).
 
 | Kind | Login | Reaches the API server |
 |---|---|---|
-| `direct` | The API server's own login, in a browser | At its address, from wherever the organisation's network allows |
+| `direct` | The API server's own login, in a browser | At its address, from wherever the organization's network allows |
 | `teleport` | Teleport, in a browser when the certificate is not valid | Through a local tunnel to a Teleport application |
 
 The rest of this document describes each pathway by its kind. An
-organisation names its own pathways, any number of them of either kind.
+organization names its own pathways, any number of them of either kind.
 
 ### Config files
 
-An organisation's configuration is a TOML file, its config file. A
-laptop holds any number of them, from one organisation or several, and the
+An organization's configuration is a TOML file, its config file. A
+laptop holds any number of them, from one organization or several, and the
 user moves between the pathways they hold
-[{D!}](decisions/config-files.md). An organisation that gives each
+[{D!}](decisions/config-files.md). An organization that gives each
 pathway its own file lets most of its members hold one file and never meet
 a prompt, while a member on several pathways holds several files.
 
@@ -131,7 +131,7 @@ Every other field belongs to a pathway. Every pathway has the same three
 parts, whatever its kind [{D!}](decisions/pathway-contract.md):
 
 - **Identity**: what the pathway is.
-- **Text for people**: labels and sentences that the organisation writes and
+- **Text for people**: labels and sentences that the organization writes and
   `axon` prints as written. `axon` never builds a sentence out of a
   configuration value.
 - **Settings for machines**: a table named for the kind, holding what only
@@ -144,7 +144,7 @@ parts, whatever its kind [{D!}](decisions/pathway-contract.md):
 | `id` | Identity | Lowercase letters, digits and hyphens | The value of `--pathway`. |
 | `kind` | Identity | `direct` or `teleport` | The pathway's kind. |
 | `name` | Text | Free text, required | The pathway's name, as the prompt shows it. |
-| `description` | Text | Free text, required | The prompt's line about the pathway, which is where the organisation names its login system and where the pathway works. |
+| `description` | Text | Free text, required | The prompt's line about the pathway, which is where the organization names its login system and where the pathway works. |
 | `unreachable_hint` | Text | Free text, optional | A sentence `axon` prints after "Can't reach `<host>`." when a host the pathway names does not answer. |
 | `teleport.proxy` | Kind table, `teleport` | Hostname, optionally with a port | The Teleport proxy. |
 | `sky.endpoint` | `sky` table, `direct` | `https` address | The SkyPilot API server. |
@@ -193,9 +193,9 @@ source is one of three:
 | A file path | `axon login --config ~/Downloads/axon.toml` |
 | `-`, standard input | `<command that prints the file> \| axon login --config -` |
 
-An address is fetched without credentials, so it suits an organisation that
+An address is fetched without credentials, so it suits an organization that
 publishes its file. A file path or standard input suits one that hands the
-file out by other means; with standard input, an organisation's setup is
+file out by other means; with standard input, an organization's setup is
 one line that fetches the file with a tool its members are already signed
 in to. An address with a scheme other than `https` is refused.
 
@@ -252,7 +252,7 @@ file your organization gives you."
 
 ## Commands
 
-| Command | Behaviour |
+| Command | Behavior |
 |---|---|
 | `axon login [--config <source>] [--pathway <id>]` | Adds a config file when `--config` is given, determines the pathway, establishes its session, and connects every command group. |
 | `axon logout` | Logs out of every command group and the pathway's session, and removes the records of the connection. |
@@ -362,7 +362,7 @@ On a `teleport` pathway the session is the Teleport login. `axon` finds
 proxy. When the certificate is not valid, `axon` runs
 `tsh login --proxy=<teleport.proxy>`, which opens a browser. A valid
 certificate needs no login and opens no browser. The certificate lasts as
-long as the organisation's Teleport sets. The user runs no `tsh` command by
+long as the organization's Teleport sets. The user runs no `tsh` command by
 hand.
 
 ### tsh
@@ -415,7 +415,7 @@ after `axon logout`.
 
 ## sky
 
-The `sky` command group is the user's way to the organisation's SkyPilot
+The `sky` command group is the user's way to the organization's SkyPilot
 API server. It passes SkyPilot's own commands through. The parts of `axon`
 that are specific to SkyPilot are kept together, inside `sky`. Everything
 `axon` does with SkyPilot is in this section.
@@ -429,7 +429,7 @@ login` and before a command runs, begins `sky:`.
 | `teleport` | `http://localhost:46581`, a Teleport tunnel to the pathway's `sky.app` |
 
 The tunnel's port, 46581, is `axon`'s and is the same for every
-organisation.
+organization.
 
 SkyPilot's own configuration and session stay in `~/.sky/`, where SkyPilot
 keeps them.
@@ -580,7 +580,7 @@ API server belong to `axon login` and `axon logout`:
 |---|---|
 | `axon sky api login` | Points to `axon login`. |
 | `axon sky api logout` | Points to `axon logout`. |
-| `axon sky api start` | Says that `axon` connects to the organisation's API server and does not start one on the laptop. |
+| `axon sky api start` | Says that `axon` connects to the organization's API server and does not start one on the laptop. |
 | `axon sky api stop` | The same as `api start`. |
 
 A refused command is refused with `--help` too. Every other `api` command
@@ -646,14 +646,14 @@ Every failure names the step that failed and the next action for the user.
 `axon`'s own messages go to standard error and begin with `axon:`. When
 `axon` stops before running a command, it exits with a non-zero code.
 
-A message names an organisation detail only by printing a host or a
+A message names an organization detail only by printing a host or a
 text field from a config file as it is written.
 
 A message names a product only when it comes from the part of `axon` that
 uses that product [{D!}](decisions/product-names-in-messages.md).
 "SkyPilot" appears only in messages from `sky`. "Teleport" appears only
 in messages about a `teleport` pathway. The general parts of `axon`, which
-are the stages of login, the pathway prompt, the organisation's
+are the stages of login, the pathway prompt, the organization's
 configuration and the form of a failure, name neither.
 
 ## Release and install
@@ -684,7 +684,7 @@ build.
 A release is built by GoReleaser in GitHub Actions when a version tag is
 pushed, and holds the archives, a checksum file and `install.sh`. A
 release is published only after its archives install and run on every
-platform it is built for. The binaries are not signed or notarised.
+platform it is built for. The binaries are not signed or notarized.
 
 A user installs `axon` with one line, which downloads `install.sh` from the
 latest release with `curl` and runs it [{D!}](decisions/install-method.md):
@@ -702,20 +702,20 @@ Installing requires `curl` and `sha256sum` or `shasum`.
 
 Updating `axon` is running the same line again.
 
-An organisation's setup for its members is the install line followed by
-`axon login --config <source>`. The page that tells an organisation's members
-how to get started, with its source for `--config`, is the organisation's own
+An organization's setup for its members is the install line followed by
+`axon login --config <source>`. The page that tells an organization's members
+how to get started, with its source for `--config`, is the organization's own
 and is kept with its config files, not in this repository.
 
 ## Documentation site
 
 `axon` has a public documentation site, separate from the readme, for the
-members of any organisation that uses `axon`
+members of any organization that uses `axon`
 [{D!}](decisions/documentation-site.md).
 
 - Its source is a [Starlight](https://starlight.astro.build) project in
   `docs/site`.
 - It is served from GitHub Pages at `https://enigma-brain.github.io/axon/`.
-- It holds nothing about any one organisation.
+- It holds nothing about any one organization.
 - It links to SkyPilot's documentation only from the page of the `sky`
   command group.

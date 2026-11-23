@@ -8,7 +8,7 @@ stay up after `axon login` returns. `axon sky` commands use it, and so do
 `ssh` to a cluster, VS Code Remote-SSH and the SkyPilot dashboard, none of
 which run through `axon`.
 
-The Teleport certificate lasts as long as the organisation's Teleport sets,
+The Teleport certificate lasts as long as the organization's Teleport sets,
 typically hours. Whatever runs the tunnel, it stops working when the
 certificate expires, and a login in a browser is needed before it
 works again. A tunnel process also ends with a reboot, and exits at once

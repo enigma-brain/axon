@@ -3,7 +3,7 @@ title: Teleport
 description: A Teleport pathway reaches the API server through Teleport, with tsh and a tunnel that axon runs for you.
 ---
 
-A Teleport pathway reaches your organisation's API server through Teleport,
+A Teleport pathway reaches your organization's API server through Teleport,
 and works from wherever Teleport does. `axon login` runs the Teleport steps,
 so you run no `tsh` command by hand.
 
@@ -12,11 +12,11 @@ so you run no `tsh` command by hand.
 1. **It finds `tsh`**, Teleport's client, on your `PATH`
    ([below](#tsh-teleports-client)).
 2. **It signs you in to Teleport** with `tsh login --proxy=<proxy>`, which opens
-   your organisation's sign-in page in a browser. Where no browser opens by
+   your organization's sign-in page in a browser. Where no browser opens by
    itself, as on WSL, `tsh` prints a link instead: open it in a browser to
    finish the sign-in. When your Teleport certificate is still valid, nothing
    opens. The certificate lasts as long as your
-   organisation's Teleport sets.
+   organization's Teleport sets.
 3. **It brings up a tunnel** to the API server, on port 46581 of your
    laptop. The tunnel runs in the background, outlives the terminal, and keeps
    its log in `~/.axon/state/tunnel.log`. `ssh` to a cluster, VS Code

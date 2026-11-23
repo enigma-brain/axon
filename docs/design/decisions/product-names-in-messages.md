@@ -5,7 +5,7 @@
 `axon` is built on other products: SkyPilot behind `sky`, Teleport on a
 `teleport` pathway. Some messages come from those parts, and others from
 the general parts of `axon`: the stages of login, the pathway prompt, the
-organisation's configuration and the form of a failure.
+organization's configuration and the form of a failure.
 
 A user of a `direct` pathway has no Teleport. A user who runs
 `axon login` is setting up `axon`, not a product behind it. `axon` exists

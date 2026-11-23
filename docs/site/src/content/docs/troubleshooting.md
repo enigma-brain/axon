@@ -94,14 +94,14 @@ axon: no config file. Run `axon login --config <source>` with the address or fil
 No config file that passes the checks is stored on this laptop. When
 one was in use, `axon login` has already disconnected its pathway, stopping
 the Teleport tunnel and forgetting the logged-in email. Run `axon login --config`
-with the address or file your organisation gave you.
+with the address or file your organization gave you.
 
 ### A refused config file
 
 A file that fails a check is refused whole and nothing changes. The message names the
 field and the check, and begins `axon: add the config file:`. The checks are
 on [Writing a config file](/axon/config-file/#what-axon-checks). Tell
-your organisation which field it names. Messages seen most:
+your organization which field it names. Messages seen most:
 
 | Message | What it means |
 |---|---|
@@ -133,7 +133,7 @@ second form is a stored file, which the new file replaces when its `id` is the s
 axon: add the config file: <address>: an address must start with https://
 ```
 
-`--config` takes an `https` address. Use the address your organisation gave you, which
+`--config` takes an `https` address. Use the address your organization gave you, which
 starts with `https://`.
 
 ### The address carries a user name or password
@@ -143,7 +143,7 @@ axon: add the config file: <address>: an address must not carry a user name or p
 ```
 
 An address is fetched without credentials. Remove them from the address. When your
-organisation protects the file, ask for it as a file and use `--config <path>`.
+organization protects the file, ask for it as a file and use `--config <path>`.
 
 ### The config file's path does not exist
 
@@ -161,7 +161,7 @@ axon: add the config file: fetch <address>: the server answered <status>
 ```
 
 The address could not be fetched. Check your network and the address. A server that
-answers with an error is your organisation's to fix.
+answers with an error is your organization's to fix.
 
 ### A stored config file is left out
 
@@ -170,7 +170,7 @@ axon: left out <path>: <reason>
 ```
 
 A stored config file fails the checks, so `axon` leaves it out of this login.
-The reason is one of the refusals above. Ask your organisation for a new file and add
+The reason is one of the refusals above. Ask your organization for a new file and add
 it with `axon login --config <source>`, or delete the stored file from `~/.axon/orgs/`.
 
 ### The config file could not be updated
@@ -184,7 +184,7 @@ At login, `axon` fetches again the file that holds your pathway, when it came fr
 address. The first form means the fetch failed or the new file was refused; the second
 means `axon` could not read what it recorded about the file's source. Either way `axon`
 carries on with the file it has. Nothing needs doing now; when the reason is a refusal,
-tell your organisation.
+tell your organization.
 
 ## Choosing a pathway
 
@@ -212,7 +212,7 @@ of the list.
 The pathway "<id>" is no longer in its config file. Using the pathway "<id>".
 ```
 
-Your organisation changed its file, and the pathway you used is not in it. One pathway
+Your organization changed its file, and the pathway you used is not in it. One pathway
 is stored, so `axon` uses it and says which. With several stored, the message ends after
 the first sentence and `axon` asks which you are on.
 
@@ -244,7 +244,7 @@ Can't reach <host>.
 ```
 
 The server does not answer from where you are. `axon` stops without opening a
-browser. Your organisation's hint, when its file gives one, follows the message and
+browser. Your organization's hint, when its file gives one, follows the message and
 says what to do, such as connecting to a network. Then run `axon login` again.
 
 ### The browser login timed out
@@ -263,7 +263,7 @@ the SkyPilot login ended with needs_auth twice. Run `axon login` again.
 ```
 
 The server did not accept the login after `axon` cleared the stale session. Run
-`axon login` again. When it repeats, tell your organisation.
+`axon login` again. When it repeats, tell your organization.
 
 ### SkyPilot's cookie file could not be removed
 
@@ -290,7 +290,7 @@ SkyPilot's login stopped with an error. Read the reason, and run `axon login` ag
 tsh <version> at <path> does not work with the Teleport proxy <proxy>, which runs <version> and supports tsh <n> and <n-1>. Update tsh: <link>
 ```
 
-The `tsh` on your `PATH` is too old or too new for your organisation's Teleport. `axon`
+The `tsh` on your `PATH` is too old or too new for your organization's Teleport. `axon`
 never replaces a `tsh` you installed. Update it from the link.
 
 ### tsh is not on PATH
@@ -352,7 +352,7 @@ The tunnel exited, for example on a Teleport error. The message ends with the ta
 the log, which is in `~/.axon/state/tunnel.log`. Run `axon login` again; when it repeats,
 the log says why.
 
-### The server did not recognise your Teleport identity
+### The server did not recognize your Teleport identity
 
 ```text
 the SkyPilot API server did not report your Teleport identity through the tunnel. Run `axon login` again.
@@ -393,7 +393,7 @@ When a message ends with the installer's reason and does not mention your networ
 client cannot be installed as asked: the installer found no pre-built package, for your
 platform, of the client or of something it needs, at the version asked for. `axon` never
 builds one from source. The reason names the package. Running `axon login` again does not
-help; the person who sets `axon` up for your organisation can tell whether the server's
+help; the person who sets `axon` up for your organization can tell whether the server's
 SkyPilot version has packages for your platform.
 
 ### Your platform has no SkyPilot client
@@ -458,7 +458,7 @@ axon: Can't reach <host>.
 ```
 
 As for a login: the server does not answer from where you are. Follow your
-organisation's hint, when the message has one.
+organization's hint, when the message has one.
 
 ### The API server is not answering
 

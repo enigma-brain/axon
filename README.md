@@ -1,18 +1,18 @@
 # axon
 
-`axon` is one command-line entry point to a platform that an organisation
+`axon` is one command-line entry point to a platform that an organization
 runs. A user installs one tool and logs in once, with `axon login`. Each part
 of the platform is then a command group of `axon`. A group that passes a
 tool's own commands straight through is named for the tool: `axon sky` runs
-SkyPilot's `sky` commands against the organisation's SkyPilot API server. A
+SkyPilot's `sky` commands against the organization's SkyPilot API server. A
 group that hides its tool behind commands of its own is named for the part of
 the platform it reaches, and the tool behind it can change without users
 learning a new way in.
 
-The organisation decides how a laptop reaches its platform. Each way in is a
-pathway, and the organisation describes its pathways in a config file
+The organization decides how a laptop reaches its platform. Each way in is a
+pathway, and the organization describes its pathways in a config file
 that it gives its users. `axon` logs in by whichever pathway the user is on,
-and names no organisation itself.
+and names no organization itself.
 
 The design is in [docs/design/DESIGN.md](docs/design/DESIGN.md).
 
@@ -37,7 +37,7 @@ Two kinds of pathway:
 | Teleport | Through Teleport, by a tunnel that `axon` runs | Teleport's, in a browser when the certificate is not valid |
 
 `axon sky` passes every `sky` command to `axon`'s own SkyPilot client, against
-the organisation's SkyPilot API server, with SkyPilot's own help. Wherever
+the organization's SkyPilot API server, with SkyPilot's own help. Wherever
 SkyPilot's help or hints say `sky`, type `axon sky`.
 `axon` installs the SkyPilot client it needs for its own use and keeps
 everything it owns on the laptop in `~/.axon`.
@@ -83,15 +83,15 @@ The same two steps install a named version:
 The install script exits non-zero, with a message that names what could not
 be downloaded or verified, when the installation fails.
 
-## Organisations
+## Organizations
 
-`axon` takes everything about the organisation it serves from an
-config file, which the organisation gives its members: the
+`axon` takes everything about the organization it serves from an
+config file, which the organization gives its members: the
 pathways, the addresses of its servers, and the text `axon` shows about
-them. `axon` itself names no organisation. The file's format is in
+them. `axon` itself names no organization. The file's format is in
 [docs/design/DESIGN.md](docs/design/DESIGN.md#config-files).
 
-A pathway is a way to reach the organisation's API server. It is of one of
+A pathway is a way to reach the organization's API server. It is of one of
 two kinds: a direct pathway reaches the server at its own address, and a
 Teleport pathway reaches it through Teleport. A file holds one pathway or
 several, and a laptop holds any number of files.
@@ -117,7 +117,7 @@ questions on the terminal. Without a terminal, a question with a flag,
 such as which pathway, stops and names the flag; any other question is
 answered no.
 
-### When your organisation changes its file
+### When your organization changes its file
 
 How a change reaches your laptop depends on where the file came from:
 
@@ -166,7 +166,7 @@ One pathway is active at a time, stored by its identifier in
 
 - **One pathway in all the stored files:** it is used without asking.
 - **More than one:** the first login asks which one you are on, offering
-  each by the name and description your organisation wrote, file by file in
+  each by the name and description your organization wrote, file by file in
   the order of the files' identifiers. Answer with the number or the
   identifier:
 
@@ -199,14 +199,14 @@ between.
 ### On a direct pathway
 
 A direct pathway reaches the API server at its own address, which may
-answer only from your organisation's network.
+answer only from your organization's network.
 
-- **Connect to the network your organisation names first.** When the
+- **Connect to the network your organization names first.** When the
   server does not answer, `axon login` says "Can't reach `<host>`.",
-  followed by your organisation's hint when its file gives one, and stops
+  followed by your organization's hint when its file gives one, and stops
   without opening a browser.
 - **The login opens in your default browser.** Sign in with your
-  organisation's account and click "Authorize"; `axon` waits for the page
+  organization's account and click "Authorize"; `axon` waits for the page
   to complete. When your session is still good, no browser opens.
 - **The wait ends after five minutes.** If the login has not been completed
   in the browser by then, `axon` stops and asks you to run `axon login` again.
@@ -223,11 +223,11 @@ A Teleport pathway reaches the API server through Teleport, from anywhere.
 - **It finds `tsh`**, Teleport's client, on your `PATH`. `tsh` is a
   prerequisite of a Teleport pathway; `axon` does not install it.
 - **It logs you in to Teleport** with `tsh login --proxy=<proxy>`, which
-  opens your organisation's sign-in page in a browser. Where no browser
+  opens your organization's sign-in page in a browser. Where no browser
   opens by itself, as on WSL, `tsh` prints a link instead: open it in a
   browser to finish the sign-in. When your Teleport certificate is still
   valid, nothing opens. The certificate lasts as long
-  as your organisation's Teleport sets.
+  as your organization's Teleport sets.
 - **It brings up the tunnel**,
   `tsh --proxy=<proxy> proxy app <application> --port 46581`, after a fresh
   application login (`tsh --proxy=<proxy> apps login <application>`), where
@@ -267,7 +267,7 @@ carry on.
 
 **What stops the tunnel:**
 
-- **The Teleport certificate expires**, after the time your organisation's
+- **The Teleport certificate expires**, after the time your organization's
   Teleport sets.
 - **The laptop restarts.**
 - **`axon login` replaces it**, when the tunnel is down or the server does not
@@ -323,7 +323,7 @@ it stops and says what to do:
 | `` SkyPilot session expired. Run `axon login`. `` | Log in again. |
 | `` Teleport session expired. Run `axon login`. `` | Log in again; the Teleport certificate has run out. |
 | `` Run `axon login` to update the SkyPilot client. `` | The server runs another SkyPilot version; the login moves the client to it. |
-| `Can't reach <host>.` | The server does not answer from where you are. Your organisation's hint, when it gives one, follows and says what to do. |
+| `Can't reach <host>.` | The server does not answer from where you are. Your organization's hint, when it gives one, follows and says what to do. |
 | `The SkyPilot API server is not answering. Retry later.` | The server itself is down; logging in again does not help. |
 | `` Couldn't restart the Teleport tunnel. Run `axon login`. `` | The tunnel's log follows the message; the login starts a fresh tunnel. |
 

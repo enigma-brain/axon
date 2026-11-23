@@ -8,7 +8,7 @@ how you reach the server, signs you in, and connects each command group.
 
 ## The first login
 
-Your organisation gives you an address or a file. Give it to `axon` with
+Your organization gives you an address or a file. Give it to `axon` with
 `--config`. It takes one of three sources:
 
 ```sh
@@ -44,11 +44,11 @@ nothing.
 
 ## Pathways
 
-A pathway is a way to reach your organisation's API server. An organisation
+A pathway is a way to reach your organization's API server. An organization
 writes its own pathways in its file, each of one of two kinds:
 
 - A [**direct**](/axon/pathways/direct/) pathway reaches the server at its own
-  address. The server may answer only from your organisation's network.
+  address. The server may answer only from your organization's network.
 - A [**Teleport**](/axon/pathways/teleport/) pathway reaches it through
   Teleport, and works from wherever Teleport does.
 
@@ -59,7 +59,7 @@ identifier. Later logins use it without asking.
 
 - With **one pathway** in all your stored files, `axon` uses it without asking.
 - With **more than one**, the first login asks which you are on. It offers each
-  by the name and description your organisation wrote, file by file in the order
+  by the name and description your organization wrote, file by file in the order
   of the files' identifiers. Answer with the number:
 
   ```text
@@ -105,7 +105,7 @@ A login runs these stages and stops at the first that fails:
 When it succeeds, `axon` records your email in `~/.axon/state/email`, and
 says for each command group that it is connected and as whom.
 
-## When your organisation changes its file
+## When your organization changes its file
 
 How a change reaches your laptop depends on where the file came from:
 

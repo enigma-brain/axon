@@ -50,7 +50,7 @@ func step(progress io.Writer, label string, ticks bool, run func(out io.Writer) 
 	return err
 }
 
-// lockedWriter serialises writes to w. A step's ticker and the command it
+// lockedWriter serializes writes to w. A step's ticker and the command it
 // runs write from separate goroutines, and progress need not be safe for
 // concurrent use.
 type lockedWriter struct {

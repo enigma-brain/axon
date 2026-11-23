@@ -775,7 +775,7 @@ func TestConcurrentEnsureOtherVersionWaitsThenReinstalls(t *testing.T) {
 	}
 }
 
-func TestEnsureWaitHonoursCancellation(t *testing.T) {
+func TestEnsureWaitHonorsCancellation(t *testing.T) {
 	f := newFixture(t)
 	tools, err := f.dir.ToolsDir()
 	if err != nil {

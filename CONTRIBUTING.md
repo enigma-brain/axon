@@ -13,7 +13,7 @@ The work spans three layers:
   `docs/design/`, with [`DESIGN.md`](docs/design/DESIGN.md) as its
   authority.
 - **Implementation**: the code and configuration in this repository that
-  realise the intent.
+  realize the intent.
 - **World state**: what running the implementation produces. It is
   observed, not recorded.
 
@@ -33,7 +33,7 @@ deployed. Where it is silent, the choice is a free parameter, left to the
 implementation.
 
 What DESIGN states is the whole of its scope: anything it does not state is
-unconstrained. DESIGN is organised however suits the system.
+unconstrained. DESIGN is organized however suits the system.
 
 DESIGN opens with a short legend explaining its citations and pointing here.
 
@@ -116,15 +116,18 @@ Each move happens in a single change:
 
 ## Writing style
 
+Everything in the repository, from code and identifiers to messages,
+documentation and commit messages, uses American spelling.
+
 DESIGN, questions and decisions are written in the present tense, as plain
 statements of fact: "the tunnel listens on port 46581", not "the tunnel
 should listen" or "the tunnel will listen". They avoid modal language such as
 "should", "may", "might" and "could". A rule is stated as what is the case;
 an open point is a question, not a hedge.
 
-DESIGN, questions and decisions are written for any organisation that uses
-`axon`. A reason is one that another organisation adopting `axon` would
-share: a reason that depends on one organisation's systems, people, plans or
+DESIGN, questions and decisions are written for any organization that uses
+`axon`. A reason is one that another organization adopting `axon` would
+share: a reason that depends on one organization's systems, people, plans or
 accounts is not given.
 
 ## Documentation site
@@ -152,7 +155,7 @@ CI builds the site for every pull request that touches `docs/site`. A push to
 when Pages is switched on for the repository, and skips publishing, with a
 note in the run summary, when it is not.
 
-The site holds no organisation detail, under the rule in
+The site holds no organization detail, under the rule in
 [What stays out](#what-stays-out). It links to SkyPilot's documentation
 only from the page of the `sky` command group.
 
@@ -254,13 +257,13 @@ under a new version, and the tag is never moved.
 ## Contributing from outside
 
 A change is proposed as a pull request against `main`. For a change to
-behaviour, or anything larger than a fix, an issue on the repository comes
+behavior, or anything larger than a fix, an issue on the repository comes
 first, to agree the direction before the work.
 
 A change to what `axon` does comes with its change to DESIGN, and to the
 question and decision files it touches, in the same pull request.
 
-Contributions are made under the repository's MIT licence.
+Contributions are made under the repository's MIT license.
 
 ## Commits and pull requests
 
@@ -273,9 +276,9 @@ its pull request. No spec or plan is committed.
 
 ## What stays out
 
-No file in the repository, and no commit message, holds an organisation
+No file in the repository, and no commit message, holds an organization
 detail. What counts as one is listed in DESIGN's section
-[Organisation details](docs/design/DESIGN.md#organisation-details).
+[Organization details](docs/design/DESIGN.md#organization-details).
 
 No file in the repository, and no commit message, carries a tracker issue
 identifier. A repository file reads without access to the tracker, and issue

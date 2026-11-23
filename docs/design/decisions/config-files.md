@@ -2,11 +2,11 @@
 
 ## Context
 
-An organisation's configuration reaches a laptop as a file, and an
-organisation can split its pathways across several files, for instance one
+An organization's configuration reaches a laptop as a file, and an
+organization can split its pathways across several files, for instance one
 pathway per file, so that each member receives only the file for their
 pathway and never meets a prompt. Some people use more than one pathway, of
-one organisation or of several, and move between them from time to time.
+one organization or of several, and move between them from time to time.
 
 Each pathway is chosen by its identifier with `--pathway`, and only one
 pathway is active at a time.
@@ -22,7 +22,7 @@ is refused without changing anything. Removing a file is deleting it.
 
 - A person on more than one pathway switches with `--pathway`, without
   setting up again or fetching a file each time.
-- An organisation can give each pathway its own file, so most members hold
+- An organization can give each pathway its own file, so most members hold
   one file with one pathway and never see a prompt.
 - A file's own `id` decides which stored file it replaces, so running
   `--config` again with a newer copy updates it in place, whatever its source.
@@ -37,6 +37,6 @@ is refused without changing anything. Removing a file is deleting it.
   address, or from a download, would be stored twice.
 - **Pathway identifiers qualified by the file, such as `file/pathway`.**
   Every `--pathway` grows longer for the uncommon case of a clash, which the
-  organisations can avoid by choosing their identifiers.
+  organizations can avoid by choosing their identifiers.
 - **A command to list and remove files.** It adds commands and their
   failure cases for an operation that is deleting a file.

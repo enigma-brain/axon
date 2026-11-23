@@ -8,7 +8,7 @@ import (
 	"syscall"
 )
 
-// lockFile, under axon's state directory, is the file that serialises
+// lockFile, under axon's state directory, is the file that serializes
 // adding config files.
 const lockFile = "orgs.lock"
 

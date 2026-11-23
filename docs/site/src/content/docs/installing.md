@@ -82,7 +82,7 @@ The install script exits with a non-zero status, and a message that begins
 
 ## Next
 
-Your organisation gives you a config file, or an address that serves
+Your organization gives you a config file, or an address that serves
 one. [Log in with it](/axon/logging-in/).
 
 When the install fails, see [Troubleshooting](/axon/troubleshooting/).

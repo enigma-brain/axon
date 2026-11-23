@@ -329,7 +329,7 @@ func assertMode(t *testing.T, path string, want os.FileMode) {
 
 // TestConcurrentAddsClaimingOnePathway adds, at the same moment, several
 // files with different ids that all claim one pathway identifier. Adds are
-// serialised, so exactly one is stored and every other is refused.
+// serialized, so exactly one is stored and every other is refused.
 func TestConcurrentAddsClaimingOnePathway(t *testing.T) {
 	s, _ := newStore(t)
 	const n = 8
