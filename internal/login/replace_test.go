@@ -418,3 +418,23 @@ func TestReplacingWithAnUnreadableActivePathwayStops(t *testing.T) {
 		t.Errorf("stored %v, want %v unchanged", got, before)
 	}
 }
+
+// A file a stopped replacement left aside does not stop a login.
+func TestLoginWithALeftoverRemovingFile(t *testing.T) {
+	h := newHarness(t)
+	path := filepath.Join(h.home, ".axon", "orgs", "example.toml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+".removing", data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.logIn()
+	if err := h.login(Options{Pathway: "campus"}); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.errOut.String())
+	}
+	if h.errOut.Len() != 0 {
+		t.Errorf("stderr = %q", h.errOut.String())
+	}
+}

@@ -246,31 +246,131 @@ func TestPutRefusesToRemoveAFileThatChanged(t *testing.T) {
 	}
 }
 
-// When a removal fails, the stored files and records are put back as they
-// were, the new file's included.
-func TestPutRestoresEverythingWhenARemovalFails(t *testing.T) {
+// clashing stores file a, then returns a file b whose pathway has its name
+// and the stored file to remove for it, as Inspect gives it.
+func clashing(t *testing.T, s Store) ([]byte, File) {
+	t.Helper()
+	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
+	added := []byte(directOrg("b", "two", "Campus", "https://b.example.org"))
+	c, err := s.Inspect(added, false)
+	if err != nil || len(c.Clashes) != 1 {
+		t.Fatalf("Inspect = %+v, %v", c, err)
+	}
+	return added, c.Clashes[0].Stored
+}
+
+// failOn makes the named step fail for path.
+func failOn(t *testing.T, step *func(string, string) error, path string) {
+	t.Helper()
+	real := *step
+	*step = func(from, to string) error {
+		if from == path {
+			return errors.New("injected failure")
+		}
+		return real(from, to)
+	}
+	t.Cleanup(func() { *step = real })
+}
+
+func failReplaceOn(t *testing.T, path string) {
+	t.Helper()
+	replaceFile = func(p string, data []byte) error {
+		if p == path {
+			return errors.New("injected failure")
+		}
+		return axondir.ReplaceFile(p, data)
+	}
+	t.Cleanup(func() { replaceFile = axondir.ReplaceFile })
+}
+
+// A put that fails, before or after the file to remove is set aside,
+// leaves the stored files and records as they were.
+func TestPutRestoresEverythingWhenAStepFails(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fail func(t *testing.T, home string, s Store)
+	}{
+		{"setting aside the old record", func(t *testing.T, home string, s Store) {
+			failOn(t, &renameFile, filepath.Join(home, ".axon", "state", "orgs", "a.toml"))
+		}},
+		{"writing the new file", func(t *testing.T, home string, s Store) {
+			failReplaceOn(t, s.Path("b"))
+		}},
+		{"writing the new record", func(t *testing.T, home string, s Store) {
+			failReplaceOn(t, filepath.Join(home, ".axon", "state", "orgs", "b.toml"))
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, home := newStore(t)
+			added, old := clashing(t, s)
+			before := snapshot(t, filepath.Join(home, ".axon"))
+			tc.fail(t, home, s)
+			_, err := s.Put(added, PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{old}})
+			if err == nil || !strings.Contains(err.Error(), "injected failure") {
+				t.Fatalf("Put = %v, want the injected failure", err)
+			}
+			if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
+				t.Errorf("a failed put left changes:\nbefore %v\nafter  %v", before, after)
+			}
+		})
+	}
+}
+
+// When putting a file back fails, the others are still put back, and the
+// file's content stays on disk beside it.
+func TestRollbackContinuesAfterAStepFails(t *testing.T) {
+	s, home := newStore(t)
+	added, old := clashing(t, s)
+	original, _ := os.ReadFile(s.Path("a"))
+	failReplaceOn(t, filepath.Join(home, ".axon", "state", "orgs", "b.toml"))
+	failOn(t, &renameFile, s.Path("a")+removingExt)
+	_, err := s.Put(added, PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{old}})
+	if err == nil || !strings.Contains(err.Error(), s.Path("a")+" could not be put back from "+s.Path("a")+removingExt) {
+		t.Fatalf("Put = %v, want the file named", err)
+	}
+	if data, _ := os.ReadFile(s.Path("a") + removingExt); string(data) != string(original) {
+		t.Errorf("the old content is not beside the file: %q", data)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".axon", "state", "orgs", "a.toml")); err != nil {
+		t.Errorf("the old record was not put back: %v", err)
+	}
+	if _, err := os.Stat(s.Path("b")); !os.IsNotExist(err) {
+		t.Errorf("the new file stayed: %v", err)
+	}
+}
+
+// A file left aside by a put that stopped is never read, and does not stop
+// a later add or replacement.
+func TestALeftoverRemovingFileIsIgnored(t *testing.T) {
 	s, home := newStore(t)
 	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
-	added := directOrg("b", "two", "Campus", "https://b.example.org")
-	c, err := s.Inspect([]byte(added), false)
+	for _, p := range []string{s.Path("a"), filepath.Join(home, ".axon", "state", "orgs", "a.toml")} {
+		data, _ := os.ReadFile(p)
+		if err := os.WriteFile(p+removingExt, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The leftover has the same pathway as the stored file, and is not
+	// read as a second copy of it.
+	files, problems, err := s.List()
+	if err != nil || len(problems) != 0 || len(files) != 1 {
+		t.Fatalf("List = %v, %v, %v", pathwayIDs(files), problems, err)
+	}
+	add(t, s, directOrg("c", "three", "C", "https://c.example.org"), "-")
+	// A replacement sets the file aside again over the leftover.
+	added := []byte(directOrg("b", "two", "Campus", "https://b.example.org"))
+	c, err := s.Inspect(added, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The old file is removed, and the removal of its record fails.
-	record := filepath.Join(home, ".axon", "state", "orgs", "a.toml")
-	removeFile = func(path string) error {
-		if path == record {
-			return errors.New("injected failure")
-		}
-		return os.Remove(path)
+	if _, err := s.Put(added, PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{c.Clashes[0].Stored}}); err != nil {
+		t.Fatal(err)
 	}
-	t.Cleanup(func() { removeFile = os.Remove })
-	before := snapshot(t, filepath.Join(home, ".axon"))
-	if _, err := s.Put([]byte(added), PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{c.Clashes[0].Stored}}); err == nil || !strings.Contains(err.Error(), "injected failure") {
-		t.Fatalf("Put = %v, want the injected failure", err)
+	if files, _, _ := s.List(); !reflect.DeepEqual(pathwayIDs(files), []string{"b/two", "c/three"}) {
+		t.Errorf("stored %v", pathwayIDs(files))
 	}
-	if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
-		t.Errorf("a failed put left changes:\nbefore %v\nafter  %v", before, after)
+	if _, err := os.Stat(s.Path("a") + removingExt); !os.IsNotExist(err) {
+		t.Errorf("the file set aside was not deleted: %v", err)
 	}
 }
 
@@ -280,91 +380,5 @@ func TestSameServerKeepsThePathsCase(t *testing.T) {
 	c := Pathway{Kind: KindDirect, Sky: Sky{Endpoint: "https://sky.example.org/team"}}
 	if !SameServer(a, b) || SameServer(a, c) {
 		t.Errorf("SameServer: host case and trailing slash ignored = %v, path case ignored = %v", SameServer(a, b), SameServer(a, c))
-	}
-}
-
-// A restore that fails does not stop the others.
-func TestRollbackContinuesAfterARestoreFails(t *testing.T) {
-	s, home := newStore(t)
-	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
-	added := directOrg("b", "two", "Campus", "https://b.example.org")
-	c, err := s.Inspect([]byte(added), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The removal of the old record fails, and so does restoring the old
-	// file's record; the old file itself is still restored.
-	record := filepath.Join(home, ".axon", "state", "orgs", "a.toml")
-	removeFile = func(path string) error {
-		if path == record {
-			return errors.New("injected removal failure")
-		}
-		return os.Remove(path)
-	}
-	replaceFile = func(path string, data []byte) error {
-		if path == record {
-			return errors.New("injected restore failure")
-		}
-		return axondir.ReplaceFile(path, data)
-	}
-	t.Cleanup(func() { removeFile, replaceFile = os.Remove, axondir.ReplaceFile })
-	_, err = s.Put([]byte(added), PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{c.Clashes[0].Stored}})
-	if err == nil || !strings.Contains(err.Error(), record+" could not be restored: injected restore failure") {
-		t.Fatalf("Put = %v, want the record named as not restored", err)
-	}
-	if data, err := os.ReadFile(s.Path("a")); err != nil || !strings.Contains(string(data), `id = "a"`) {
-		t.Errorf("the old file was not restored: %v", err)
-	}
-	if _, err := os.Stat(s.Path("b")); !os.IsNotExist(err) {
-		t.Errorf("the new file stayed: %v", err)
-	}
-}
-
-// A file that was removed and could not be restored is kept elsewhere,
-// and the error names where.
-func TestAnUnrestoredFileIsKept(t *testing.T) {
-	s, home := newStore(t)
-	keep := t.TempDir()
-	keepDir = func() string { return keep }
-	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
-	original, err := os.ReadFile(s.Path("a"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	added := directOrg("b", "two", "Campus", "https://b.example.org")
-	c, err := s.Inspect([]byte(added), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The old file is removed, its record's removal fails, and putting the
-	// old file back fails.
-	record := filepath.Join(home, ".axon", "state", "orgs", "a.toml")
-	removeFile = func(path string) error {
-		if path == record {
-			return errors.New("injected removal failure")
-		}
-		return os.Remove(path)
-	}
-	replaceFile = func(path string, data []byte) error {
-		if path == s.Path("a") {
-			return errors.New("injected restore failure")
-		}
-		return axondir.ReplaceFile(path, data)
-	}
-	t.Cleanup(func() { removeFile, replaceFile, keepDir = os.Remove, axondir.ReplaceFile, os.TempDir })
-	_, err = s.Put([]byte(added), PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{c.Clashes[0].Stored}})
-	if err == nil {
-		t.Fatal("Put succeeded")
-	}
-	entries, _ := os.ReadDir(keep)
-	if len(entries) != 1 {
-		t.Fatalf("kept %v, want one file", entries)
-	}
-	kept := filepath.Join(keep, entries[0].Name())
-	if data, _ := os.ReadFile(kept); string(data) != string(original) {
-		t.Errorf("kept %q, want the old file", data)
-	}
-	if !strings.Contains(err.Error(), "its previous content is in "+kept) {
-		t.Errorf("error %q does not name %s", err, kept)
 	}
 }

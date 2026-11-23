@@ -378,58 +378,73 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 			return f, false, nil
 		}
 	}
-	// Everything the put changes is kept as it was, so that a failure at
-	// any step puts it all back: the stored files and records stay either
-	// all as they were or all as they are meant to become.
-	paths := []string{path, s.recordPath(f.ID)}
-	for _, r := range opts.Remove {
-		if r.ID != f.ID {
-			paths = append(paths, s.Path(r.ID), s.recordPath(r.ID))
-		}
-	}
+	// A failure at any step puts everything back, so the stored files and
+	// records end either all as they were or all as they are meant to
+	// become. The stored file and record being replaced are kept in memory.
+	// Each file to remove is first renamed aside, beside itself, and
+	// deleted only once everything else has succeeded, so its content stays
+	// on disk until then.
 	var saved []savedFile
-	for _, p := range paths {
+	for _, p := range []string{path, s.recordPath(f.ID)} {
 		sf, err := saveFile(p)
 		if err != nil {
 			return File{}, false, err
 		}
 		saved = append(saved, sf)
 	}
+	var aside []string // paths renamed aside, each now at path+removingExt
 	fail := func(err error) (File, bool, error) {
-		// Every saved file is restored, even after one fails, and each
-		// failure is reported.
-		var unrestored []string
-		for i := len(saved) - 1; i >= 0; i-- {
-			if undo := saved[i].restore(); undo != nil {
-				msg := fmt.Sprintf("%s could not be restored: %v", saved[i].path, undo)
-				if kept, err := saved[i].keep(); err == nil && kept != "" {
-					msg += fmt.Sprintf(" (its previous content is in %s)", kept)
-				}
-				unrestored = append(unrestored, msg)
+		// Every step is undone, even after one fails, and each failure is
+		// reported.
+		var undone []string
+		for i := len(aside) - 1; i >= 0; i-- {
+			if undo := renameFile(aside[i]+removingExt, aside[i]); undo != nil {
+				undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", aside[i], aside[i]+removingExt, unwrapPath(undo)))
 			}
 		}
-		if len(unrestored) > 0 {
-			return File{}, false, fmt.Errorf("%w; and %s", err, strings.Join(unrestored, "; "))
+		for i := len(saved) - 1; i >= 0; i-- {
+			if undo := saved[i].restore(); undo != nil {
+				undone = append(undone, fmt.Sprintf("%s could not be restored: %v", saved[i].path, undo))
+			}
+		}
+		if len(undone) > 0 {
+			return File{}, false, fmt.Errorf("%w; and %s", err, strings.Join(undone, "; "))
 		}
 		return File{}, false, err
 	}
 
-	if err := axondir.ReplaceFile(path, data); err != nil {
+	for _, r := range opts.Remove {
+		if r.ID == f.ID {
+			continue
+		}
+		for _, p := range []string{s.Path(r.ID), s.recordPath(r.ID)} {
+			err := renameFile(p, p+removingExt)
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				return fail(fmt.Errorf("remove %s: %w", p, unwrapPath(err)))
+			}
+			aside = append(aside, p)
+		}
+	}
+	if err := replaceFile(path, data); err != nil {
 		return fail(err)
 	}
 	if err := s.writeRecord(f.ID, opts.Origin, data); err != nil {
 		return fail(err)
 	}
-	for _, r := range opts.Remove {
-		if r.ID == f.ID {
-			continue
-		}
-		if err := s.remove(r.ID); err != nil {
-			return fail(err)
-		}
+	// The put has succeeded. A file left aside because its deletion
+	// fails is ignored by every reader, and is safe to delete.
+	for _, p := range aside {
+		removeFile(p + removingExt)
 	}
 	return f, true, nil
 }
+
+// removingExt is added to the name of a file a put is removing, until the
+// put has succeeded. No reader of the store reads such a file.
+const removingExt = ".removing"
 
 // savedFile is a file's content before a put changed it.
 type savedFile struct {
@@ -450,28 +465,6 @@ func saveFile(path string) (savedFile, error) {
 	return savedFile{path: path, data: data, existed: true}, nil
 }
 
-// keepDir is where keep writes a file it could not restore. Tests replace
-// it.
-var keepDir = os.TempDir
-
-// keep writes the saved content of a file that existed to a new file in
-// keepDir, so that it outlives the put, and returns that file's path. For a
-// file that did not exist it writes nothing and returns "".
-func (f savedFile) keep() (string, error) {
-	if !f.existed {
-		return "", nil
-	}
-	out, err := os.CreateTemp(keepDir(), "axon-"+filepath.Base(f.path)+"-*")
-	if err != nil {
-		return "", err
-	}
-	if _, err := out.Write(f.data); err != nil {
-		out.Close()
-		return "", err
-	}
-	return out.Name(), out.Close()
-}
-
 // restore puts the file back as it was saved.
 func (f savedFile) restore() error {
 	if f.existed {
@@ -483,22 +476,13 @@ func (f savedFile) restore() error {
 	return nil
 }
 
-// removeFile removes a file, and replaceFile replaces one. Tests replace
-// them to make a step fail.
+// removeFile removes a file, renameFile renames one and replaceFile
+// replaces one. Tests replace them to make a step fail.
 var (
 	removeFile  = os.Remove
+	renameFile  = os.Rename
 	replaceFile = axondir.ReplaceFile
 )
-
-// remove deletes the stored file id and its record.
-func (s Store) remove(id string) error {
-	for _, path := range []string{s.Path(id), s.recordPath(id)} {
-		if err := removeFile(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("remove %s: %w", path, unwrapPath(err))
-		}
-	}
-	return nil
-}
 
 func (s Store) recordPath(id string) string {
 	return filepath.Join(s.dir.Root(), "state", stateSub, id+fileExt)
@@ -528,7 +512,7 @@ func (s Store) writeRecord(id string, origin Origin, data []byte) error {
 	if err := toml.NewEncoder(&buf).Encode(rec); err != nil {
 		return fmt.Errorf("record the source of %s: %w", id, err)
 	}
-	return axondir.ReplaceFile(filepath.Join(dir, id+fileExt), buf.Bytes())
+	return replaceFile(filepath.Join(dir, id+fileExt), buf.Bytes())
 }
 
 // now is the clock a record's time is read from. Tests replace it.

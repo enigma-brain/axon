@@ -252,6 +252,11 @@ one line that says so.
 A hand-made file and a config file never update each other: two such files
 with the same `id` are a clash.
 
+A file being removed is renamed with the suffix `.removing` and deleted once
+the addition is stored. When `axon` stops in between, such a file is left in
+`~/.axon/orgs/` or `~/.axon/state/orgs/`; `axon` never reads it, and it is
+safe to delete.
+
 ### Hand-made pathways
 
 A user without a config file makes a pathway at `axon login`
