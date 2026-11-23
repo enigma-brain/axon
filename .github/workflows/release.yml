@@ -13,6 +13,10 @@ name: Release
 #               published.
 #   4. check:   the install line runs against the published release.
 #
+# The release is built for the tag whose push started the run, which
+# GoReleaser is told explicitly rather than left to find in git. So a final
+# release may be tagged on the same commit as its release candidate.
+#
 # When the gate fails, the release stays a draft and the workflow fails.
 # CONTRIBUTING.md, under "Continuous integration", says what a maintainer
 # does then.
@@ -46,6 +50,9 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # With several tags on the commit, GoReleaser would pick one of
+          # them itself; this names the tag that was pushed.
+          GORELEASER_CURRENT_TAG: ${{ env.TAG }}
       - name: Collect the files uploaded to the draft
         run: |
           mkdir release-files
