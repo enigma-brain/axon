@@ -52,17 +52,19 @@ func checkReleaseTag(data []byte) error {
 			}
 			found++
 			// A step's env overrides its job's, which overrides the
-			// workflow's.
-			lookup := func(name string) (string, bool) {
-				for _, env := range []map[string]string{step.Env, job.Env, wf.Env} {
-					if v, ok := env[name]; ok {
-						return compactExpr(v), true
+			// workflow's. lookup searches the scopes from the given one
+			// outward and returns the scope where the name is defined.
+			scopes := []map[string]string{step.Env, job.Env, wf.Env}
+			lookup := func(name string, from int) (string, int, bool) {
+				for j := from; j < len(scopes); j++ {
+					if v, ok := scopes[j][name]; ok {
+						return compactExpr(v), j, true
 					}
 				}
-				return "", false
+				return "", 0, false
 			}
 			where := fmt.Sprintf("job %q, step %d (%s)", jobName, i+1, step.Uses)
-			tag, ok := lookup("GORELEASER_CURRENT_TAG")
+			tag, scope, ok := lookup("GORELEASER_CURRENT_TAG", 0)
 			if !ok {
 				return fmt.Errorf("%s does not set GORELEASER_CURRENT_TAG", where)
 			}
@@ -71,7 +73,9 @@ func checkReleaseTag(data []byte) error {
 			}
 			if name, isEnv := strings.CutPrefix(tag, "${{env."); isEnv && strings.HasSuffix(name, "}}") {
 				name = strings.TrimSuffix(name, "}}")
-				if v, ok := lookup(name); ok && v == pushedRef {
+				// An env value sees only the env of the scopes around it,
+				// not the other entries of its own map.
+				if v, _, ok := lookup(name, scope+1); ok && v == pushedRef {
 					continue
 				}
 				return fmt.Errorf("%s sets GORELEASER_CURRENT_TAG to env.%s, which is not ${{ github.ref_name }}", where, name)
@@ -170,6 +174,32 @@ jobs:
         env:
           GORELEASER_CURRENT_TAG: ${{ env.TAG }}
 `,
+		},
+		{
+			name: "env variable overridden beside it in the same map",
+			yaml: head + `env:
+  TAG: v1.0.0
+jobs:
+  draft:
+    steps:
+      - uses: goreleaser/goreleaser-action@v7
+        env:
+          TAG: ${{ github.ref_name }}
+          GORELEASER_CURRENT_TAG: ${{ env.TAG }}
+`,
+		},
+		{
+			name: "job env variable referenced from the step",
+			yaml: head + `jobs:
+  draft:
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: goreleaser/goreleaser-action@v7
+        env:
+          GORELEASER_CURRENT_TAG: ${{ env.TAG }}
+`,
+			ok: true,
 		},
 		{
 			name: "env variable that is not defined",
