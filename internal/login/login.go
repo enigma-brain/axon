@@ -139,6 +139,16 @@ func (l *login) run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("determine the pathway: %w", err)
 	}
 
+	// A teleport pathway needs tsh. Without it the login stops here, before
+	// the pathway that was connected is left or the active one changes.
+	if p.Kind == orgfile.KindTeleport {
+		path, err := l.teleport.ensure(ctx, p.Teleport.Proxy)
+		if err != nil {
+			return fmt.Errorf("establish the Teleport session: %w", err)
+		}
+		l.teleport.path = path
+	}
+
 	// Leaving the pathway that was connected, or its settings for
 	// machines, disconnects it by what was recorded when it connected,
 	// before the new pathway is stored: when that fails, the active

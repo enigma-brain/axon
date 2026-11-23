@@ -77,7 +77,7 @@ func Logout(ctx context.Context, opts LogoutOptions) error {
 	lo := &logout{
 		dir:       dir,
 		client:    skyClient{dir: dir},
-		skyConfig: filepath.Join(home, ".sky", "config.yaml"),
+		skyConfig: skyConfigPath(home, os.Getenv),
 		environ:   os.Environ,
 		findTsh:   tsh.Find,
 		tshLogout: tsh.Logout,
@@ -97,31 +97,34 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 	}
 	stateDir := filepath.Join(lo.dir.Root(), "state")
 
-	rec, hasRecord, err := connected.Read(lo.dir)
-	if err != nil {
-		return err
-	}
-	// A record that this axon cannot read, such as one an earlier axon
-	// wrote, still marks a connection.
-	_, statErr := os.Stat(connected.Path(lo.dir))
-	oldRecord := !hasRecord && statErr == nil
-	_, hasEmail, err := lo.dir.Email()
-	if err != nil {
-		return err
-	}
-	running, err := tunnelRunning(stateDir)
-	if err != nil {
-		return err
-	}
-	if !hasRecord && !oldRecord && !hasEmail && !running {
-		fmt.Fprintln(opts.Out, lineNothing)
-		return nil
-	}
-
 	failed := false
 	fail := func(step string, err error) {
 		failed = true
 		fmt.Fprintf(opts.Err, "axon: could not %s: %v\n", step, err)
+	}
+
+	// What is recorded. A record that cannot be read is reported, and the
+	// steps that do not need it still run; the records are then kept, so
+	// that logging out again retries.
+	rec, hasRecord, err := connected.Read(lo.dir)
+	if err != nil {
+		fail("read the record of the connected pathway", err)
+	}
+	// A record that this axon cannot read as a record, such as one an
+	// earlier axon wrote, still marks a connection.
+	_, statErr := os.Stat(connected.Path(lo.dir))
+	oldRecord := err == nil && !hasRecord && statErr == nil
+	_, hasEmail, err := lo.dir.Email()
+	if err != nil {
+		fail("read the logged-in email", err)
+	}
+	running, err := tunnelRunning(stateDir)
+	if err != nil {
+		fail("check the Teleport tunnel", err)
+	}
+	if !failed && !hasRecord && !oldRecord && !hasEmail && !running {
+		fmt.Fprintln(opts.Out, lineNothing)
+		return nil
 	}
 
 	// 1. The SkyPilot login.
@@ -240,4 +243,17 @@ func tunnelRunning(stateDir string) (bool, error) {
 		return false, nil
 	}
 	return tunnel.RecordedRunning(stateDir)
+}
+
+// skyConfigPath returns SkyPilot's user configuration file as the client
+// resolves it: the file SKYPILOT_GLOBAL_CONFIG names, when it is set, and
+// ~/.sky/config.yaml otherwise.
+func skyConfigPath(home string, getenv func(string) string) string {
+	if path := getenv("SKYPILOT_GLOBAL_CONFIG"); path != "" {
+		if path == "~" || strings.HasPrefix(path, "~/") {
+			return filepath.Join(home, strings.TrimPrefix(path, "~"))
+		}
+		return path
+	}
+	return filepath.Join(home, ".sky", "config.yaml")
 }

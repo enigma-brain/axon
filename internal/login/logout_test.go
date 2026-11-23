@@ -310,3 +310,57 @@ func TestLoginWithAnEarlierAxonsRecord(t *testing.T) {
 		t.Error("the tunnel is not up after the login")
 	}
 }
+
+// An email record that cannot be read is reported, and the steps that do
+// not need it still run.
+func TestLogoutContinuesWhenTheEmailCannotBeRead(t *testing.T) {
+	h := newMetaHarness(t)
+	if err := h.run("remote"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	h.tshCalls()
+	emailPath := filepath.Join(h.home, ".axon", "state", "email")
+	if err := os.Remove(emailPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(emailPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	r := (&logoutRun{lo: newLogout(h.harness, fakeTsh)}).run()
+	if r.err == nil {
+		t.Fatal("logout succeeded with an unreadable email record")
+	}
+	if !strings.HasPrefix(r.errOut.String(), "axon: could not read the logged-in email: ") {
+		t.Errorf("stderr = %q", r.errOut.String())
+	}
+	if calls := h.tshCalls(); !contains(calls, "logout --proxy=teleport.example.org") {
+		t.Errorf("tsh calls = %q, want the Teleport logout", calls)
+	}
+	if h.tunnelStatus().Running {
+		t.Error("the tunnel still runs")
+	}
+	if _, ok, _ := connected.Read(axondir.New(h.home)); !ok {
+		t.Error("the record was removed after a failed step")
+	}
+}
+
+func TestSkyConfigPath(t *testing.T) {
+	env := func(v string) func(string) string {
+		return func(k string) string {
+			if k == "SKYPILOT_GLOBAL_CONFIG" {
+				return v
+			}
+			return ""
+		}
+	}
+	for v, want := range map[string]string{
+		"":                "/home/ada/.sky/config.yaml",
+		"/etc/sky.yaml":   "/etc/sky.yaml",
+		"~/conf/sky.yaml": "/home/ada/conf/sky.yaml",
+	} {
+		if got := skyConfigPath("/home/ada", env(v)); got != want {
+			t.Errorf("SKYPILOT_GLOBAL_CONFIG=%q: %q, want %q", v, got, want)
+		}
+	}
+}

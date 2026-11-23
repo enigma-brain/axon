@@ -345,13 +345,13 @@ func TestBinary(t *testing.T) {
 			t.Errorf("stderr = %q", stderr)
 		}
 		_, stderr, _ = runAxon(t, bin, h, strings.NewReader(twoFile), "login", "--config", "-", "--pathway", "south")
-		// A teleport pathway's session stage asks the proxy for its version,
-		// which goes through the dead proxy.
-		if !strings.HasPrefix(stderr, "axon: establish the Teleport session: ") {
+		// The fence's PATH has no tsh, so a teleport pathway stops before the
+		// active pathway changes.
+		if !strings.HasPrefix(stderr, "axon: establish the Teleport session: this pathway needs Teleport's client, tsh") {
 			t.Errorf("stderr = %q", stderr)
 		}
-		if got := readActive(t, h); got != "pathway = \"south\"\n" {
-			t.Errorf("config.toml = %q", got)
+		if got := readActive(t, h); got != "" {
+			t.Errorf("config.toml = %q, want no active pathway", got)
 		}
 	})
 

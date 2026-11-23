@@ -43,16 +43,12 @@ type teleport struct {
 	path string
 }
 
-// establishTeleportSession makes sure tsh is present and logs in to
-// Teleport when the certificate is not valid. A valid certificate needs no
+// establishTeleportSession logs in to Teleport, with the tsh that run
+// found, when the certificate is not valid. A valid certificate needs no
 // login, so no browser opens.
 func (l *login) establishTeleportSession(ctx context.Context, p orgfile.Pathway, opts Options) error {
 	proxy := p.Teleport.Proxy
-	path, err := l.teleport.ensure(ctx, proxy)
-	if err != nil {
-		return err
-	}
-	l.teleport.path = path
+	path := l.teleport.path
 
 	valid, err := tsh.SessionValid(ctx, path, proxy)
 	if err != nil {

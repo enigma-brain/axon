@@ -374,6 +374,23 @@ func TestTeleportTshMissingStops(t *testing.T) {
 	}
 }
 
+// A missing tsh leaves the pathway that was connected as it was: the
+// active pathway and its record do not change.
+func TestTeleportTshMissingKeepsThePreviousPathway(t *testing.T) {
+	h := newMetaHarness(t)
+	h.script("ok")
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login on campus: %v\n%s", err, h.out.String())
+	}
+	h.l.teleport.ensure = tsh.Ensure
+	if err := h.run("remote"); err == nil || !strings.Contains(err.Error(), "no tsh was found on PATH") {
+		t.Fatalf("login on remote: err = %v", err)
+	}
+	if h.active() != "campus" || h.record().ID != "campus" || h.email() == "" {
+		t.Errorf("active = %q, record = %+v, email = %q; want campus kept", h.active(), h.record(), h.email())
+	}
+}
+
 // The login uses the tsh it finds on PATH.
 func TestTeleportUsesTshOnPath(t *testing.T) {
 	h := newMetaHarness(t)
