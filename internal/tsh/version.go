@@ -85,3 +85,14 @@ func supported(version, proxy string) bool {
 	c, p := major(version), major(proxy)
 	return c == p || c == p-1
 }
+
+// Ping reports whether the Teleport proxy at proxy, a host or host:port,
+// answers: it asks the proxy for its version, which needs no login and no
+// tsh. The error says why it did not answer.
+func Ping(ctx context.Context, proxy string) error {
+	if err := CheckProxy(proxy); err != nil {
+		return err
+	}
+	_, err := proxyVersion(ctx, proxy)
+	return err
+}

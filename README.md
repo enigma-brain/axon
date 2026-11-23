@@ -10,8 +10,9 @@ the platform it reaches, and the tool behind it can change without users
 learning a new way in.
 
 The organization decides how a laptop reaches its platform. Each way in is a
-pathway, and the organization describes its pathways in a config file
-that it gives its users. `axon` logs in by whichever pathway the user is on,
+pathway. A user makes one at the first login from the server's address, or
+the organization describes its pathways in a config file that it gives its
+users. `axon` logs in by whichever pathway the user is on,
 and names no organization itself.
 
 The design is in [docs/design/DESIGN.md](docs/design/DESIGN.md).
@@ -85,8 +86,9 @@ be downloaded or verified, when the installation fails.
 
 ## Organizations
 
-`axon` takes everything about the organization it serves from an
-config file, which the organization gives its members: the
+`axon` takes everything about the organization it serves from the user's
+answers at the first login, or from a config file, which the organization
+gives its members: the
 pathways, the addresses of its servers, and the text `axon` shows about
 them. `axon` itself names no organization. The file's format is in
 [docs/design/DESIGN.md](docs/design/DESIGN.md#config-files).
@@ -96,21 +98,42 @@ two kinds: a direct pathway reaches the server at its own address, and a
 Teleport pathway reaches it through Teleport. A file holds one pathway or
 several, and a laptop holds any number of files.
 
+### Making a pathway
+
+With no pathway stored, `axon login` on a terminal asks how you reach the
+SkyPilot API server (directly, or through Teleport), its address, or the
+Teleport proxy and application (default `skypilot`), and a name, whose
+default is the address. Flags give the same answers without a question:
+
+    axon login --sky-endpoint https://sky.example.org --name Campus
+    axon login --teleport-proxy teleport.example.org --sky-app skypilot
+
+Nothing is stored until the server answers. The pathway is stored as a
+hand-made config file in `~/.axon/orgs/`, and its identifier, for
+`--pathway`, is its name in lowercase with dashes. With no pathway, no
+flags and no terminal, `axon login` stops and names the flags and
+`--config`.
+
 ### Adding a file
 
-The first login adds your organization's config file with `--config`, from one of
-three sources:
+An organization with many members hands out a config file, which the first
+login adds with `--config`, from one of three sources:
 
     axon login --config https://example.org/axon.toml
     axon login --config ~/Downloads/axon.toml
     <command that prints the file> | axon login --config -
 
 The file is checked and stored as `~/.axon/orgs/<id>.toml`, named by the
-`id` it holds, and its source is recorded in `~/.axon/state/orgs/`. A file
-that fails a check is refused with a message naming the field, and nothing
-changes. Adding a file whose `id` is stored already replaces that file;
-the other files stay as they are. Two files may not hold the same pathway
-identifier.
+`id` it holds. Its source, when it was stored and its SHA-256 are recorded
+in `~/.axon/state/orgs/`. A file that fails a check is refused with a
+message naming the field, and nothing changes. A file may carry a
+`revision`, which `axon` prints when it stores or updates the file.
+
+Adding a file whose `id` is stored already updates that file, asking first
+only when its `revision` is lower than the stored one's. Adding a file or a
+hand-made pathway with the name or server of a stored pathway in another
+file asks whether to replace that file, default no; `--replace` answers yes,
+and with no terminal the login stops and names `--replace`.
 
 With `--config -`, standard input is the file, so `axon login` asks its
 questions on the terminal. Without a terminal, a question with a flag,
@@ -126,8 +149,10 @@ How a change reaches your laptop depends on where the file came from:
   when it passes the checks and keeps its `id`. You do nothing; the change
   arrives at your next login. Only that one file is fetched, and a file
   that `--config` added in the same login is not fetched twice. When the
-  fetch fails or the new file is refused, `axon` says so in one line and
-  logs in with the file it has.
+  fetch fails, the new file is refused or newly clashes by name with
+  another stored file, `axon` says so in one line and logs in with the file
+  it has. A lower revision asks first, or with no terminal keeps the stored
+  copy.
 - **A file path or standard input:** the file is read once. Run
   `axon login --config` again with the new file.
 
@@ -147,8 +172,8 @@ Delete it from `~/.axon/orgs/`; there is no command for it. When it held
 the active pathway, the next `axon login` chooses another from the stored
 files and, once one is chosen, disconnects the pathway you left. When it
 was the last file, `axon login` disconnects the pathway you left, stopping
-its Teleport tunnel and forgetting the logged-in email, then stops and asks
-for `--config`. At each login a stored file that fails the checks is left out,
+its Teleport tunnel and forgetting the logged-in email, then asks for a
+pathway as at the first login. At each login a stored file that fails the checks is left out,
 with one line naming it.
 
 ## Logging in
@@ -156,7 +181,8 @@ with one line naming it.
     axon login
 
 With no config file stored, `axon login` disconnects the pathway it
-had connected, if any, then stops and asks for `--config`.
+had connected, if any, then asks for a pathway, as in
+[Making a pathway](#making-a-pathway).
 Otherwise it chooses the pathway, logs you in, and connects `axon sky`.
 
 ### Choosing the pathway

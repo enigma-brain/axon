@@ -142,12 +142,22 @@ At the top of the file:
 |---|---|
 | `format` | The file's format. It is `2`. |
 | `id` | The file's identifier: lowercase letters, digits and hyphens, starting with a letter, at most 32 characters. `axon` stores the file as `~/.axon/orgs/<id>.toml`. A file with the same `id` replaces the stored one. |
+| `revision` | Optional. A whole number, 0 or more, that you raise each time you change the file. |
+
+Keep the file's `id` the same from one change to the next, and raise `revision`
+each time. A member's laptop then treats the new file as an update of the copy
+it holds, and replaces it without a question. When a member adds a copy whose
+`revision` is lower than the one stored, `axon` asks before it goes back, and
+the lines it prints when it stores or updates the file name the revisions. A
+file with a new `id` is a different file: when its pathways have the names or
+servers of the old file's, `axon` asks each member whether to replace the old
+one. An `axon` older than v0.3.0 refuses a file that has `revision`.
 
 Then one `[[pathway]]` entry for each pathway. Every pathway has these:
 
 | Field | Required | Holds |
 |---|---|---|
-| `id` | Yes | The pathway's identifier: lowercase letters, digits and hyphens. It is the value of `--pathway`, and no two pathways on a laptop have the same one. |
+| `id` | Yes | The pathway's identifier: lowercase letters, digits and hyphens. It is the value of `--pathway`. When two files on a laptop have a pathway with the same identifier or name, `axon` asks whether to replace the stored one. |
 | `kind` | Yes | `direct` or `teleport`. |
 | `name` | Yes | The pathway's name, as the prompt shows it. |
 | `description` | Yes | The prompt's line about the pathway. Say how members sign in and where the pathway works. |
@@ -178,9 +188,9 @@ direct pathway, is refused.
   `teleport`, a `name` and a `description`;
 - every `direct` pathway has `sky.endpoint`, and it is an `https` address;
 - every `teleport` pathway has `teleport.proxy` and `sky.app`;
+- `revision`, when present, is a whole number, 0 or more;
 - it has no field or table that this page does not list;
-- no pathway identifier appears twice in it, or in any other file stored on
-  the laptop, apart from the one it replaces;
+- no pathway identifier appears twice in it;
 - it is no larger than 1 MiB.
 
 A file that fails a check is refused whole, with a message that names the

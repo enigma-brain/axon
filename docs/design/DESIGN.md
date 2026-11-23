@@ -30,7 +30,8 @@ jobs and volumes.
 laptop. It has no server component.
 
 One `axon` serves any organization whose pathways are of the kinds below.
-What makes it serve an organization is a config file that the
+What makes it serve an organization is a pathway: one that `axon login`
+makes from the server's address, or the pathways of a config file that the
 organization supplies.
 
 ## Organizations
@@ -54,8 +55,8 @@ The repository holds none of them. No file in it names one: not the code,
 the tests, the design documents or the readme, and no commit message. An
 example that needs a detail uses a made-up one under `example.org`.
 
-`axon` takes every organization detail from a config file, and has no
-default for any of them. The name of the GitHub organization that hosts
+`axon` takes every organization detail from a config file or from the
+user's answers at `axon login`, and has no default for any of them. The name of the GitHub organization that hosts
 `axon`'s own repository is not an organization detail in this sense: it
 names where `axon` comes from, not whom it serves.
 
@@ -126,6 +127,7 @@ next one.
 |---|---|---|
 | `format` | `2` | The file's format. |
 | `id` | Lowercase letters, digits and hyphens, starting with a letter, at most 32 characters | The file's identifier, which names the stored file. |
+| `revision` | A whole number, 0 or more, optional | The file's revision. An organization raises it each time it changes the file, and keeps the file's `id`. |
 
 Every other field belongs to a pathway. Every pathway has the same three
 parts, whatever its kind [{D!}](decisions/pathway-contract.md):
@@ -161,10 +163,10 @@ parts, whatever its kind [{D!}](decisions/pathway-contract.md):
   address;
 - every `teleport` pathway has `teleport.proxy`, a hostname, optionally
   with a port, and `sky.app`;
+- `revision`, when present, is a whole number, 0 or more;
 - it has no field or table that this section does not list for the file or
   for the pathway's kind;
-- no pathway identifier appears twice in it, or in any other stored file
-  apart from the one it replaces.
+- no pathway identifier appears twice in it.
 
 A file of format `1`, the format of an earlier `axon`, is refused, whether it
 is given with `--config` or already stored, with: "the file is in an older
@@ -172,9 +174,8 @@ format. Run `axon login --config <source>` again with your organization's
 current config file." `axon` does not convert it.
 
 A file that fails a check is refused whole, with a message that names the
-field and the check. A file refused because a pathway identifier is taken
-names the identifier and the stored file that has it. A refused file
-changes nothing: every stored file stays as it was.
+field and the check. A refused file changes nothing: every stored file
+stays as it was.
 
 The config files are trusted input: they decide which servers the
 user's logins and requests go to. Apart from the hosts the active pathway
@@ -206,12 +207,97 @@ names the flag when it is missing. A question with no flag is answered
 "no".
 
 `axon` stores the file as `~/.axon/orgs/<id>.toml`, named by the file's
-`id`, and records its source in `~/.axon/state/`. Adding a file leaves the
-other stored files as they are. Adding a file whose `id` is already stored
-replaces that one file and its source.
+`id`. Beside it, in `~/.axon/state/`, it records the file's source, when the
+file was stored, and the SHA-256 of its bytes. Adding a file leaves the
+other stored files as they are, apart from the ones the user agrees to
+replace. When it stores a file that has a `revision`, `axon` says the
+revision.
 
 Removing a file is deleting it from `~/.axon/orgs/`. There is no command
 for it.
+
+### Replacing a stored pathway
+
+`axon` asks before an addition overwrites what is stored, and never refuses
+an addition outright [{D!}](decisions/stored-file-clashes.md).
+
+An addition of a config file whose `id` is that of a stored config file is
+an update. It replaces the stored copy without a question, and the line
+that reports it names the old and the new revision, unless both have a
+`revision` and the new one is lower. Then `axon` asks whether to replace
+the stored copy, naming both revisions. Answering no keeps the stored copy,
+and the login goes on with it.
+
+An addition, of a config file or of a hand-made pathway, clashes with a
+stored pathway in another file when the two have the same name, ignoring
+case, the same identifier, or the same server: the same API server address
+on a `direct` pathway, or the same Teleport proxy and application on a
+`teleport` pathway. For each stored file a clash touches, `axon` asks
+whether to replace it, and says what replacing removes: a hand-made
+pathway, or a config file whole, with the names of all its pathways. The
+default answer is no.
+
+- Yes removes what the question named, its record included, and stores
+  the addition. When the active pathway is in what is removed, `axon` first
+  leaves it, as a switch of pathway does.
+- No to a clash of name or identifier: a config file is not added, and
+  `axon` says so; for a hand-made pathway, `axon` asks for another name.
+- No to a clash of server alone keeps both.
+
+`axon login --replace` answers yes to every one of these questions in
+advance. With no terminal to ask on, a clash stops the login with a message
+that names `--replace`, and a lower revision keeps the stored copy, with
+one line that says so.
+
+A hand-made file and a config file never update each other: two such files
+with the same `id` are a clash.
+
+A file being removed is renamed with the suffix `.removing` and deleted once
+the addition is stored. When `axon` stops in between, such a file is left in
+`~/.axon/orgs/` or `~/.axon/state/orgs/`; `axon` never reads it, and it is
+safe to delete.
+
+### Hand-made pathways
+
+A user without a config file makes a pathway at `axon login`
+[{D!}](decisions/pathway-without-config-file.md). With no pathway stored,
+no `--config` and a terminal, `axon login` asks, in order:
+
+1. the kind: directly at the server's address, or through Teleport;
+2. for `direct`, the SkyPilot API server's address; for `teleport`, the
+   Teleport proxy's address and then the Teleport application, whose
+   default is `skypilot`;
+3. a name for the pathway, whose default is the server's host, or the
+   proxy.
+
+Every question with a default shows it and says that Enter accepts it. An
+address is accepted with or without `https://`; `axon` adds it to the API
+server's address and drops it from the proxy's.
+
+Flags give the same answers without a question, whether or not a pathway
+is stored: `--sky-endpoint <address>` for `direct`; `--teleport-proxy
+<address>` with `--sky-app <name>` for `teleport`; and `--name <name>`.
+Flags that contradict each other, such as `--sky-endpoint` with
+`--teleport-proxy`, and any of them with `--config` or `--pathway`, are
+refused with a message that names them.
+
+Nothing is stored until the pathway's server answers: the SkyPilot API
+server's health endpoint, logged in or not, for `direct`, and the Teleport
+proxy's version endpoint for `teleport`. At the prompt, an address that
+does not answer is reported and asked for again. With flags, `axon login`
+stops with an error.
+
+The pathway is then stored as a format 2 config file that `axon` writes
+into `~/.axon/orgs/`, with one pathway and no `revision`, and its record
+says that it is hand-made. The pathway's identifier is its name in
+lowercase, with each run of other characters than letters and digits made
+one hyphen. The file's `id` is that identifier, made to fit the form of a
+file `id` and kept apart from the stored files' ids. Its `description`
+says that the pathway was made on the laptop and where it goes, and it has
+no `unreachable_hint`. Adding the pathway makes it the active one. From
+then on it is a pathway like any other: `--pathway`, switching, `axon
+login` and `axon logout` treat it alike. A hand-made file has no source to
+fetch again.
 
 ### Updating a config file
 
@@ -231,6 +317,12 @@ files, with no further fetch in that login, and uses the stored copy of the
 newly chosen pathway's file. When it chooses without asking, because one
 pathway remains, it says in one line which pathway it now uses.
 
+The fetched file follows the rule for an update: a lower revision asks
+first, and with no terminal the stored copy is kept with one line that says
+so. A fetched file whose pathway newly has the name or identifier of a
+pathway in another stored file is not asked about: like a refused file, it
+is left out with one line, and the login uses the stored copy.
+
 A file from a file path or standard input is read once, when `--config` is
 given. Updating it is running `axon login --config` again with the new file.
 
@@ -244,9 +336,10 @@ it.
 
 `axon --version` and `axon --help` work without a config file.
 
-When no file is stored and `--config` is not given, `axon login` stops with:
-"axon: no config file. Run `axon login --config <source>` with the address or
-file your organization gives you."
+When no file is stored and neither `--config` nor the flags of a hand-made
+pathway are given, `axon login` asks for a hand-made pathway on a terminal.
+With no terminal, it stops with a message that names `--sky-endpoint`,
+`--teleport-proxy` and `--config`.
 
 `axon sky` with no file stops with: "Run `axon login` first."
 
@@ -254,7 +347,7 @@ file your organization gives you."
 
 | Command | Behavior |
 |---|---|
-| `axon login [--config <source>] [--pathway <id>]` | Adds a config file when `--config` is given, determines the pathway, establishes its session, and connects every command group. |
+| `axon login [--config <source>] [--pathway <id>] [--sky-endpoint <address> \| --teleport-proxy <address> [--sky-app <name>]] [--name <name>] [--replace]` | Adds a config file when `--config` is given, or makes a hand-made pathway, determines the pathway, establishes its session, and connects every command group. |
 | `axon logout` | Logs out of every command group and the pathway's session, and removes the records of the connection. |
 | `axon sky [args]` | Checks the connection, then runs `axon`'s own SkyPilot client with the same arguments. |
 | `axon --version` | Prints the version of `axon`. |
@@ -269,17 +362,17 @@ These are all of `axon`'s commands.
 
 | Path | Holds |
 |---|---|
-| `~/.axon/orgs/` | The config files, one per file added, each `<id>.toml` as its source gave it. |
+| `~/.axon/orgs/` | The config files, one per file added, each `<id>.toml` as its source gave it, and the hand-made files `axon` writes. |
 | `~/.axon/config.toml` | The active pathway, by its identifier. |
 | `~/.axon/tools/` | What `axon` installs for its own use. |
-| `~/.axon/state/` | What `axon` records about running state, such as each config file's source, the settings the pathway had when it was connected, the tunnel's process, and the logged-in email. |
+| `~/.axon/state/` | What `axon` records about running state, such as each config file's record (its source or that it is hand-made, when it was stored, and its SHA-256), the settings the pathway had when it was connected, the tunnel's process, and the logged-in email. |
 
 `axon` writes a file in `~/.axon/orgs/` only by replacing it whole, and
 never writes the active pathway into it.
 
 Removing `~/.axon` removes everything `axon` installed for its own use and
 everything it recorded, the config files included. The next `axon login`
-needs `--config`. Two things are outside the directory and remain: Teleport's
+starts with no pathway. Two things are outside the directory and remain: Teleport's
 own profile and certificates in `~/.tsh`, which `tsh` writes, and a tunnel
 that is running. The next login adopts that tunnel only when its command
 line is exactly the active pathway's tunnel command, its proxy and
@@ -293,8 +386,10 @@ The `axon` binary is not in this directory; it is in `~/.local/bin`.
 `axon login` is the one login command. It runs these stages in order and
 stops at the first that fails:
 
-1. Add the config file that `--config` gives, when it is given.
-2. Determine the pathway.
+1. Add the config file that `--config` gives, or make the hand-made
+   pathway the flags give, when they are given.
+2. Determine the pathway, after making a hand-made one at the prompt when
+   none is stored.
 3. Refresh the pathway's file, as "Updating a config file" sets out.
 4. Establish the pathway's session.
 5. Connect each command group, by that group's own steps
@@ -718,7 +813,8 @@ Installing requires `curl` and `sha256sum` or `shasum`.
 Updating `axon` is running the same line again.
 
 An organization's setup for its members is the install line followed by
-`axon login --config <source>`. The page that tells an organization's members
+`axon login`, with the server's address, or with `--config <source>` for an
+organization that hands out a config file. The page that tells an organization's members
 how to get started, with its source for `--config`, is the organization's own
 and is kept with its config files, not in this repository.
 

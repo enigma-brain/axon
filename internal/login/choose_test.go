@@ -55,7 +55,7 @@ func TestNoOrganizationFileStops(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
 	err := h.run("")
-	want := "no config file. Run `axon login --config <source>` with the address or file your organization gives you."
+	want := "no pathway is set up, and there is no terminal to ask on. Run `axon login --sky-endpoint <address>` for a SkyPilot API server you reach directly, `axon login --teleport-proxy <address>` for one through Teleport, or `axon login --config <source>` with the file your organization gives you."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}

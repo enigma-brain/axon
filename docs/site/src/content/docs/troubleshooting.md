@@ -92,16 +92,55 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## The config file
 
-### No config file is stored
+### No pathway is set up
 
 ```text
-axon: no config file. Run `axon login --config <source>` with the address or file your organization gives you.
+axon: no pathway is set up, and there is no terminal to ask on. Run `axon login --sky-endpoint <address>` for a SkyPilot API server you reach directly, `axon login --teleport-proxy <address>` for one through Teleport, or `axon login --config <source>` with the file your organization gives you.
 ```
 
-No config file that passes the checks is stored on this laptop. When
-one was in use, `axon login` has already disconnected its pathway, stopping
-the Teleport tunnel and forgetting the logged-in email. Run `axon login --config`
-with the address or file your organization gave you.
+No pathway is stored on this laptop, and `axon login` ran where it cannot ask,
+such as in a script. When one was in use, `axon login` has already disconnected
+it, stopping the Teleport tunnel and forgetting the logged-in email. Run
+`axon login` in a terminal to answer its questions, or give the answers as the
+flags the message names. See [Logging in](/axon/logging-in/#the-first-login).
+
+### The server does not answer when you make a pathway
+
+```text
+Can't reach the SkyPilot API server at <address>: <reason>. Check the address and try again.
+<address> answered, but not as a SkyPilot API server (<reason>). Check the address and try again.
+Can't reach the Teleport proxy at <proxy>: <reason>. Check the address and try again.
+```
+
+`axon` checks the address before it stores the pathway, and asks for it again.
+Check it for typos, and that you are on a network the server answers on. The
+second form means something else answers at that address: ask your organization
+for the SkyPilot API server's address. With `--sky-endpoint` or
+`--teleport-proxy` the same message stops the login, ending with "run `axon login`
+again".
+
+### A pathway you add clashes with a stored one
+
+```text
+axon: add the config file: not added, since its pathway "<name>" has the same name as a stored pathway in <path>. Run the command again with --replace to replace that file.
+axon: add the config file: its pathway "<name>" clashes with the stored pathway "<name>" in <path>, and there is no terminal to ask whether to replace it. Run the command again with --replace to replace it.
+axon: make the pathway: it clashes with the stored pathway "<name>" in <path>, and there is no terminal to ask whether to replace it. Run the command again with --replace to replace it.
+```
+
+The first means you answered no to replacing a stored pathway of the same name.
+The others mean there was no terminal to ask on. Add `--replace` to replace what
+is stored, as [Replacing a stored pathway](/axon/logging-in/#replacing-a-stored-pathway)
+describes, or leave things as they are.
+
+### An older revision of a config file
+
+```text
+axon: the config file at <source> is revision <n>, older than the stored revision <m>. Using the stored file.
+```
+
+The file you added, or the one fetched at login, is older than the copy on your
+laptop, and there was no terminal to ask whether to replace it. `axon` keeps the
+copy it has. Tell your organization when its published file is the older one.
 
 ### A refused config file
 
@@ -120,7 +159,7 @@ your organization which field it names. Messages seen most:
 | `pathway "<id>": sky.endpoint: must be an https address` | A direct pathway's address is missing or does not start with `https://`. |
 | `pathway "<id>": teleport.proxy: must be a hostname, optionally with a port` | A Teleport pathway's proxy is missing or is not a host. |
 | `<field>: not a field of a config file` | The file holds a field that the format does not have, such as a misspelling. |
-| `pathway "<id>": id: already used by the stored file <path>` | Another stored file has a pathway with the same identifier. |
+| `revision: must be a whole number, 0 or more` | The file's `revision` is not a whole number. |
 | `not valid TOML: <reason> (line <n>)` | The file is not valid TOML. |
 
 ### A config file in an older format
@@ -188,7 +227,8 @@ axon: could not update <path>: <reason>. Using the stored file.
 ```
 
 At login, `axon` fetches again the file that holds your pathway, when it came from an
-address. The first form means the fetch failed or the new file was refused; the second
+address. The first form means the fetch failed, the new file was refused, or it has a
+pathway named like one in another stored file; the second
 means `axon` could not read what it recorded about the file's source. Either way `axon`
 carries on with the file it has. Nothing needs doing now; when the reason is a refusal,
 tell your organization.

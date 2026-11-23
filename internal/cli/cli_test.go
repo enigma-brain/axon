@@ -117,7 +117,7 @@ func TestLoginHelpNamesItsFlags(t *testing.T) {
 func TestLoginWithoutAFileStops(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	_, err := run(t, "login")
-	if err == nil || !strings.HasPrefix(err.Error(), "no config file. Run `axon login --config <source>`") {
+	if err == nil || !strings.HasPrefix(err.Error(), "no pathway is set up, and there is no terminal to ask on.") {
 		t.Errorf("login with no file: err = %v", err)
 	}
 }
