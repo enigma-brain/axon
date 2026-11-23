@@ -170,13 +170,12 @@ which a maintainer starts by hand.
 A job in CI that downloads real software or builds the release runs only
 when the paths it tests have changed. In `.github/workflows/ci.yml`, the
 first job reads the change, the pull request's diff or the commits a push to
-`main` added, and sets three flags:
+`main` added, and sets two flags:
 
 - **code**: any `.go` file, `go.mod`, `go.sum`, anything under `internal/`,
   `install.sh`, `.goreleaser.yaml`, anything under `.github/release-gate/`
   or `ci.yml` itself;
-- **skyclient**: anything under `internal/skyclient/`, or `ci.yml`;
-- **tsh**: anything under `internal/tsh/`, or `ci.yml`.
+- **skyclient**: anything under `internal/skyclient/`, or `ci.yml`.
 
 When the change cannot be read, as on the first push of a branch, every
 flag is set. A change to documentation alone sets none.
@@ -188,7 +187,6 @@ flag is set. A change to documentation alone sets none.
 | CI | GoReleaser in snapshot mode, checking the archives | `ubuntu-latest` | When **code** |
 | CI | The smoke test | `ubuntu-latest` | When **code** |
 | CI | The real install of the SkyPilot client | `ubuntu-latest`, in the smoke test's job | When **skyclient** |
-| CI | The real install of `tsh` | `ubuntu-latest`, in the smoke test's job | When **tsh** |
 | Docs | The site build | `ubuntu-latest` | For every pull request that touches `docs/site` or `docs.yml` |
 | Pages | The site build and publishing | `ubuntu-latest` | For every push to `main` |
 | Release | GoReleaser builds the release as a draft | `ubuntu-latest` | For every pushed tag `v*` |
@@ -196,7 +194,7 @@ flag is set. A change to documentation alone sets none.
 | Release | Publishing the draft | `ubuntu-latest` | When the gate passed on all three |
 | Release | The install line and `axon --version` against the published release | `ubuntu-latest` | After the release is published |
 | Mac | Build and test | `macos-latest` | When started by hand |
-| Mac | The real installs of the SkyPilot client and `tsh`, and the smoke test | `macos-latest` and `macos-15-intel` | When started by hand |
+| Mac | The real install of the SkyPilot client, and the smoke test | `macos-latest` and `macos-15-intel` | When started by hand |
 
 A job that does not run is reported as skipped, which a required check
 accepts.
@@ -220,7 +218,7 @@ page, under "Mac", or with:
     gh workflow run mac.yml --ref <branch>
 
 Run it on a pull request's branch before merging when the change touches
-`install.sh`, `internal/skyclient/`, `internal/tsh/`, or anything that
+`install.sh`, `internal/skyclient/`, or anything that
 behaves differently on macOS, and on `main` before tagging a release that
 holds such a change, so that the release gate does not find the failure
 first. Run it as well to reproduce a failure reported on a Mac.

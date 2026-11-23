@@ -1,38 +1,37 @@
-# axon installs tsh when it is missing
+# tsh is a prerequisite of a teleport pathway, and axon does not install it
 
 ## Context
 
 A teleport pathway reaches the API server through Teleport, and every
 Teleport step runs through Teleport's client, `tsh`. `axon login` runs those
-steps so that the user runs no `tsh` command by hand. A user new to such a
-pathway has no `tsh` installed.
+steps so that the user runs no `tsh` command by hand.
 
-`tsh` has to be compatible with the Teleport proxy it logs in to. The proxy
-reports its own version publicly. Some users already have a `tsh` that their
-organisation installs and updates.
+An organization that gives its members a teleport pathway already runs
+Teleport, and its members use `tsh` for Teleport's other services, so they
+have it installed, by the organization's own means and kept up to date with
+its proxy. `tsh` has to be compatible with the Teleport proxy it logs in to,
+and Teleport publishes its own install instructions for every platform.
 
 ## Rationale
 
-When `tsh` is not on `PATH` and `axon` has not installed one, `axon login`
-installs it at the version the proxy reports.
+`axon` uses the `tsh` on `PATH` and never installs one. With no `tsh` on
+`PATH`, `axon login` stops before any login step, says that the pathway
+needs `tsh` and that none was found, and gives the address of Teleport's
+install instructions.
 
-- The promise that the user handles no Teleport step by hand covers the
-  install as well as the login.
-- Taking the version from the proxy keeps `tsh` compatible with it, with no
-  pinned number to maintain in `axon`.
-- An existing `tsh` is used as it is and never replaced, so `axon` does not
-  fight an install that someone else manages. When its version is outside
-  the range the proxy supports, `axon` says so and names both versions; the
-  owner of that install updates it.
-
-When the install fails or the user declines it, `axon` prints Teleport's
-install link and stops, which is the behaviour of the alternative below and
-loses nothing.
+- `axon` downloads nothing from Teleport, so it carries no pinned version,
+  no checksums and no handling of each platform's archive, and it never
+  competes with the install the organization manages.
+- One `tsh` on the laptop means one version and one profile directory,
+  `~/.tsh`, used by `axon` and by the member's own `tsh` commands alike.
+- The member meets the requirement once, with Teleport's own instructions,
+  which cover every platform `axon` runs on.
 
 ## Alternatives considered
 
-- **Print the install link and stop.** The user installs a tool by hand
-  before running the command whose purpose is that they do not have to.
+- **Install `tsh` when it is missing.** It downloads hundreds of megabytes
+  of Teleport's archive and keeps a second `tsh` beside the one the
+  organization manages, for a member who almost always has `tsh` already.
 - **Always install a private `tsh`, whatever is on `PATH`.** It duplicates a
   working install and puts two versions of `tsh`, with one shared profile
   directory, on the same laptop.

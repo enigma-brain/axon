@@ -355,8 +355,8 @@ On a `direct` pathway there is no session apart from each service's own: a
 service that needs a login opens it in a browser when `axon` connects to
 that service.
 
-On a `teleport` pathway the session is the Teleport login. `axon` makes sure
-`tsh` is present, then checks the Teleport certificate for the pathway's
+On a `teleport` pathway the session is the Teleport login. `axon` finds
+`tsh` on `PATH`, then checks the Teleport certificate for the pathway's
 proxy. When the certificate is not valid, `axon` runs
 `tsh login --proxy=<teleport.proxy>`, which opens a browser. A valid
 certificate needs no login and opens no browser. The certificate lasts as
@@ -365,24 +365,17 @@ hand.
 
 ### tsh
 
-`axon` uses the `tsh` on `PATH` when there is one, and never replaces it.
+`tsh` is a prerequisite of a `teleport` pathway. `axon` uses the `tsh` on
+`PATH`, and never installs or replaces one [{D!}](decisions/tsh-install.md).
+When no `tsh` is on `PATH`, `axon login` stops before any login step, with:
+"this pathway needs Teleport's client, tsh, and no tsh was found on PATH.
+Install it from https://goteleport.com/docs/installation/ and run `axon
+login` again." A `tsh` that an earlier `axon` kept in `~/.axon/tools/` is
+neither used nor removed.
+
 Teleport supports a client whose major version is the proxy's or one behind
 it. When the `tsh` on `PATH` is outside that range, `axon` stops, names the
 installed version and the proxy's, and says to update `tsh`.
-
-When no `tsh` is on `PATH` and `axon` has not installed one, `axon login`
-installs it at the version the pathway's proxy reports
-[{D!}](decisions/tsh-install.md).
-
-- On Linux, `axon` downloads Teleport's archive, verifies its checksum, and
-  keeps `tsh` in `~/.axon/tools/`. Nothing needs `sudo`.
-- On macOS, `axon` downloads Teleport's archive for the laptop's
-  architecture, verifies its checksum, and keeps `tsh.app` intact in
-  `~/.axon/tools/`, running the binary inside the bundle. Nothing needs `sudo`
-  or a password [{D!}](decisions/tsh-macos-install.md).
-
-When the install fails or the user declines it, `axon` prints Teleport's
-install link and stops.
 
 ## sky
 

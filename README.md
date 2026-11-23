@@ -220,7 +220,8 @@ answer only from your organisation's network.
 A Teleport pathway reaches the API server through Teleport, from anywhere.
 `axon login` does what the manual Teleport steps did:
 
-- **It finds `tsh`**, Teleport's client, or offers to install it.
+- **It finds `tsh`**, Teleport's client, on your `PATH`. `tsh` is a
+  prerequisite of a Teleport pathway; `axon` does not install it.
 - **It logs you in to Teleport** with `tsh login --proxy=<proxy>`, which
   opens your organisation's sign-in page in a browser. Where no browser
   opens by itself, as on WSL, `tsh` prints a link instead: open it in a
@@ -243,32 +244,20 @@ A Teleport pathway reaches the API server through Teleport, from anywhere.
   login`, only when the client is pointed elsewhere. No browser opens:
   Teleport supplies your identity.
 
-#### Installing tsh
+#### tsh
 
-A Teleport pathway logs in through Teleport's client, `tsh`. When a
-`tsh` is on your `PATH`, `axon` uses it and never replaces it; when its
-version is too old or too new for the Teleport proxy, `axon` names both
-versions and stops, and you update that `tsh`.
+A Teleport pathway logs in through Teleport's client, `tsh`, which you
+install before you log in, from Teleport's
+[install instructions](https://goteleport.com/docs/installation/). `axon`
+uses the `tsh` on your `PATH` and never replaces it. With none, `axon login`
+stops before any login step:
 
-When there is no `tsh`, on macOS or on Linux on x86-64, `axon login` offers
-to install one:
+    axon: establish the Teleport session: this pathway needs Teleport's client, tsh, and no tsh was found on PATH. Install it from https://goteleport.com/docs/installation/ and run `axon login` again.
 
-    Teleport's client, tsh, is not installed.
-    Install tsh <proxy's version> into ~/.axon/tools? [Y/n]
-
-- **Press Enter to install.** `axon` downloads Teleport's archive at the
-  proxy's version, a few hundred megabytes, printing its size and each quarter of the progress, and checks it against
-  the checksum Teleport publishes. It keeps `tsh` in `~/.axon/tools/` for its
-  own use and does not put it on your `PATH`. Nothing asks for `sudo` or a
-  password.
-- **The login carries on.** Once `tsh` is installed, `axon login` goes
-  straight on to the Teleport login.
-- **Answer `n` to install it yourself.** `axon` prints Teleport's install
-  link and stops; run `axon login` again once `tsh` is on your `PATH`. A
-  failed download or check stops the same way.
-- **Later logins download nothing.** When the proxy moves to a version
-  `axon`'s `tsh` does not support, the next login replaces it without
-  asking.
+When the `tsh` on your `PATH` is too old or too new for the Teleport proxy,
+`axon` names both versions and stops, and you update that `tsh`. A `tsh`
+that an earlier `axon` kept in `~/.axon/tools/tsh` is not used; delete that
+folder whenever you like.
 
 #### The tunnel
 
@@ -401,39 +390,14 @@ suite runs it on macOS on Apple silicon and on Intel. Before a release is
 published, it runs on all three against the binary the release's
 `install.sh` installed.
 
-### The tsh install
+### tsh
 
-`internal/tsh` finds Teleport's client for a Teleport pathway. It reads
-the proxy's version from the proxy's `/webapi/ping` endpoint, uses
-a `tsh` on `PATH` whose major version is the proxy's or one behind, and
-otherwise uses its own. On Linux on x86-64 and on macOS, after the user
-agrees, it downloads Teleport's archive at the proxy's version from
-`https://cdn.teleport.dev`, checks it against the `.sha256` file published
-beside it, and keeps only `tsh`. On macOS the archive is the one for the
-Mac's architecture, `darwin-arm64` or `darwin-amd64`, and `tsh` is the
-application bundle `tsh.app`, kept whole: its binary is signed to run only
-from inside the bundle. Only directories and regular files inside
-`teleport/tsh.app/` are extracted; any other entry there fails the install.
-
-| Path under `~/.axon/tools/` | Holds |
-|---|---|
-| `tsh/<version>/tsh` | `axon`'s own `tsh`, on Linux. |
-| `tsh/<version>/tsh.app/` | `axon`'s own `tsh` bundle, on macOS; it runs `tsh.app/Contents/MacOS/tsh`. |
-| `tsh/current` | Its version, written once an install succeeds. |
-
-Entries under `tsh/` whose names begin with a dot are installs in progress;
-they are removed once they are an hour old, as are earlier versions. Every
-download stops when no data arrives for 30 seconds.
-
-The unit tests use a fake proxy, fake archives for Linux and macOS and a
-fake `tsh`, and no network. A real install, which downloads about 180 to
-215 MB into a temporary home directory and runs the installed `tsh version`,
-runs on Linux on x86-64 or on macOS with no `tsh` on `PATH`:
-
-    AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/tsh
-
-CI runs it on Linux when a change touches `internal/tsh/` or the workflow,
-and the Mac suite runs it on macOS on Apple silicon and on Intel.
+`internal/tsh` finds Teleport's client on `PATH` for a Teleport pathway,
+and runs it for the logins, the certificate check and the logout. It reads
+the proxy's version from the proxy's `/webapi/ping` endpoint and uses the
+`tsh` on `PATH` only when its major version is the proxy's or one behind.
+It never downloads `tsh`. The tests use a fake proxy and a fake `tsh` on a
+`PATH` that holds nothing else.
 
 ### Releasing
 
@@ -477,5 +441,5 @@ and is part of `go test ./...`.
 | `internal/sky` | The `axon sky` command group: its refusals, its connection check, and each pathway kind's endpoint. |
 | `internal/apiserver` | The SkyPilot API server's health request, with SkyPilot's cookies and the client's version headers. |
 | `internal/skyclient` | `axon`'s own SkyPilot client. |
-| `internal/tsh` | Teleport's client: install, login, application login, certificate check. |
+| `internal/tsh` | Teleport's client: finding it on `PATH`, login, application login, certificate check. |
 | `internal/tunnel` | The Teleport tunnel to the API server. |

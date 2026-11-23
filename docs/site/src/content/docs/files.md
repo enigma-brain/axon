@@ -11,7 +11,7 @@ description: What axon keeps in ~/.axon, and where the axon binary is.
 |---|---|
 | `~/.axon/orgs/` | The config files, one per file added, each `<id>.toml` as its source gave it. |
 | `~/.axon/config.toml` | The active pathway, by its identifier. |
-| `~/.axon/tools/` | What `axon` installs for its own use: the SkyPilot client with its own `uv` and Python, and `tsh` when `axon` installed it. |
+| `~/.axon/tools/` | What `axon` installs for its own use: the SkyPilot client with its own `uv` and Python. A `tsh` that an earlier `axon` installed here is no longer used. |
 | `~/.axon/state/` | What `axon` records about running state. |
 
 In `~/.axon/state/`, the files you may meet are:

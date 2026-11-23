@@ -9,8 +9,8 @@ so you run no `tsh` command by hand.
 
 ## Logging in
 
-1. **It finds `tsh`**, Teleport's client, or offers to install it
-   ([below](#when-tsh-is-missing)).
+1. **It finds `tsh`**, Teleport's client, on your `PATH`
+   ([below](#tsh-teleports-client)).
 2. **It signs you in to Teleport** with `tsh login --proxy=<proxy>`, which opens
    your organisation's sign-in page in a browser. Where no browser opens by
    itself, as on WSL, `tsh` prints a link instead: open it in a browser to
@@ -28,31 +28,21 @@ so you run no `tsh` command by hand.
 The tunnel is `axon`'s own: a process on port 46581 that is not `axon`'s
 tunnel makes `axon login` stop and name it.
 
-## When tsh is missing
+## tsh, Teleport's client
 
-When a `tsh` is on your `PATH`, `axon` uses it and never replaces it. A `tsh`
-works when its major version is that of your organisation's Teleport or one
-behind it. When its version is too old or too new, `axon` names both versions
-and stops, and you update that `tsh`.
-
-When there is no `tsh`, on macOS or on Linux on x86-64, `axon login` offers
-to install one:
+A Teleport pathway needs Teleport's client, `tsh`, on your `PATH` before you
+log in. Install it from Teleport's
+[install instructions](https://goteleport.com/docs/installation/). `axon`
+does not install `tsh`, and never replaces the one you have. With no `tsh`
+on your `PATH`, `axon login` stops before any login step:
 
 ```text
-Teleport's client, tsh, is not installed.
-Install tsh <version> into ~/.axon/tools? [Y/n]
+axon: establish the Teleport session: this pathway needs Teleport's client, tsh, and no tsh was found on PATH. Install it from https://goteleport.com/docs/installation/ and run `axon login` again.
 ```
 
-- **Press Enter to install.** `axon` downloads Teleport's archive at the
-  version your organisation's Teleport runs, a few hundred megabytes, prints its
-  size and each quarter of the progress, and checks it against the checksum
-  Teleport publishes. It keeps `tsh` in `~/.axon/tools/` for its own use and
-  does not put it on your `PATH`. Nothing asks for `sudo` or a password.
-- **Answer `n` to install it yourself.** `axon` prints Teleport's install link
-  and stops. Run `axon login` again once `tsh` is on your `PATH`.
-- **Later logins download nothing**, until the Teleport proxy moves to a
-  version `axon`'s `tsh` does not support. Then the next login replaces it
-  without asking.
+A `tsh` works when its major version is that of your organization's Teleport
+or one behind it. When its version is too old or too new, `axon` names both
+versions and stops, and you update that `tsh`.
 
 ## The tunnel
 

@@ -291,36 +291,18 @@ tsh <version> at <path> does not work with the Teleport proxy <proxy>, which run
 ```
 
 The `tsh` on your `PATH` is too old or too new for your organisation's Teleport. `axon`
-never replaces a `tsh` you installed. Update it, or remove it from your `PATH` so that
-`axon` installs its own.
+never replaces a `tsh` you installed. Update it from the link.
 
 ### tsh is not on PATH
 
 ```text
-Teleport's client, tsh, is not on PATH. Install it from <link> and run `axon login` again
+axon: establish the Teleport session: this pathway needs Teleport's client, tsh, and no tsh was found on PATH. Install it from https://goteleport.com/docs/installation/ and run `axon login` again.
+axon: this pathway needs Teleport's client, tsh, and no tsh was found on PATH. Install it from https://goteleport.com/docs/installation/ and run `axon login` again.
 ```
 
-`axon` installs `tsh` only on macOS and on Linux on x86-64. Install it from the link,
-then run `axon login` again.
-
-### You declined to install tsh
-
-```text
-tsh was not installed. Install it from <link> and run `axon login` again
-```
-
-You answered `n` to the offer to install `tsh`. Install it from the link, or run
-`axon login` again and press Enter at the question.
-
-### tsh could not be downloaded
-
-```text
-install tsh <version>: <reason>. Install tsh from <link> and run `axon login` again
-download Teleport <version>: <reason>. Install tsh from <link> and run `axon login` again
-```
-
-The download or its check failed: a network error, a stall of 30 seconds with no data,
-or a checksum that did not match. Check your network and run `axon login` again.
+A Teleport pathway needs `tsh` on your `PATH`, and `axon` does not install it. Install
+it from the link, then run `axon login`. The second form comes from `axon sky` when it
+needs `tsh` to restart the tunnel.
 
 ### The Teleport sign-in failed
 
@@ -496,14 +478,13 @@ axon: Couldn't restart the Teleport tunnel. Run `axon login`.
 `axon sky` tried to restart a stopped tunnel, and the tunnel's process exited. The tail
 of the tunnel's log follows the message. Run `axon login`, which starts a fresh tunnel.
 
-### A client axon keeps is missing
+### The SkyPilot client is missing
 
 ```text
 axon: the SkyPilot client is not installed. Run `axon login` first.
-axon: Teleport's client, tsh, is not found. Run `axon login`.
 ```
 
-The client or `tsh` that `axon` keeps in `~/.axon/tools/` is missing. Run `axon login`,
+The SkyPilot client that `axon` keeps in `~/.axon/tools/` is missing. Run `axon login`,
 which installs it.
 
 ### The command is not available in axon sky
