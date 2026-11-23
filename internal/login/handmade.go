@@ -110,7 +110,13 @@ func cleanEndpoint(s string) (string, error) {
 func cleanProxy(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	proxy := strings.TrimSuffix(strings.TrimPrefix(s, "https://"), "/")
-	if tsh.CheckProxy(proxy) != nil {
+	// A fully qualified name's final dot names the same host.
+	if host, port, found := strings.Cut(proxy, ":"); found {
+		proxy = strings.TrimSuffix(host, ".") + ":" + port
+	} else {
+		proxy = strings.TrimSuffix(proxy, ".")
+	}
+	if tsh.CheckProxy(proxy) != nil || !orgfile.IsHostPort(proxy) {
 		return "", fmt.Errorf(msgNotHostPort, s)
 	}
 	return proxy, nil
@@ -347,7 +353,11 @@ func (l *login) storeHandMade(h handMade, opts Options) (orgfile.File, error) {
 	store := orgfile.NewStore(l.dir)
 	for {
 		id := identifier(h.name)
-		data, err := handMadeFile(fileID(store, id, nil), id, h)
+		fid, err := fileID(store, id, nil)
+		if err != nil {
+			return orgfile.File{}, err
+		}
+		data, err := handMadeFile(fid, id, h)
 		if err != nil {
 			return orgfile.File{}, err
 		}
@@ -374,11 +384,13 @@ func (l *login) storeHandMade(h handMade, opts Options) (orgfile.File, error) {
 
 		// With the files to remove known, the file takes the plain
 		// identifier when its holder is one of them.
-		data, err = handMadeFile(fileID(store, id, outcome.remove), id, h)
-		if err != nil {
+		if fid, err = fileID(store, id, outcome.remove); err != nil {
 			return orgfile.File{}, err
 		}
-		if err := l.leaveRemoved(change, outcome.remove, opts); err != nil {
+		if data, err = handMadeFile(fid, id, h); err != nil {
+			return orgfile.File{}, err
+		}
+		if err := l.leaveRemoved(outcome.remove, opts); err != nil {
 			return orgfile.File{}, err
 		}
 		f, err := store.Put(data, orgfile.PutOptions{Origin: orgfile.HandMade, Remove: outcome.remove})
@@ -395,19 +407,25 @@ func (l *login) storeHandMade(h handMade, opts Options) (orgfile.File, error) {
 // is id: id itself, cut to the longest a file identifier can be and
 // starting with a letter, with -2, -3 and so on added while a stored file
 // other than one in remove has it.
-func fileID(store orgfile.Store, id string, remove []string) string {
+func fileID(store orgfile.Store, id string, remove []orgfile.File) (string, error) {
 	base := id
 	if base[0] >= '0' && base[0] <= '9' {
 		base = "p-" + base
 	}
-	free := func(candidate string) bool {
+	free := func(candidate string) (bool, error) {
 		for _, r := range remove {
-			if r == candidate {
-				return true
+			if r.ID == candidate {
+				return true, nil
 			}
 		}
 		_, err := os.Lstat(store.Path(candidate))
-		return errors.Is(err, os.ErrNotExist)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			return true, nil
+		case err != nil:
+			return false, fmt.Errorf("check %s: %w", store.Path(candidate), err)
+		}
+		return false, nil
 	}
 	cut := func(s string, n int) string {
 		if len(s) > n {
@@ -416,11 +434,14 @@ func fileID(store orgfile.Store, id string, remove []string) string {
 		return strings.TrimRight(s, "-")
 	}
 	candidate := cut(base, maxFileID)
-	for n := 2; !free(candidate); n++ {
+	for n := 2; ; n++ {
+		ok, err := free(candidate)
+		if err != nil || ok {
+			return candidate, err
+		}
 		suffix := "-" + strconv.Itoa(n)
 		candidate = cut(base, maxFileID-len(suffix)) + suffix
 	}
-	return candidate
 }
 
 // The TOML of a hand-made file.

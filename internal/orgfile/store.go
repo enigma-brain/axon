@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -143,6 +145,17 @@ func (e *ClashError) Error() string {
 	return fmt.Sprintf("pathway %q: already used by the stored file %s, whose pathway %q has the same name or identifier", e.Clash.Added.ID, e.Path, e.Clash.Pathway.ID)
 }
 
+// ChangedError refuses to remove a stored file that changed after the
+// user agreed to remove it.
+type ChangedError struct {
+	// Path is the stored file's path.
+	Path string
+}
+
+func (e *ChangedError) Error() string {
+	return fmt.Sprintf("%s changed after you were asked about it. Run the command again.", e.Path)
+}
+
 // LowerRevisionError refuses to replace a stored file with a lower
 // revision of it unless the replacement allows it.
 type LowerRevisionError struct {
@@ -157,8 +170,10 @@ func (e *LowerRevisionError) Error() string {
 type PutOptions struct {
 	// Origin is where the file comes from.
 	Origin Origin
-	// Remove names stored files, by id, to remove when the file is stored.
-	Remove []string
+	// Remove holds the stored files to remove when the file is stored, as
+	// Inspect returned them. A file that has changed since is not removed,
+	// and nothing is stored.
+	Remove []File
 	// AllowLower allows a lower revision to replace the stored copy.
 	AllowLower bool
 }
@@ -218,12 +233,28 @@ func SameServer(a, b Pathway) bool {
 	}
 	switch a.Kind {
 	case KindDirect:
-		norm := func(e string) string { return strings.ToLower(strings.TrimRight(e, "/")) }
-		return norm(a.Sky.Endpoint) == norm(b.Sky.Endpoint)
+		return sameEndpoint(a.Sky.Endpoint, b.Sky.Endpoint)
 	case KindTeleport:
 		return a.Teleport != nil && b.Teleport != nil && sameProxy(a.Teleport.Proxy, b.Teleport.Proxy) && a.Sky.App == b.Sky.App
 	}
 	return false
+}
+
+// sameEndpoint reports whether the https addresses a and b name the same
+// API server: the same scheme and host, ignoring case, and the same path,
+// ignoring a trailing slash.
+func sameEndpoint(a, b string) bool {
+	norm := func(e string) string {
+		e = strings.TrimRight(e, "/")
+		u, err := url.Parse(e)
+		if err != nil {
+			return e
+		}
+		u.Scheme = strings.ToLower(u.Scheme)
+		u.Host = strings.ToLower(u.Host)
+		return u.String()
+	}
+	return norm(a) == norm(b)
 }
 
 // sameProxy reports whether the proxy addresses a and b name the same
@@ -294,9 +325,22 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 	if err != nil {
 		return File{}, false, err
 	}
+	stored, _, err := s.List()
+	if err != nil {
+		return File{}, false, err
+	}
 	remove := map[string]bool{}
 	for _, r := range opts.Remove {
-		remove[r] = true
+		var current *File
+		for i := range stored {
+			if stored[i].ID == r.ID {
+				current = &stored[i]
+			}
+		}
+		if current == nil || !reflect.DeepEqual(*current, r) {
+			return File{}, false, &ChangedError{Path: s.Path(r.ID)}
+		}
+		remove[r.ID] = true
 	}
 	for _, c := range change.Clashes {
 		if c.SameName && !remove[c.Stored.ID] {
@@ -334,38 +378,86 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 			return f, false, nil
 		}
 	}
-	if err := axondir.ReplaceFile(path, data); err != nil {
+	// Everything the put changes is kept as it was, so that a failure at
+	// any step puts it all back: the stored files and records stay either
+	// all as they were or all as they are meant to become.
+	paths := []string{path, s.recordPath(f.ID)}
+	for _, r := range opts.Remove {
+		if r.ID != f.ID {
+			paths = append(paths, s.Path(r.ID), s.recordPath(r.ID))
+		}
+	}
+	var saved []savedFile
+	for _, p := range paths {
+		sf, err := saveFile(p)
+		if err != nil {
+			return File{}, false, err
+		}
+		saved = append(saved, sf)
+	}
+	fail := func(err error) (File, bool, error) {
+		for i := len(saved) - 1; i >= 0; i-- {
+			if undo := saved[i].restore(); undo != nil {
+				return File{}, false, fmt.Errorf("%w; and %s could not be restored: %v", err, saved[i].path, undo)
+			}
+		}
 		return File{}, false, err
+	}
+
+	if err := axondir.ReplaceFile(path, data); err != nil {
+		return fail(err)
 	}
 	if err := s.writeRecord(f.ID, opts.Origin, data); err != nil {
-		// Put the stored file back as it was, so that it and its
-		// record still belong together.
-		var undo error
-		if hadPrevious {
-			undo = axondir.ReplaceFile(path, previous)
-		} else {
-			undo = os.Remove(path)
-		}
-		if undo != nil {
-			return File{}, false, fmt.Errorf("%w; and %s could not be restored: %v", err, path, undo)
-		}
-		return File{}, false, err
+		return fail(err)
 	}
 	for _, r := range opts.Remove {
-		if r == f.ID {
+		if r.ID == f.ID {
 			continue
 		}
-		if err := s.remove(r); err != nil {
-			return File{}, false, err
+		if err := s.remove(r.ID); err != nil {
+			return fail(err)
 		}
 	}
 	return f, true, nil
 }
 
+// savedFile is a file's content before a put changed it.
+type savedFile struct {
+	path    string
+	data    []byte
+	existed bool
+}
+
+// saveFile keeps the content of the file at path, which need not exist.
+func saveFile(path string) (savedFile, error) {
+	data, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return savedFile{path: path}, nil
+	case err != nil:
+		return savedFile{}, fmt.Errorf("read %s: %w", path, unwrapPath(err))
+	}
+	return savedFile{path: path, data: data, existed: true}, nil
+}
+
+// restore puts the file back as it was saved.
+func (f savedFile) restore() error {
+	if f.existed {
+		return axondir.ReplaceFile(f.path, f.data)
+	}
+	if err := os.Remove(f.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+// removeFile removes a file. Tests replace it to make a removal fail.
+var removeFile = os.Remove
+
 // remove deletes the stored file id and its record.
 func (s Store) remove(id string) error {
 	for _, path := range []string{s.Path(id), s.recordPath(id)} {
-		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := removeFile(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("remove %s: %w", path, unwrapPath(err))
 		}
 	}

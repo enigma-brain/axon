@@ -224,11 +224,7 @@ func TestReplacingTheActivePathwayLeavesIt(t *testing.T) {
 	if err := connected.Write(dir, campus); err != nil {
 		t.Fatal(err)
 	}
-	change, err := orgfile.NewStore(dir).Inspect([]byte(otherCampus), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := h.l.leaveRemoved(change, []string{"example"}, Options{Out: &h.out}); err != nil {
+	if err := h.l.leaveRemoved([]orgfile.File{files[0]}, Options{Out: &h.out}); err != nil {
 		t.Fatal(err)
 	}
 	if same, err := connected.Is(dir, campus); err != nil || same {
@@ -404,5 +400,21 @@ func TestPipedConfigAsksTheLowerRevisionOnTheTerminal(t *testing.T) {
 	}
 	if !strings.Contains(h.stored("example"), "revision = 5\n") || h.errOut.Len() != 0 {
 		t.Errorf("the answer on the terminal was not used; stderr %q", h.errOut.String())
+	}
+}
+
+// An active pathway that cannot be read stops the replacement before
+// anything is removed.
+func TestReplacingWithAnUnreadableActivePathwayStops(t *testing.T) {
+	h := newHarness(t)
+	if err := os.WriteFile(axondir.New(h.home).ConfigPath(), []byte("pathway = [\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := h.storedIDs()
+	if err := h.login(Options{Config: writeOrg(t, otherCampus), Replace: true}); err == nil {
+		t.Fatal("login succeeded with an unreadable active pathway")
+	}
+	if got := h.storedIDs(); len(got) != len(before) || got[0] != before[0] {
+		t.Errorf("stored %v, want %v unchanged", got, before)
 	}
 }

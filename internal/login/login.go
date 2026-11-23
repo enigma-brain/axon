@@ -323,7 +323,7 @@ func (l *login) addOrg(ctx context.Context, opts Options) (f orgfile.File, in io
 		put.AllowLower = true
 	}
 
-	if err := l.leaveRemoved(change, put.Remove, opts); err != nil {
+	if err := l.leaveRemoved(put.Remove, opts); err != nil {
 		return fail(err)
 	}
 	f, err = store.Put(data, put)

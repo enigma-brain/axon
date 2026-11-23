@@ -362,11 +362,18 @@ func TestIdentifier(t *testing.T) {
 func TestFileID(t *testing.T) {
 	home := t.TempDir()
 	store := orgfile.NewStore(axondir.New(home))
-	if got := fileID(store, "2nd-site", nil); got != "p-2nd-site" {
+	must := func(id string, err error) string {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	if got := must(fileID(store, "2nd-site", nil)); got != "p-2nd-site" {
 		t.Errorf("fileID = %q", got)
 	}
 	long := strings.Repeat("a", 40)
-	if got := fileID(store, long, nil); got != strings.Repeat("a", 32) {
+	if got := must(fileID(store, long, nil)); got != strings.Repeat("a", 32) {
 		t.Errorf("fileID = %q", got)
 	}
 	if err := os.MkdirAll(filepath.Join(home, ".axon", "orgs"), 0o700); err != nil {
@@ -375,10 +382,42 @@ func TestFileID(t *testing.T) {
 	if err := os.WriteFile(store.Path("lab"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := fileID(store, "lab", nil); got != "lab-2" {
+	if got := must(fileID(store, "lab", nil)); got != "lab-2" {
 		t.Errorf("fileID of a taken id = %q", got)
 	}
-	if got := fileID(store, "lab", []string{"lab"}); got != "lab" {
+	if got := must(fileID(store, "lab", []orgfile.File{{ID: "lab"}})); got != "lab" {
 		t.Errorf("fileID of an id being removed = %q", got)
+	}
+}
+
+// An error other than a missing file stops fileID, rather than trying
+// one suffix after another.
+func TestFileIDReturnsAnError(t *testing.T) {
+	home := t.TempDir()
+	store := orgfile.NewStore(axondir.New(home))
+	// A file in place of ~/.axon makes every path below it fail with
+	// "not a directory".
+	if err := os.WriteFile(filepath.Join(home, ".axon"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fileID(store, "lab", nil); err == nil {
+		t.Error("fileID returned no error")
+	}
+}
+
+func TestCleanProxy(t *testing.T) {
+	for in, want := range map[string]string{
+		"teleport.example.org.":         "teleport.example.org",
+		"https://teleport.example.org/": "teleport.example.org",
+		"teleport.example.org.:3080":    "teleport.example.org:3080",
+	} {
+		if got, err := cleanProxy(in); err != nil || got != want {
+			t.Errorf("cleanProxy(%q) = %q, %v, want %q", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"a..b", "a.-b.org", "a b"} {
+		if _, err := cleanProxy(bad); err == nil {
+			t.Errorf("cleanProxy(%q) accepted it", bad)
+		}
 	}
 }

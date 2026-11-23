@@ -145,7 +145,11 @@ func TestPutRemovesAndStores(t *testing.T) {
 	if _, err := s.Put([]byte(added), PutOptions{Origin: FromSource(mustSource(t, "-"))}); !errors.As(err, new(*ClashError)) {
 		t.Fatalf("Put without removing = %v, want a clash", err)
 	}
-	if _, err := s.Put([]byte(added), PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []string{"a"}}); err != nil {
+	c, err := s.Inspect([]byte(added), false)
+	if err != nil || len(c.Clashes) != 1 {
+		t.Fatalf("Inspect = %+v, %v", c, err)
+	}
+	if _, err := s.Put([]byte(added), PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{c.Clashes[0].Stored}}); err != nil {
 		t.Fatal(err)
 	}
 	files, _, _ := s.List()
@@ -214,5 +218,65 @@ func TestSameIDAsAHandMadeFileClashes(t *testing.T) {
 	}
 	if _, err := s.Add([]byte(directOrg("lab", "theirs", "Theirs", "https://t.example.org")), mustSource(t, "-")); !errors.As(err, new(*ClashError)) {
 		t.Errorf("Add over a hand-made file = %v", err)
+	}
+}
+
+// A file that changed after the user agreed to remove it is not removed,
+// and nothing is stored.
+func TestPutRefusesToRemoveAFileThatChanged(t *testing.T) {
+	s, home := newStore(t)
+	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
+	added := directOrg("b", "two", "Campus", "https://b.example.org")
+	c, err := s.Inspect([]byte(added), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Another login adds a pathway to the file in between.
+	add(t, s, oneDirect("a", "one", "extra"), "-")
+	before := snapshot(t, filepath.Join(home, ".axon"))
+	_, err = s.Put([]byte(added), PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{c.Clashes[0].Stored}})
+	var changed *ChangedError
+	if !errors.As(err, &changed) || changed.Path != s.Path("a") {
+		t.Fatalf("Put = %v, want the file named as changed", err)
+	}
+	if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
+		t.Error("a refused put changed ~/.axon")
+	}
+}
+
+// When a removal fails, the stored files and records are put back as they
+// were, the new file's included.
+func TestPutRestoresEverythingWhenARemovalFails(t *testing.T) {
+	s, home := newStore(t)
+	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
+	added := directOrg("b", "two", "Campus", "https://b.example.org")
+	c, err := s.Inspect([]byte(added), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The old file is removed, and the removal of its record fails.
+	record := filepath.Join(home, ".axon", "state", "orgs", "a.toml")
+	removeFile = func(path string) error {
+		if path == record {
+			return errors.New("injected failure")
+		}
+		return os.Remove(path)
+	}
+	t.Cleanup(func() { removeFile = os.Remove })
+	before := snapshot(t, filepath.Join(home, ".axon"))
+	if _, err := s.Put([]byte(added), PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{c.Clashes[0].Stored}}); err == nil || !strings.Contains(err.Error(), "injected failure") {
+		t.Fatalf("Put = %v, want the injected failure", err)
+	}
+	if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
+		t.Errorf("a failed put left changes:\nbefore %v\nafter  %v", before, after)
+	}
+}
+
+func TestSameServerKeepsThePathsCase(t *testing.T) {
+	a := Pathway{Kind: KindDirect, Sky: Sky{Endpoint: "https://Sky.example.org/Team/"}}
+	b := Pathway{Kind: KindDirect, Sky: Sky{Endpoint: "https://sky.example.org/Team"}}
+	c := Pathway{Kind: KindDirect, Sky: Sky{Endpoint: "https://sky.example.org/team"}}
+	if !SameServer(a, b) || SameServer(a, c) {
+		t.Errorf("SameServer: host case and trailing slash ignored = %v, path case ignored = %v", SameServer(a, b), SameServer(a, c))
 	}
 }

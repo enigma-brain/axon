@@ -376,6 +376,10 @@ func isHTTPSAddress(s string) bool {
 	return err == nil && u.Scheme == "https" && u.Host != "" && u.Opaque == ""
 }
 
+// IsHostPort reports whether s is a Teleport proxy address a config file
+// accepts: a hostname, optionally followed by a colon and a port.
+func IsHostPort(s string) bool { return isHostPort(s) }
+
 // isHostPort reports whether s is a hostname, optionally followed by a
 // colon and a port from 1 to 65535.
 func isHostPort(s string) bool {

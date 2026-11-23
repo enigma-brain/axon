@@ -44,8 +44,8 @@ func askYesNo(in io.Reader, out io.Writer, question string) (bool, error) {
 
 // clashOutcome is what the questions about a change's clashes decided.
 type clashOutcome struct {
-	// remove names the stored files to remove, by id.
-	remove []string
+	// remove holds the stored files to remove, as the question showed them.
+	remove []orgfile.File
 	// declined is the first name clash whose replacement was declined, or
 	// nil when every name clash is to be replaced.
 	declined *orgfile.Clash
@@ -82,7 +82,7 @@ func resolveClashes(store orgfile.Store, change orgfile.Change, replace bool, in
 			}
 		}
 		if yes {
-			outcome.remove = append(outcome.remove, c.Stored.ID)
+			outcome.remove = append(outcome.remove, c.Stored)
 			continue
 		}
 		if c.SameName {
@@ -151,10 +151,10 @@ func nameList(names []string) string {
 }
 
 // reportRemoved writes one line for each stored file a change removed.
-func reportRemoved(store orgfile.Store, change orgfile.Change, removed []string, out io.Writer) {
+func reportRemoved(store orgfile.Store, change orgfile.Change, removed []orgfile.File, out io.Writer) {
 	gone := map[string]bool{}
-	for _, id := range removed {
-		gone[id] = true
+	for _, f := range removed {
+		gone[f.ID] = true
 	}
 	for _, group := range groupClashes(change.Clashes) {
 		c := group[0]
@@ -171,23 +171,19 @@ func reportRemoved(store orgfile.Store, change orgfile.Change, removed []string,
 
 // leaveRemoved leaves the active pathway, as a switch of pathway does,
 // when it is in a stored file about to be removed.
-func (l *login) leaveRemoved(change orgfile.Change, removed []string, opts Options) error {
+func (l *login) leaveRemoved(removed []orgfile.File, opts Options) error {
 	if len(removed) == 0 {
 		return nil
 	}
 	active, ok, err := l.dir.Pathway()
-	if err != nil || !ok {
+	if err != nil {
+		return fmt.Errorf("%w. Run `axon login --pathway <id>` to replace it.", err)
+	}
+	if !ok {
 		return nil
 	}
-	gone := map[string]bool{}
-	for _, id := range removed {
-		gone[id] = true
-	}
-	for _, c := range change.Clashes {
-		if !gone[c.Stored.ID] {
-			continue
-		}
-		for _, p := range c.Stored.Pathways {
+	for _, f := range removed {
+		for _, p := range f.Pathways {
 			if p.ID == active {
 				if err := l.disconnectAll(opts); err != nil {
 					return fmt.Errorf("disconnect the previous pathway: %w", err)
