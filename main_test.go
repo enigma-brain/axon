@@ -192,6 +192,13 @@ func TestBinary(t *testing.T) {
 		}
 	})
 
+	t.Run("logout with nothing logged in", func(t *testing.T) {
+		out, stderr, err := runAxon(t, bin, home(t), nil, "logout")
+		if err != nil || out != "Nothing is logged in.\n" || stderr != "" {
+			t.Errorf("logout = %q, %q, %v", out, stderr, err)
+		}
+	})
+
 	t.Run("old pathway and no file", func(t *testing.T) {
 		h := home(t)
 		if err := os.WriteFile(filepath.Join(h, ".axon", "config.toml"), []byte("pathway = \"old-name\"\n"), 0o600); err != nil {

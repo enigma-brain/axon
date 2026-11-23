@@ -420,3 +420,22 @@ func TestSessionValidCancelled(t *testing.T) {
 		t.Errorf("SessionValid = %v, %v; want an error carrying the deadline, not \"no login\"", ok, err)
 	}
 }
+
+func TestLogout(t *testing.T) {
+	f := newFixture(t)
+	path := f.putOnPath("18.11.7")
+	if err := Logout(context.Background(), path, testProxy); err != nil {
+		t.Fatalf("Logout: %v", err)
+	}
+	if got, want := readLog(t), "logout --proxy="+testProxy+"\n"; got != want {
+		t.Errorf("tsh ran with %q, want %q", got, want)
+	}
+	t.Setenv("FAKETSH_EXIT", "1")
+	err := Logout(context.Background(), path, testProxy)
+	if err == nil || !strings.HasPrefix(err.Error(), "tsh logout --proxy=teleport.example.org: exit status 1: tsh failed") {
+		t.Errorf("Logout returned %v, want the command and tsh's output", err)
+	}
+	if err := Logout(context.Background(), path, "--proxy=x"); err == nil {
+		t.Error("Logout accepted a bad proxy")
+	}
+}

@@ -63,7 +63,7 @@ func run(t *testing.T, args ...string) (string, error) {
 	return out.String(), err
 }
 
-func TestHelpListsOnlyLoginAndSky(t *testing.T) {
+func TestHelpListsLoginLogoutAndSky(t *testing.T) {
 	out, err := run(t, "--help")
 	if err != nil {
 		t.Fatal(err)
@@ -79,8 +79,8 @@ func TestHelpListsOnlyLoginAndSky(t *testing.T) {
 			names = append(names, f[0])
 		}
 	}
-	if got := strings.Join(names, " "); got != "login sky" {
-		t.Errorf("help lists %q, want %q", got, "login sky")
+	if got := strings.Join(names, " "); got != "login logout sky" {
+		t.Errorf("help lists %q, want %q", got, "login logout sky")
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -149,4 +150,21 @@ func SessionValid(ctx context.Context, tshPath, proxy string) (bool, error) {
 		return false, nil
 	}
 	return status.Active.ValidUntil.After(now()), nil
+}
+
+// Logout ends the Teleport session for the proxy at proxy. It runs tsh
+// without a terminal and returns tsh's own output in the error when tsh
+// fails.
+func Logout(ctx context.Context, tshPath, proxy string) error {
+	if err := CheckProxy(proxy); err != nil {
+		return err
+	}
+	out, err := exec.CommandContext(ctx, tshPath, "logout", "--proxy="+proxy).CombinedOutput()
+	if err != nil {
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return fmt.Errorf("tsh logout --proxy=%s: %w: %s", proxy, err, msg)
+		}
+		return fmt.Errorf("tsh logout --proxy=%s: %w", proxy, err)
+	}
+	return nil
 }

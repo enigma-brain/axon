@@ -55,6 +55,13 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+	case len(args) == 2 && args[0] == "logout" && strings.HasPrefix(args[1], "--proxy="):
+		if _, err := os.Stat(filepath.Join(dir, "logout-fails")); err == nil {
+			fmt.Fprintln(os.Stderr, "ERROR: logout failed")
+			os.Exit(1)
+		}
+		os.Remove(filepath.Join(dir, "valid"))
+		fmt.Printf("Logged out %s.\n", strings.TrimPrefix(args[1], "--proxy="))
 	case len(args) == 4 && strings.HasPrefix(args[0], "--proxy=") && args[1] == "apps" && args[2] == "login":
 		fmt.Printf("Logged into app %s\n", args[3])
 	case len(args) == 6 && strings.HasPrefix(args[0], "--proxy=") && args[1] == "proxy" && args[2] == "app" && args[4] == "--port":
