@@ -73,9 +73,23 @@ func home(t *testing.T) string {
 	return h
 }
 
-// The organisation files the tests add. Every detail is made up.
+// The config files the tests add. Every detail is made up.
 const (
-	campusFile = `format = 1
+	// formatOneFile is a file of the format an earlier axon used.
+	formatOneFile = `format = 1
+id = "example-older"
+
+[[pathway]]
+id = "older"
+kind = "direct"
+name = "Older"
+description = "Single sign-on in a browser."
+
+[pathway.devenv]
+endpoint = "https://sky.example.org"
+`
+
+	campusFile = `format = 2
 id = "example-campus"
 
 [[pathway]]
@@ -84,10 +98,10 @@ kind = "direct"
 name = "Campus"
 description = "Single sign-on in a browser."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://sky.example.org"
 `
-	twoFile = `format = 1
+	twoFile = `format = 2
 id = "example-two"
 
 [[pathway]]
@@ -96,7 +110,7 @@ kind = "direct"
 name = "North"
 description = "From the north site."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://north.example.org"
 
 [[pathway]]
@@ -108,16 +122,16 @@ description = "From anywhere."
 [pathway.teleport]
 proxy = "teleport.example.org"
 
-[pathway.devenv]
-app = "devenv"
+[pathway.sky]
+app = "skypilot"
 `
 )
 
-// stopped is how a login that reached the devenv connection ends inside
-// the fence.
-const stopped = "axon: connect devenv: check the SkyPilot client: "
+// stopped is how a login that reached the sky group's connection ends
+// inside the fence.
+const stopped = "axon: connect sky: check the SkyPilot client: "
 
-// stores writes data as the stored organisation file id under home.
+// stores writes data as the stored config file id under home.
 func stores(t *testing.T, home, id, data string) {
 	t.Helper()
 	orgs := filepath.Join(home, ".axon", "orgs")
@@ -158,7 +172,7 @@ func TestBinary(t *testing.T) {
 			t.Errorf("--version = %q, %v", out, err)
 		}
 		out, _, err = runAxon(t, bin, home(t), nil, "--help")
-		if err != nil || !strings.Contains(out, "login") || !strings.Contains(out, "devenv") {
+		if err != nil || !strings.Contains(out, "login") || !strings.Contains(out, "sky") {
 			t.Errorf("--help = %q, %v", out, err)
 		}
 	})
@@ -167,14 +181,33 @@ func TestBinary(t *testing.T) {
 		h := home(t)
 		_, stderr, err := runAxon(t, bin, h, nil, "login")
 		wantFailure(t, "login", err)
-		want := "axon: no organisation configuration. Run `axon login --org <source>` with the address or file your organisation gives you.\n"
+		want := "axon: no config file. Run `axon login --config <source>` with the address or file your organization gives you.\n"
 		if stderr != want {
 			t.Errorf("login: stderr = %q, want %q", stderr, want)
 		}
-		_, stderr, err = runAxon(t, bin, h, nil, "devenv", "status")
-		wantFailure(t, "devenv", err)
+		_, stderr, err = runAxon(t, bin, h, nil, "sky", "status")
+		wantFailure(t, "sky", err)
 		if stderr != "axon: Run `axon login` first.\n" {
-			t.Errorf("devenv: stderr = %q", stderr)
+			t.Errorf("sky: stderr = %q", stderr)
+		}
+	})
+
+	t.Run("sky help with no client creates nothing", func(t *testing.T) {
+		h := t.TempDir()
+		_, stderr, err := runAxon(t, bin, h, nil, "sky", "--help")
+		wantFailure(t, "sky --help", err)
+		if stderr != "axon: the SkyPilot client is not installed. Run `axon login` first.\n" {
+			t.Errorf("stderr = %q", stderr)
+		}
+		if _, err := os.Stat(filepath.Join(h, ".axon")); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("sky --help created ~/.axon: %v", err)
+		}
+	})
+
+	t.Run("logout with nothing logged in", func(t *testing.T) {
+		out, stderr, err := runAxon(t, bin, home(t), nil, "logout")
+		if err != nil || out != "Nothing is logged in.\n" || stderr != "" {
+			t.Errorf("logout = %q, %q, %v", out, stderr, err)
 		}
 	})
 
@@ -185,7 +218,7 @@ func TestBinary(t *testing.T) {
 		}
 		_, stderr, err := runAxon(t, bin, h, nil, "login")
 		wantFailure(t, "login", err)
-		if !strings.HasPrefix(stderr, "axon: no organisation configuration.") {
+		if !strings.HasPrefix(stderr, "axon: no config file.") {
 			t.Errorf("stderr = %q", stderr)
 		}
 	})
@@ -263,7 +296,7 @@ func TestBinary(t *testing.T) {
 		stores(t, h, "example-two", twoFile)
 		_, stderr, err := runAxon(t, bin, h, nil, "login", "--pathway", "west")
 		wantFailure(t, "login", err)
-		want := "axon: determine the pathway: no stored organisation file has the pathway \"west\". The stored pathways are north and south.\n"
+		want := "axon: determine the pathway: no stored config file has the pathway \"west\". The stored pathways are north and south.\n"
 		if stderr != want {
 			t.Errorf("stderr = %q, want %q", stderr, want)
 		}
@@ -278,10 +311,10 @@ func TestBinary(t *testing.T) {
 		if err := os.WriteFile(path, []byte(campusFile), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		stdout, stderr, err := runAxon(t, bin, h, nil, "login", "--org", path)
+		stdout, stderr, err := runAxon(t, bin, h, nil, "login", "--config", path)
 		wantFailure(t, "login", err)
 		stored := filepath.Join(h, ".axon", "orgs", "example-campus.toml")
-		if stdout != "Stored the organisation file "+stored+"\n" || !strings.HasPrefix(stderr, stopped) {
+		if stdout != "Stored the config file "+stored+"\n" || !strings.HasPrefix(stderr, stopped) {
 			t.Errorf("stdout = %q, stderr = %q", stdout, stderr)
 		}
 		if data, _ := os.ReadFile(stored); string(data) != campusFile {
@@ -294,7 +327,7 @@ func TestBinary(t *testing.T) {
 
 	t.Run("org from standard input", func(t *testing.T) {
 		h := home(t)
-		_, stderr, err := runAxon(t, bin, h, strings.NewReader(campusFile), "login", "--org", "-")
+		_, stderr, err := runAxon(t, bin, h, strings.NewReader(campusFile), "login", "--config", "-")
 		wantFailure(t, "login", err)
 		if !strings.HasPrefix(stderr, stopped) {
 			t.Errorf("stderr = %q", stderr)
@@ -306,27 +339,27 @@ func TestBinary(t *testing.T) {
 
 	t.Run("org from standard input without a terminal", func(t *testing.T) {
 		h := home(t)
-		_, stderr, err := runAxon(t, bin, h, strings.NewReader(twoFile), "login", "--org", "-")
+		_, stderr, err := runAxon(t, bin, h, strings.NewReader(twoFile), "login", "--config", "-")
 		wantFailure(t, "login", err)
 		if !strings.HasSuffix(stderr, "Run `axon login --pathway <id>` with one of north and south.\n") {
 			t.Errorf("stderr = %q", stderr)
 		}
-		_, stderr, _ = runAxon(t, bin, h, strings.NewReader(twoFile), "login", "--org", "-", "--pathway", "south")
-		// A teleport pathway's session stage asks the proxy for its version,
-		// which goes through the dead proxy.
-		if !strings.HasPrefix(stderr, "axon: establish the Teleport session: ") {
+		_, stderr, _ = runAxon(t, bin, h, strings.NewReader(twoFile), "login", "--config", "-", "--pathway", "south")
+		// The fence's PATH has no tsh, so a teleport pathway stops before the
+		// active pathway changes.
+		if !strings.HasPrefix(stderr, "axon: establish the Teleport session: this pathway needs Teleport's client, tsh") {
 			t.Errorf("stderr = %q", stderr)
 		}
-		if got := readActive(t, h); got != "pathway = \"south\"\n" {
-			t.Errorf("config.toml = %q", got)
+		if got := readActive(t, h); got != "" {
+			t.Errorf("config.toml = %q, want no active pathway", got)
 		}
 	})
 
 	t.Run("org from an address goes through the fence", func(t *testing.T) {
 		h := home(t)
-		_, stderr, err := runAxon(t, bin, h, nil, "login", "--org", "https://example.org/axon.toml")
+		_, stderr, err := runAxon(t, bin, h, nil, "login", "--config", "https://example.org/axon.toml")
 		wantFailure(t, "login", err)
-		if !strings.HasPrefix(stderr, "axon: add the organisation file: ") {
+		if !strings.HasPrefix(stderr, "axon: add the config file: ") {
 			t.Errorf("stderr = %q", stderr)
 		}
 		if _, err := os.Stat(filepath.Join(h, ".axon", "orgs")); !errors.Is(err, os.ErrNotExist) {
@@ -334,12 +367,38 @@ func TestBinary(t *testing.T) {
 		}
 	})
 
+	t.Run("config file of format 1", func(t *testing.T) {
+		h := home(t)
+		older := filepath.Join(t.TempDir(), "older.toml")
+		if err := os.WriteFile(older, []byte(formatOneFile), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, stderr, err := runAxon(t, bin, h, nil, "login", "--config", older)
+		wantFailure(t, "login --config", err)
+		want := "axon: add the config file: the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.\n"
+		if stderr != want {
+			t.Errorf("passed: stderr = %q, want %q", stderr, want)
+		}
+
+		stores(t, h, "example-older", formatOneFile)
+		_, stderr, err = runAxon(t, bin, h, nil, "login")
+		wantFailure(t, "login", err)
+		stored := filepath.Join(h, ".axon", "orgs", "example-older.toml")
+		want = "axon: left out " + stored + ": the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.\n" +
+			"axon: no config file. Run `axon login --config <source>` with the address or file your organization gives you.\n"
+		if stderr != want {
+			t.Errorf("stored: stderr = %q, want %q", stderr, want)
+		}
+	})
+
 	for _, tc := range []struct {
 		args []string
 		want string
 	}{
-		{[]string{"devenv", "stop"}, "axon: axon devenv does not cover \"stop\"."},
+		{[]string{"devenv", "status"}, "axon: unknown command \"devenv\""},
+		{[]string{"sky", "api", "stop"}, "axon: `axon sky api stop` is not available:"},
 		{[]string{"bogus"}, "axon: unknown command \"bogus\""},
+		{[]string{"login", "--org", "https://example.org/axon.toml"}, "axon: unknown flag: --org"},
 	} {
 		_, stderr, err := runAxon(t, bin, home(t), nil, tc.args...)
 		wantFailure(t, strings.Join(tc.args, " "), err)

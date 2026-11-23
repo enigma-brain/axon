@@ -3,12 +3,12 @@
 ## Context
 
 `axon` is a single binary, released for several platforms from a public
-GitHub repository. Its users are members of organisations that adopt it,
-with no account in the GitHub organisation that hosts it. A public
+GitHub repository. Its users are members of organizations that adopt it,
+with no account in the GitHub organization that hosts it. A public
 release's files have plain download addresses, and the latest release's
 files have addresses that do not change between releases.
 
-The binaries are not signed or notarised. macOS blocks an unsigned binary
+The binaries are not signed or notarized. macOS blocks an unsigned binary
 that arrives through a browser and runs one that is fetched from a
 terminal.
 

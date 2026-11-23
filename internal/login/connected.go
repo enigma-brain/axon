@@ -18,8 +18,8 @@ import (
 // would name is unknown, so it disconnects too; disconnecting what is not
 // connected changes nothing.
 //
-// Disconnecting devenv stops the tunnel by its own record and removes the
-// recorded email, so axon devenv asks for a login until the new pathway's
+// Disconnecting the sky group stops the tunnel by its own record and removes the
+// recorded email, so axon sky asks for a login until the new pathway's
 // login records one.
 func (l *login) disconnectUnless(p orgfile.Pathway, opts Options) error {
 	same, err := connected.Is(l.dir, p)
@@ -49,7 +49,7 @@ func (l *login) disconnect(opts Options) error {
 		return err
 	}
 	if running {
-		fmt.Fprintf(opts.Out, "devenv: stopping the Teleport tunnel on port %d\n", tunnel.Port)
+		fmt.Fprintf(opts.Out, "sky: stopping the Teleport tunnel on port %d\n", tunnel.Port)
 		if err := tunnel.StopRecorded(stateDir); err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func (l *login) disconnect(opts Options) error {
 
 // disconnectAll disconnects the pathway that was connected and removes its
 // record, so that nothing is recorded as connected. It is how a login with
-// no stored organisation file leaves the active pathway.
+// no stored config file leaves the active pathway.
 func (l *login) disconnectAll(opts Options) error {
 	if err := l.disconnect(opts); err != nil {
 		return err

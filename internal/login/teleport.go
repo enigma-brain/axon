@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -14,7 +13,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/enigma-brain/axon/internal/apiserver"
-	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/orgfile"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
@@ -32,9 +30,9 @@ var errNoIdentity = errors.New("the SkyPilot API server did not report your Tele
 // teleport is what login does with Teleport. Run fills it with the tsh
 // package; tests replace ensure, which asks the live proxy for its version.
 type teleport struct {
-	// ensure returns the path of a tsh the proxy supports, installing one
-	// when none is present.
-	ensure func(ctx context.Context, dir axondir.Dir, proxy string, in io.Reader, out io.Writer) (string, error)
+	// ensure returns the path of the tsh on PATH when the proxy supports
+	// its version.
+	ensure func(ctx context.Context, proxy string) (string, error)
 	// newTunnel returns the tunnel to the Teleport application app through
 	// the Teleport proxy proxy, run with tshPath and recorded in stateDir.
 	newTunnel func(stateDir, tshPath, proxy, app string) *tunnel.Tunnel
@@ -45,16 +43,12 @@ type teleport struct {
 	path string
 }
 
-// establishTeleportSession makes sure tsh is present and logs in to
-// Teleport when the certificate is not valid. A valid certificate needs no
+// establishTeleportSession logs in to Teleport, with the tsh that run
+// found, when the certificate is not valid. A valid certificate needs no
 // login, so no browser opens.
 func (l *login) establishTeleportSession(ctx context.Context, p orgfile.Pathway, opts Options) error {
 	proxy := p.Teleport.Proxy
-	path, err := l.teleport.ensure(ctx, l.dir, proxy, opts.In, opts.Out)
-	if err != nil {
-		return err
-	}
-	l.teleport.path = path
+	path := l.teleport.path
 
 	valid, err := tsh.SessionValid(ctx, path, proxy)
 	if err != nil {
@@ -77,7 +71,7 @@ func (l *login) establishTeleportSession(ctx context.Context, p orgfile.Pathway,
 // identity. The last step, pointClient, runs later.
 func (l *login) connectTeleport(ctx context.Context, p orgfile.Pathway, opts Options, clientVersion string) (apiserver.Health, error) {
 	endpoint := l.endpoint(p)
-	proxy, app := p.Teleport.Proxy, p.Devenv.App
+	proxy, app := p.Teleport.Proxy, p.Sky.App
 	stateDir, err := l.dir.StateDir()
 	if err != nil {
 		return apiserver.Health{}, err
@@ -94,7 +88,7 @@ func (l *login) connectTeleport(ctx context.Context, p orgfile.Pathway, opts Opt
 		return apiserver.Health{}, err
 	}
 	if up {
-		fmt.Fprintf(opts.Out, "devenv: the Teleport tunnel is up on port %d\n", tunnel.Port)
+		fmt.Fprintf(opts.Out, "sky: the Teleport tunnel is up on port %d\n", tunnel.Port)
 	} else {
 		// 2. A fresh application certificate.
 		if err := tsh.AppLogin(ctx, l.teleport.path, proxy, app); err != nil {
@@ -106,7 +100,7 @@ func (l *login) connectTeleport(ctx context.Context, p orgfile.Pathway, opts Opt
 		}
 		// 4 and 5. Start confirms that the port is free, starts the tunnel
 		// and waits for it to answer.
-		fmt.Fprintf(opts.Out, "devenv: starting the Teleport tunnel on port %d\n", tunnel.Port)
+		fmt.Fprintf(opts.Out, "sky: starting the Teleport tunnel on port %d\n", tunnel.Port)
 		if err := tn.Start(ctx); err != nil {
 			if ctx.Err() != nil {
 				return apiserver.Health{}, ctx.Err()
@@ -130,7 +124,7 @@ func (l *login) connectTeleport(ctx context.Context, p orgfile.Pathway, opts Opt
 
 // pointClient runs a teleport pathway's last step: sky api login
 // against the tunnel's endpoint, when the endpoint the client has stored
-// differs. connectDevenv runs it after the identity check and the version
+// differs. connectSky runs it after the identity check and the version
 // sync, which on this pathway need no SkyPilot login, so sky is a client at
 // the server's version.
 func (l *login) pointClient(ctx context.Context, p orgfile.Pathway, opts Options, sky string) error {
@@ -221,7 +215,7 @@ func (l *login) skyLogin(ctx context.Context, opts Options, sky, endpoint string
 	cmd.Stdout = opts.Out
 	cmd.Stderr = opts.Err
 
-	fmt.Fprintf(opts.Out, "devenv: pointing the SkyPilot client at %s\n", endpoint)
+	fmt.Fprintf(opts.Out, "sky: pointing the SkyPilot client at %s\n", endpoint)
 	runErr := cmd.Run()
 	// The caller's own cancellation or deadline comes first; the message
 	// about the wait is only for the wait login sets here.

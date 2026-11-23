@@ -12,11 +12,11 @@ import (
 	"github.com/enigma-brain/axon/internal/skyclient"
 )
 
-// smokeFile is the organisation file the smoke test adds. Every detail is
+// smokeFile is the config file the smoke test adds. Every detail is
 // made up. Its endpoint is port 1 on the loopback address, where nothing
 // listens, so the login stops at the reachability check, the step before
 // the browser login, and no request leaves the machine.
-const smokeFile = `format = 1
+const smokeFile = `format = 2
 id = "example-smoke"
 
 [[pathway]]
@@ -25,12 +25,12 @@ kind = "direct"
 name = "Smoke"
 description = "A made-up pathway whose server is never reached."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://127.0.0.1:1"
 `
 
 // TestSmokeLogin runs axon as a user would, in an empty home directory:
-// axon login --org <file> stores the file, installs the SkyPilot client for
+// axon login --config <file> stores the file, installs the SkyPilot client for
 // real, and stops where the login would open a browser. The install
 // downloads a few hundred megabytes, so the test runs only when
 // AXON_REAL_INSTALL=1.
@@ -73,13 +73,13 @@ func TestSmokeLogin(t *testing.T) {
 	}
 	t.Logf("%s", strings.TrimSpace(out))
 
-	stdout, stderr, err := run("login", "--org", orgPath)
+	stdout, stderr, err := run("login", "--config", orgPath)
 	t.Logf("axon login stdout:\n%s", stdout)
 	t.Logf("axon login stderr:\n%s", stderr)
 	wantFailure(t, "axon login", err)
 
-	if !strings.Contains(stdout, "Stored the organisation file ") {
-		t.Errorf("axon login did not report storing the organisation file")
+	if !strings.Contains(stdout, "Stored the config file ") {
+		t.Errorf("axon login did not report storing the config file")
 	}
 	if !strings.Contains(stderr, "Can't reach 127.0.0.1:1.") {
 		t.Errorf("axon login did not stop at the reachability check, before the browser login")
@@ -87,9 +87,9 @@ func TestSmokeLogin(t *testing.T) {
 
 	stored, err := os.ReadFile(filepath.Join(home, ".axon", "orgs", "example-smoke.toml"))
 	if err != nil {
-		t.Errorf("read the stored organisation file: %v", err)
+		t.Errorf("read the stored config file: %v", err)
 	} else if string(stored) != smokeFile {
-		t.Errorf("the stored organisation file is not the file given:\n%s", stored)
+		t.Errorf("the stored config file is not the file given:\n%s", stored)
 	}
 
 	current, err := os.ReadFile(filepath.Join(home, ".axon", "tools", "skypilot", "current"))

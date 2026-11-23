@@ -108,8 +108,8 @@ func Ensure(ctx context.Context, dir axondir.Dir, version string, progress io.Wr
 		return from, version, nil
 	}
 
-	fmt.Fprintf(progress, "devenv: installing the SkyPilot client %s, with its own uv and Python, into %s.\n", version, tools)
-	fmt.Fprintln(progress, "devenv: your system's Python and packages are not changed.")
+	fmt.Fprintf(progress, "sky: installing the SkyPilot client %s, with its own uv and Python, into %s.\n", version, tools)
+	fmt.Fprintln(progress, "sky: your system's Python and packages are not changed.")
 
 	uv, err := ensureUV(ctx, tools, progress)
 	if err != nil {
@@ -130,7 +130,7 @@ func Ensure(ctx context.Context, dir axondir.Dir, version string, progress io.Wr
 	if err != nil {
 		return "", "", fmt.Errorf("install SkyPilot %s (%s): %w", version, skypilotPackage, err)
 	}
-	fmt.Fprintf(progress, "devenv: installed the SkyPilot client %s\n", version)
+	fmt.Fprintf(progress, "sky: installed the SkyPilot client %s\n", version)
 	return from, version, nil
 }
 
@@ -172,11 +172,8 @@ func installClient(ctx context.Context, uv string, env []string, tools, version 
 // Version returns the version of the installed client without installing
 // anything. The boolean is false when no client is installed.
 func Version(dir axondir.Dir) (version string, installed bool, err error) {
-	tools, err := dir.ToolsDir()
-	if err != nil {
-		return "", false, err
-	}
-	path := filepath.Join(tools, skypilotDir, currentFile)
+	// A read creates no directory.
+	path := filepath.Join(dir.ToolsPath(), skypilotDir, currentFile)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return "", false, nil
@@ -188,11 +185,14 @@ func Version(dir axondir.Dir) (version string, installed bool, err error) {
 	if !versionPattern.MatchString(version) {
 		return "", false, fmt.Errorf("read %s: %q is not a release version", path, version)
 	}
-	if !isExecutable(skyPath(tools, version)) {
+	if !isExecutable(skyPath(dir.ToolsPath(), version)) {
 		return "", false, nil
 	}
 	return version, true, nil
 }
+
+// ErrNotInstalled reports that axon has not installed its SkyPilot client.
+var ErrNotInstalled = errors.New("the SkyPilot client is not installed. Run `axon login`")
 
 // Path returns the absolute path of the client's sky executable.
 func Path(dir axondir.Dir) (string, error) {
@@ -201,7 +201,7 @@ func Path(dir axondir.Dir) (string, error) {
 		return "", err
 	}
 	if !installed {
-		return "", errors.New("the SkyPilot client is not installed. Run `axon login`")
+		return "", ErrNotInstalled
 	}
 	tools, err := dir.ToolsDir()
 	if err != nil {

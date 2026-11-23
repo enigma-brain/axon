@@ -10,11 +10,11 @@ import (
 	"testing"
 
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/devenv"
+	"github.com/enigma-brain/axon/internal/sky"
 )
 
-// twoPathways is an organisation file with two made-up pathways.
-const twoPathways = `format = 1
+// twoPathways is a config file with two made-up pathways.
+const twoPathways = `format = 2
 id = "example"
 
 [[pathway]]
@@ -23,7 +23,7 @@ kind = "direct"
 name = "Campus"
 description = "On campus."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://sky.example.org"
 
 [[pathway]]
@@ -32,12 +32,12 @@ kind = "direct"
 name = "Lab"
 description = "In the lab."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://lab.example.org"
 `
 
 // storeOrg sets HOME to a new directory holding twoPathways as a stored
-// organisation file. The login tests below stop before any network request.
+// config file. The login tests below stop before any network request.
 func storeOrg(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
@@ -63,7 +63,7 @@ func run(t *testing.T, args ...string) (string, error) {
 	return out.String(), err
 }
 
-func TestHelpListsOnlyLoginAndDevenv(t *testing.T) {
+func TestHelpListsLoginLogoutAndSky(t *testing.T) {
 	out, err := run(t, "--help")
 	if err != nil {
 		t.Fatal(err)
@@ -79,8 +79,8 @@ func TestHelpListsOnlyLoginAndDevenv(t *testing.T) {
 			names = append(names, f[0])
 		}
 	}
-	if got := strings.Join(names, " "); got != "devenv login" {
-		t.Errorf("help lists %q, want %q", got, "devenv login")
+	if got := strings.Join(names, " "); got != "login logout sky" {
+		t.Errorf("help lists %q, want %q", got, "login logout sky")
 	}
 }
 
@@ -107,7 +107,7 @@ func TestLoginHelpNamesItsFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"--org", "--pathway", "https address", "standard input"} {
+	for _, want := range []string{"--config", "--pathway", "https address", "standard input"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("login --help lacks %q:\n%s", want, out)
 		}
@@ -117,7 +117,7 @@ func TestLoginHelpNamesItsFlags(t *testing.T) {
 func TestLoginWithoutAFileStops(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	_, err := run(t, "login")
-	if err == nil || !strings.HasPrefix(err.Error(), "no organisation configuration. Run `axon login --org <source>`") {
+	if err == nil || !strings.HasPrefix(err.Error(), "no config file. Run `axon login --config <source>`") {
 		t.Errorf("login with no file: err = %v", err)
 	}
 }
@@ -147,13 +147,20 @@ func TestLoginWithoutTerminalAsksForFlag(t *testing.T) {
 	}
 }
 
-func TestDevenvIsWired(t *testing.T) {
+func TestSkyIsWired(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	out, err := run(t, "devenv", "--help")
-	if err != nil || !strings.Contains(out, "jobs launch") {
-		t.Errorf("devenv --help: err = %v, output:\n%s", err, out)
+	// With no client installed, sky's help stops before running anything.
+	if _, err := run(t, "sky", "--help"); err == nil || !strings.Contains(err.Error(), "SkyPilot client is not installed") {
+		t.Errorf("sky --help with no client: err = %v", err)
 	}
-	if _, err := run(t, "devenv", "launch", "-c", "dev", "task.yaml"); !errors.Is(err, devenv.ErrNoLogin) {
-		t.Errorf("devenv launch without a login: err = %v, want %v", err, devenv.ErrNoLogin)
+	if _, err := run(t, "sky", "launch", "-c", "dev", "task.yaml"); !errors.Is(err, sky.ErrNoLogin) {
+		t.Errorf("sky launch without a login: err = %v, want %v", err, sky.ErrNoLogin)
+	}
+}
+
+func TestDevenvIsGone(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if _, err := run(t, "devenv", "status"); err == nil || !strings.Contains(err.Error(), "unknown command") {
+		t.Errorf("axon devenv: err = %v, want unknown command", err)
 	}
 }

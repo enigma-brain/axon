@@ -1,6 +1,6 @@
 // Package axondir owns ~/.axon, the one directory axon keeps on the laptop.
 //
-// The directory holds the organisation files, the configuration file, the
+// The directory holds the config files, the configuration file, the
 // tools axon installs for its own use, and the state it records. Directories are created on first
 // use, readable by the user only; files are written readable by the user
 // only.
@@ -59,7 +59,7 @@ func (d Dir) Root() string { return d.root }
 // ConfigPath returns the path of the configuration file.
 func (d Dir) ConfigPath() string { return filepath.Join(d.root, configFile) }
 
-// OrgsDir returns the directory for the organisation files, creating it
+// OrgsDir returns the directory for the config files, creating it
 // when it does not exist.
 func (d Dir) OrgsDir() (string, error) { return d.ensure(orgsDir) }
 
@@ -67,13 +67,17 @@ func (d Dir) OrgsDir() (string, error) { return d.ensure(orgsDir) }
 // when it does not exist.
 func (d Dir) ToolsDir() (string, error) { return d.ensure(toolsDir) }
 
+// ToolsPath returns the path of the directory for the tools axon installs,
+// without creating it.
+func (d Dir) ToolsPath() string { return filepath.Join(d.root, toolsDir) }
+
 // StateDir returns the directory for the state axon records, creating it
 // when it does not exist.
 func (d Dir) StateDir() (string, error) { return d.ensure(stateDir) }
 
 // Pathway returns the identifier of the active pathway. The boolean is
 // false when none is stored. The identifier is not checked against the
-// organisation files: whether a stored file still has it is the caller's
+// config files: whether a stored file still has it is the caller's
 // question.
 func (d Dir) Pathway() (string, bool, error) {
 	data, err := os.ReadFile(d.ConfigPath())

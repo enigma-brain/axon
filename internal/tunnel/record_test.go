@@ -64,7 +64,7 @@ func TestRecordHoldsTheCommandLine(t *testing.T) {
 	if rec.PID != st.PID {
 		t.Errorf("recorded process ID = %d, want %d", rec.PID, st.PID)
 	}
-	want := "--proxy=teleport.example.org proxy app devenv --port " + strconv.Itoa(testPort)
+	want := "--proxy=teleport.example.org proxy app skypilot --port " + strconv.Itoa(testPort)
 	if got := strings.Join(rec.Args, " "); got != want {
 		t.Errorf("recorded arguments = %q, want %q", got, want)
 	}
@@ -134,7 +134,7 @@ func TestOldFormTunnelIsAnotherProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !alive(t, pid) {
-		t.Error("a stop signalled the old-form tunnel")
+		t.Error("a stop signaled the old-form tunnel")
 	}
 	if !gone(old) {
 		t.Error("the old record was kept by Stop")

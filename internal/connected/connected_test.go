@@ -13,7 +13,7 @@ func remote() orgfile.Pathway {
 		File: "example", ID: "remote", Kind: orgfile.KindTeleport,
 		Name: "Remote", Description: "From anywhere.",
 		Teleport: &orgfile.Teleport{Proxy: "teleport.example.org"},
-		Devenv:   orgfile.Devenv{App: "devenv"},
+		Sky:      orgfile.Sky{App: "skypilot"},
 	}
 }
 
@@ -29,7 +29,7 @@ func TestWriteAndRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "format = 1\nid = \"remote\"\nkind = \"teleport\"\nteleport_proxy = \"teleport.example.org\"\ndevenv_app = \"devenv\"\n"
+	want := "format = 2\nid = \"remote\"\nkind = \"teleport\"\nteleport_proxy = \"teleport.example.org\"\nsky_app = \"skypilot\"\n"
 	if string(data) != want {
 		t.Errorf("record = %q, want %q", data, want)
 	}
@@ -56,7 +56,7 @@ func TestIs(t *testing.T) {
 	for name, change := range map[string]func(*orgfile.Pathway){
 		"id":    func(p *orgfile.Pathway) { p.ID = "elsewhere" },
 		"proxy": func(p *orgfile.Pathway) { p.Teleport = &orgfile.Teleport{Proxy: "teleport.example.org:3080"} },
-		"app":   func(p *orgfile.Pathway) { p.Devenv.App = "other" },
+		"app":   func(p *orgfile.Pathway) { p.Sky.App = "other" },
 	} {
 		p := remote()
 		change(&p)
@@ -71,7 +71,9 @@ func TestOtherFormatIsNoRecord(t *testing.T) {
 	if _, err := dir.StateDir(); err != nil {
 		t.Fatal(err)
 	}
-	for _, content := range []string{"format = 2\nid = \"remote\"\n", "not toml ["} {
+	// The first is a record an older axon wrote.
+	v010 := "format = 1\nid = \"remote\"\nkind = \"teleport\"\nteleport_proxy = \"teleport.example.org\"\ndevenv_app = \"skypilot\"\n"
+	for _, content := range []string{v010, "format = 3\nid = \"remote\"\n", "not toml ["} {
 		if err := os.WriteFile(Path(dir), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}

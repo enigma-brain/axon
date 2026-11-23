@@ -1,14 +1,12 @@
 // Package tsh holds everything axon does with Teleport's client, tsh:
-// finding or installing it, the Teleport login, the application login and
-// the check of the Teleport certificate.
+// finding it on PATH, the Teleport login, the application login, the
+// logout and the check of the Teleport certificate.
 //
-// A tsh on PATH is used when the proxy supports its version, and is never
-// replaced. Otherwise axon uses its own tsh under ~/.axon/tools/, installing
-// it at the proxy's version from Teleport's archive after the user agrees.
+// tsh is a prerequisite of a teleport pathway: axon uses the tsh on PATH,
+// never installs one, and never replaces it.
 package tsh
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,8 +17,6 @@ import (
 	"os/exec"
 	"strings"
 	"time"
-
-	"github.com/enigma-brain/axon/internal/axondir"
 )
 
 // InstallLink is Teleport's page on installing its client.
@@ -37,126 +33,50 @@ var (
 // now is the clock the certificate is checked against.
 var now = time.Now
 
-// ErrNotFound reports that there is no tsh on PATH and axon has installed
-// none.
-var ErrNotFound = errors.New("Teleport's client, tsh, is not installed. Run `axon login`")
+// ErrNotFound reports that there is no tsh on PATH.
+var ErrNotFound = fmt.Errorf("this pathway needs Teleport's client, tsh, and no tsh was found on PATH. Install it from %s and run `axon login` again.", InstallLink)
 
-// Find returns the path of the tsh on PATH, or else of axon's own. It makes
-// no network request, asks nothing, installs nothing and does not check the
-// version. It returns ErrNotFound when there is neither.
-func Find(dir axondir.Dir) (string, error) {
-	if path, err := exec.LookPath("tsh"); err == nil {
-		return path, nil
-	}
-	tools, err := dir.ToolsDir()
-	if err != nil {
-		return "", err
-	}
-	own, _, ok, err := installed(tools)
-	if err != nil {
-		return "", err
-	}
-	if !ok {
+// Find returns the path of the tsh on PATH. It makes no network request
+// and does not check the version. It returns ErrNotFound when there is
+// none.
+func Find() (string, error) {
+	path, err := exec.LookPath("tsh")
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
 		return "", ErrNotFound
+	case err != nil:
+		// Such as a tsh found only through a relative entry of PATH, which
+		// is not run.
+		return "", fmt.Errorf("find tsh on PATH: %w", err)
 	}
-	return own, nil
+	return path, nil
 }
 
-// Ensure returns the path of a tsh whose version the Teleport proxy at proxy
-// supports, installing one when none is present. It reads answers from in
-// and writes prompts and progress to out.
-//
-// A tsh on PATH comes first; when the proxy does not support its version,
-// Ensure stops and names both versions. axon's own tsh comes next, and is
-// reinstalled at the proxy's version, without asking, when the proxy no
-// longer supports it. With neither, Ensure asks before installing.
-func Ensure(ctx context.Context, dir axondir.Dir, proxyAddr string, in io.Reader, out io.Writer) (tshPath string, err error) {
-	if out == nil {
-		out = io.Discard
-	}
+// Ensure returns the path of the tsh on PATH when the Teleport proxy at
+// proxyAddr supports its version. It returns ErrNotFound when there is no
+// tsh on PATH, and stops naming both versions when the proxy does not
+// support the one on PATH.
+func Ensure(ctx context.Context, proxyAddr string) (string, error) {
 	if err := CheckProxy(proxyAddr); err != nil {
+		return "", err
+	}
+	path, err := Find()
+	if err != nil {
 		return "", err
 	}
 	proxy, err := proxyVersion(ctx, proxyAddr)
 	if err != nil {
 		return "", err
 	}
-
-	if path, err := exec.LookPath("tsh"); err == nil {
-		version, err := clientVersion(ctx, path)
-		if err != nil {
-			return "", err
-		}
-		if !supported(version, proxy) {
-			return "", fmt.Errorf("tsh %s at %s does not work with the Teleport proxy %s, which runs %s and supports tsh %d and %d. Update tsh: %s",
-				version, path, proxyAddr, proxy, major(proxy), major(proxy)-1, InstallLink)
-		}
-		return path, nil
-	}
-
-	tools, err := dir.ToolsDir()
+	version, err := clientVersion(ctx, path)
 	if err != nil {
 		return "", err
 	}
-	own, version, ok, err := installed(tools)
-	if err != nil {
-		return "", err
-	}
-	if ok && supported(version, proxy) {
-		return own, nil
-	}
-
-	if !canInstall() {
-		return "", fmt.Errorf("Teleport's client, tsh, is not on PATH. Install it from %s and run `axon login` again", InstallLink)
-	}
-	if ok {
-		fmt.Fprintf(out, "Updating axon's tsh from %s to %s, the Teleport proxy's version\n", version, proxy)
-	} else {
-		fmt.Fprintln(out, "Teleport's client, tsh, is not installed.")
-		if !confirm(in, out, fmt.Sprintf("Install tsh %s into ~/.axon/tools? [Y/n] ", proxy)) {
-			return "", fmt.Errorf("tsh was not installed. Install it from %s and run `axon login` again", InstallLink)
-		}
-	}
-	path, err := install(ctx, tools, proxy, out)
-	if err != nil {
-		return "", fmt.Errorf("%w. Install tsh from %s and run `axon login` again", err, InstallLink)
-	}
-	if ok {
-		fmt.Fprintf(out, "Updated tsh from %s to %s\n", version, proxy)
-	} else {
-		fmt.Fprintf(out, "Installed tsh %s\n", proxy)
+	if !supported(version, proxy) {
+		return "", fmt.Errorf("tsh %s at %s does not work with the Teleport proxy %s, which runs %s and supports tsh %d and %d. Update tsh: %s",
+			version, path, proxyAddr, proxy, major(proxy), major(proxy)-1, InstallLink)
 	}
 	return path, nil
-}
-
-// confirm asks question until the answer is yes or no. An empty answer is
-// yes. The end of input, or a nil in, is no.
-func confirm(in io.Reader, out io.Writer, question string) bool {
-	if in == nil {
-		return false
-	}
-	r := bufio.NewReader(in)
-	for {
-		fmt.Fprint(out, question)
-		line, err := r.ReadString('\n')
-		answer := strings.ToLower(strings.TrimSpace(line))
-		// An answer cut off by the end of input is complete only when it
-		// says something: a blank one is not the empty line that means yes.
-		if err != nil && answer == "" {
-			fmt.Fprintln(out)
-			return false
-		}
-		switch answer {
-		case "", "y", "yes":
-			return true
-		case "n", "no":
-			return false
-		}
-		if err != nil {
-			fmt.Fprintln(out)
-			return false
-		}
-	}
 }
 
 // Login runs the Teleport login against the proxy at proxy.
@@ -235,4 +155,32 @@ func SessionValid(ctx context.Context, tshPath, proxy string) (bool, error) {
 		return false, nil
 	}
 	return status.Active.ValidUntil.After(now()), nil
+}
+
+// ErrStillLoggedIn reports a tsh logout that exited without ending the
+// session, such as when several identities are logged in to the proxy.
+var ErrStillLoggedIn = errors.New("the Teleport session is still valid after tsh logout")
+
+// Logout ends the Teleport session for the proxy at proxy, and checks that
+// it ended. It runs tsh without a terminal and returns tsh's own output in
+// the error when tsh fails.
+func Logout(ctx context.Context, tshPath, proxy string) error {
+	if err := CheckProxy(proxy); err != nil {
+		return err
+	}
+	out, err := exec.CommandContext(ctx, tshPath, "logout", "--proxy="+proxy).CombinedOutput()
+	if err != nil {
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return fmt.Errorf("tsh logout --proxy=%s: %w: %s", proxy, err, msg)
+		}
+		return fmt.Errorf("tsh logout --proxy=%s: %w", proxy, err)
+	}
+	valid, err := SessionValid(ctx, tshPath, proxy)
+	if err != nil {
+		return err
+	}
+	if valid {
+		return fmt.Errorf("%w. Run `tsh logout --proxy=%s --user=<user>` for each user tsh lists", ErrStillLoggedIn, proxy)
+	}
+	return nil
 }

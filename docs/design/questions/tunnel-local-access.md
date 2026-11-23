@@ -40,12 +40,12 @@ of them through for the owner.
 
 State the limit. A teleport pathway is for a machine whose other local
 accounts and processes the user trusts, a condition the user can judge and
-`axon` cannot, and the proxy rests on unverified behaviour of three
+`axon` cannot, and the proxy rests on unverified behavior of three
 clients.
 
 ## Resolution path
 
-- An organisation needs a teleport pathway on a machine that other people
+- An organization needs a teleport pathway on a machine that other people
   log in to.
 - Then: confirm whether the tunnel's listener is reachable by other local
   accounts on macOS, Linux and WSL as described, and test whether the

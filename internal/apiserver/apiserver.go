@@ -1,7 +1,7 @@
 // Package apiserver makes the health request to the SkyPilot API server.
 //
 // axon login uses it to verify the identity the server reports and to read
-// the server's version; the axon devenv connection check uses it before a
+// the server's version; the axon sky connection check uses it before a
 // command runs.
 package apiserver
 

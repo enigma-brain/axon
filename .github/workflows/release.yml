@@ -101,7 +101,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Run the installed axon login with an example organisation file in an empty home
+      - name: Run the installed axon login with an example config file in an empty home
         env:
           AXON_REAL_INSTALL: "1"
         run: AXON_SMOKE_BIN="$HOME/.local/bin/axon" go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .

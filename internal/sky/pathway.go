@@ -1,4 +1,4 @@
-package devenv
+package sky
 
 import (
 	"errors"
@@ -11,8 +11,8 @@ import (
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
-// ErrNoLogin reports that axon devenv has nothing to connect to: no
-// organisation file, no active pathway, an active pathway no stored file
+// ErrNoLogin reports that axon sky has nothing to connect to: no
+// config file, no active pathway, an active pathway no stored file
 // has, or no recorded login.
 var ErrNoLogin = errors.New("Run `axon login` first.")
 
@@ -23,7 +23,7 @@ func Endpoint(p orgfile.Pathway) string {
 	if p.Kind == orgfile.KindTeleport {
 		return "http://localhost:" + strconv.Itoa(tunnel.Port)
 	}
-	return p.Devenv.Endpoint
+	return p.Sky.Endpoint
 }
 
 // Host returns the host of endpoint, as a message names it.
@@ -44,7 +44,7 @@ func Unreachable(p orgfile.Pathway, endpoint string) string {
 	return msg
 }
 
-// activePathway returns the active pathway from the stored organisation
+// activePathway returns the active pathway from the stored organization
 // files. A stored file that fails the checks is left out without a word:
 // only axon login reports it. It returns ErrNoLogin when there is no active
 // pathway or no stored file has it.

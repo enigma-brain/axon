@@ -18,7 +18,7 @@ import (
 	"github.com/enigma-brain/axon/internal/orgfile"
 )
 
-// orgServer is a local TLS server that publishes organisation files, one
+// orgServer is a local TLS server that publishes config files, one
 // per path, and counts the requests for each.
 type orgServer struct {
 	srv      *httptest.Server
@@ -110,7 +110,7 @@ func (s *orgServer) total() int {
 	return n
 }
 
-// storeFrom adds data as an organisation file whose source is the test
+// storeFrom adds data as a config file whose source is the test
 // address of path.
 func (h *harness) storeFrom(path, data string) {
 	h.t.Helper()
@@ -166,8 +166,8 @@ func (h *harness) emailFile() os.FileInfo {
 	return info
 }
 
-// oneCampus is an organisation file with the single direct pathway campus.
-const oneCampus = `format = 1
+// oneCampus is a config file with the single direct pathway campus.
+const oneCampus = `format = 2
 id = "example"
 
 [[pathway]]
@@ -176,7 +176,7 @@ kind = "direct"
 name = "Campus"
 description = "Single sign-on in a browser."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://sky.example.org"
 `
 
@@ -199,7 +199,7 @@ func TestRefreshReplacesTheFileWithoutDisconnectingOnText(t *testing.T) {
 		t.Errorf("stored file = %q, want the fetched one", got)
 	}
 	path := filepath.Join(h.home, ".axon", "orgs", "example.toml")
-	if !strings.Contains(h.out.String(), "Updated the organisation file "+path+"\n") {
+	if !strings.Contains(h.out.String(), "Updated the config file "+path+"\n") {
 		t.Errorf("output lacks the update line:\n%s", h.out.String())
 	}
 	if !os.SameFile(email, h.emailFile()) {
@@ -226,7 +226,7 @@ func TestRefreshOfTheSameFileSaysNothing(t *testing.T) {
 	if err := h.run(""); err != nil {
 		t.Fatal(err)
 	}
-	if got := h.out.String(); got != "devenv: connected as ada@example.org (SkyPilot 0.13.0)\n" {
+	if got := h.out.String(); got != "sky: connected as ada@example.org (SkyPilot 0.13.0)\n" {
 		t.Errorf("output = %q", got)
 	}
 	if h.errOut.Len() != 0 {
@@ -242,7 +242,7 @@ func TestRefreshFailureUsesTheStoredFile(t *testing.T) {
 		reason string
 	}{
 		{"unreachable", func(s *orgServer) { s.fail("/example.toml", http.StatusInternalServerError) }, "the server answered 500 Internal Server Error"},
-		{"refused", func(s *orgServer) { s.publish("/example.toml", "format = 2\n") }, "format"},
+		{"refused", func(s *orgServer) { s.publish("/example.toml", "format = 3\n") }, "format"},
 		{"another id", func(s *orgServer) {
 			s.publish("/example.toml", strings.Replace(exampleOrg, `id = "example"`, `id = "elsewhere"`, 1))
 		}, `id: is "elsewhere", not "example"`},
@@ -300,7 +300,7 @@ func TestRefreshSkipsFilesNotFromAnAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.connectedTo("campus")
-	if err := h.login(Options{Org: file, Pathway: "lab"}); err != nil {
+	if err := h.login(Options{Config: file, Pathway: "lab"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(h.home, ".axon", "state", "orgs", "other.toml")); err != nil {
@@ -324,11 +324,11 @@ func TestOrgAddedIsNotFetchedAgain(t *testing.T) {
 	orgs := h.serveOrgs()
 	orgs.publish("/other.toml", otherOrg)
 	h.logIn()
-	if err := h.login(Options{Org: "https://example.org/other.toml"}); err != nil {
+	if err := h.login(Options{Config: "https://example.org/other.toml"}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	if got := orgs.count("/other.toml"); got != 1 {
-		t.Errorf("fetched %d times, want once, by --org", got)
+		t.Errorf("fetched %d times, want once, by --config", got)
 	}
 	if h.active() != "lab" {
 		t.Errorf("active = %q, want lab", h.active())
@@ -348,7 +348,7 @@ func TestDroppedPathwayNamedByFlagStops(t *testing.T) {
 	orgs.publish("/example.toml", dropCampus)
 
 	err := h.run("campus")
-	want := `determine the pathway: the pathway "campus" is no longer in its organisation file. The stored pathways are remote and lab.`
+	want := `determine the pathway: the pathway "campus" is no longer in its config file. The stored pathways are remote and lab.`
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
@@ -371,7 +371,7 @@ func TestDroppedPathwayWithOneLeftIsReplacedWithoutAsking(t *testing.T) {
 	if err := h.run(""); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
-	if !strings.Contains(h.out.String(), "The pathway \"campus\" is no longer in its organisation file. Using the pathway \"campus-sso\".\n") {
+	if !strings.Contains(h.out.String(), "The pathway \"campus\" is no longer in its config file. Using the pathway \"campus-sso\".\n") {
 		t.Errorf("output lacks the line naming the new pathway:\n%s", h.out.String())
 	}
 	if strings.Contains(h.out.String(), "Which pathway") {
@@ -397,7 +397,7 @@ func TestDroppedPathwayWithSeveralLeftAsks(t *testing.T) {
 	if err := h.login(Options{In: strings.NewReader("lab\n")}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
-	want := "The pathway \"campus\" is no longer in its organisation file.\nWhich pathway are you on?\n" +
+	want := "The pathway \"campus\" is no longer in its config file.\nWhich pathway are you on?\n" +
 		"  1) Remote  Works from anywhere.\n" +
 		"  2) Lab     A browser login. Works from the lab.\n"
 	if !strings.Contains(h.out.String(), want) {
@@ -444,7 +444,7 @@ func TestRefreshedSettingsReconnectDirectPathway(t *testing.T) {
 	if h.active() != "campus" {
 		t.Errorf("active = %q, want campus kept", h.active())
 	}
-	if got := h.record().DevenvEndpoint; got != "https://sky2.example.org" {
+	if got := h.record().SkyEndpoint; got != "https://sky2.example.org" {
 		t.Errorf("recorded endpoint = %q, want the new one", got)
 	}
 	if os.SameFile(before, h.emailFile()) {
@@ -491,18 +491,18 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 	}
 	h.tshCalls()
 
-	orgs.publish("/example.toml", strings.Replace(exampleOrg, `app = "devenv"`, `app = "devenv2"`, 1))
+	orgs.publish("/example.toml", strings.Replace(exampleOrg, `app = "skypilot"`, `app = "skypilot2"`, 1))
 	stateDir, err := axondir.New(h.home).StateDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	moved := h.l.teleport.newTunnel(stateDir, fakeTsh, testProxy, "devenv2")
+	moved := h.l.teleport.newTunnel(stateDir, fakeTsh, testProxy, "skypilot2")
 	t.Cleanup(func() { moved.Stop() })
 
 	if err := h.run(""); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
-	if !strings.Contains(h.out.String(), "devenv: stopping the Teleport tunnel") {
+	if !strings.Contains(h.out.String(), "sky: stopping the Teleport tunnel") {
 		t.Errorf("output does not say the old tunnel stopped:\n%s", h.out.String())
 	}
 	if st := h.tunnelStatus(); st.Running {
@@ -512,10 +512,10 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 	if err != nil || !st.Healthy {
 		t.Errorf("tunnel to the new application = %+v, %v; want it serving", st, err)
 	}
-	if want := fmt.Sprintf("--proxy=%s proxy app devenv2 --port %d", testProxy, testPort); !contains(h.tshCalls(), want) {
+	if want := fmt.Sprintf("--proxy=%s proxy app skypilot2 --port %d", testProxy, testPort); !contains(h.tshCalls(), want) {
 		t.Errorf("tsh did not run %q", want)
 	}
-	if h.active() != "remote" || h.record().DevenvApp != "devenv2" {
-		t.Errorf("active = %q, record = %+v; want remote with devenv2", h.active(), h.record())
+	if h.active() != "remote" || h.record().SkyApp != "skypilot2" {
+		t.Errorf("active = %q, record = %+v; want remote with skypilot2", h.active(), h.record())
 	}
 }

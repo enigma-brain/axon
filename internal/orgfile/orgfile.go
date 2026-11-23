@@ -1,6 +1,6 @@
-// Package orgfile reads, checks and stores organisation files.
+// Package orgfile reads, checks and stores config files.
 //
-// An organisation file is a TOML file that names an organisation's
+// A config file is a TOML file that names an organization's
 // pathways: the ways a user reaches its services. The package parses and
 // checks a file, reads one from an https address, a file path or standard
 // input, stores accepted files in ~/.axon/orgs and lists them.
@@ -32,7 +32,7 @@ const (
 	KindTeleport Kind = "teleport"
 )
 
-// File is a checked organisation file.
+// File is a checked config file.
 type File struct {
 	// ID is the file's identifier, which names the stored file.
 	ID string
@@ -40,9 +40,9 @@ type File struct {
 	Pathways []Pathway
 }
 
-// Pathway is one pathway of an organisation file.
+// Pathway is one pathway of a config file.
 type Pathway struct {
-	// File is the ID of the organisation file that holds the pathway.
+	// File is the ID of the config file that holds the pathway.
 	File string
 	// ID is the pathway's identifier, the value of --pathway.
 	ID   string
@@ -57,8 +57,8 @@ type Pathway struct {
 	// Teleport holds the settings of a teleport pathway, and is nil for a
 	// direct one.
 	Teleport *Teleport
-	// Devenv holds where the devenv command group finds its service.
-	Devenv Devenv
+	// Sky holds where the sky command group finds its service.
+	Sky Sky
 }
 
 // Teleport holds the settings only a teleport pathway has.
@@ -67,9 +67,9 @@ type Teleport struct {
 	Proxy string
 }
 
-// Devenv holds where the devenv command group finds the SkyPilot API
-// server on a pathway.
-type Devenv struct {
+// Sky holds where the sky command group finds the SkyPilot API server on
+// a pathway.
+type Sky struct {
 	// Endpoint is the API server's https address, on a direct pathway.
 	Endpoint string
 	// App is the Teleport application that serves the API server, on a
@@ -78,7 +78,11 @@ type Devenv struct {
 }
 
 // Format is the only file format this package accepts.
-const Format = 1
+const Format = 2
+
+// ErrOlderFormat is the refusal of a file in a format that an earlier axon
+// used.
+var ErrOlderFormat = errors.New("the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.")
 
 var (
 	fileIDPattern    = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
@@ -101,23 +105,23 @@ type rawPathway struct {
 	Description     any          `toml:"description"`
 	UnreachableHint any          `toml:"unreachable_hint"`
 	Teleport        *rawTeleport `toml:"teleport"`
-	Devenv          *rawDevenv   `toml:"devenv"`
+	Sky             *rawSky      `toml:"sky"`
 }
 
 type rawTeleport struct {
 	Proxy any `toml:"proxy"`
 }
 
-type rawDevenv struct {
+type rawSky struct {
 	Endpoint any `toml:"endpoint"`
 	App      any `toml:"app"`
 }
 
-// CheckError is the refusal of an organisation file: the field that failed
+// CheckError is the refusal of a config file: the field that failed
 // and the check it failed.
 type CheckError struct {
 	// Field names the field, prefixed with its pathway where it has one,
-	// such as `pathway "campus": devenv.endpoint`.
+	// such as `pathway "campus": sky.endpoint`.
 	Field string
 	// Check says what the field must be.
 	Check string
@@ -134,7 +138,7 @@ func refuse(field, format string, args ...any) error {
 	return &CheckError{Field: field, Check: fmt.Sprintf(format, args...)}
 }
 
-// Parse parses data as an organisation file and applies every check on a
+// Parse parses data as a config file and applies every check on a
 // single file. It does not compare the file with the stored files.
 func Parse(data []byte) (File, error) {
 	if len(data) > MaxSize {
@@ -147,6 +151,9 @@ func Parse(data []byte) (File, error) {
 			return File{}, refuse(perr.LastKey, "not valid TOML: %s (line %d)", perr.Message, perr.Position.Line)
 		}
 		return File{}, refuse("", "not valid TOML: %v", err)
+	}
+	if n, ok := generic["format"].(int64); ok && n >= 1 && n < Format {
+		return File{}, ErrOlderFormat
 	}
 	if err := checkTables(generic); err != nil {
 		return File{}, err
@@ -171,7 +178,7 @@ func Parse(data []byte) (File, error) {
 		return File{}, refuse("pathway", "the file must have at least one [[pathway]]")
 	}
 	if undecoded := md.Undecoded(); len(undecoded) > 0 {
-		return File{}, refuse(undecoded[0].String(), "not a field of an organisation file")
+		return File{}, refuse(undecoded[0].String(), "not a field of a config file")
 	}
 
 	f := File{ID: id}
@@ -203,7 +210,7 @@ func checkTables(generic map[string]any) error {
 		return refuse("pathway", "must be [[pathway]] entries")
 	}
 	for i, p := range pathways {
-		for _, name := range []string{"teleport", "devenv"} {
+		for _, name := range []string{"teleport", "sky"} {
 			if t, ok := p[name]; ok {
 				if _, ok := t.(map[string]any); !ok {
 					return refuse(fmt.Sprintf("pathway %d: %s", i+1, name), "must be a table")
@@ -214,14 +221,14 @@ func checkTables(generic map[string]any) error {
 	return nil
 }
 
-// The keys an organisation file may hold, spelled exactly. The decoder
+// The keys a config file may hold, spelled exactly. The decoder
 // matches struct fields regardless of case, so a key such as ID beside id
 // would otherwise both decode into the same field.
 var (
 	fileKeys     = keySet("format", "id", "pathway")
-	pathwayKeys  = keySet("id", "kind", "name", "description", "unreachable_hint", "teleport", "devenv")
+	pathwayKeys  = keySet("id", "kind", "name", "description", "unreachable_hint", "teleport", "sky")
 	teleportKeys = keySet("proxy")
-	devenvKeys   = keySet("endpoint", "app")
+	skyKeys      = keySet("endpoint", "app")
 )
 
 func keySet(keys ...string) map[string]bool {
@@ -244,7 +251,7 @@ func checkKeys(generic map[string]any) error {
 		if err := unknownKey("pathway.", p, pathwayKeys); err != nil {
 			return err
 		}
-		for name, allowed := range map[string]map[string]bool{"teleport": teleportKeys, "devenv": devenvKeys} {
+		for name, allowed := range map[string]map[string]bool{"teleport": teleportKeys, "sky": skyKeys} {
 			if t, ok := p[name].(map[string]any); ok {
 				if err := unknownKey("pathway."+name+".", t, allowed); err != nil {
 					return err
@@ -268,7 +275,7 @@ func unknownKey(prefix string, table map[string]any, allowed map[string]bool) er
 		return nil
 	}
 	sort.Strings(unknown)
-	return refuse(prefix+unknown[0], "not a field of an organisation file")
+	return refuse(prefix+unknown[0], "not a field of a config file")
 }
 
 // checkPathway checks the pathway at index i of the file.
@@ -304,26 +311,26 @@ func checkPathway(i int, rp rawPathway) (Pathway, error) {
 		p.UnreachableHint = hint
 	}
 
-	devenv := rp.Devenv
-	if devenv == nil {
-		devenv = &rawDevenv{}
+	sky := rp.Sky
+	if sky == nil {
+		sky = &rawSky{}
 	}
 	switch p.Kind {
 	case KindDirect:
 		if rp.Teleport != nil {
 			return Pathway{}, refuse(field("teleport"), "not allowed on a direct pathway")
 		}
-		if devenv.App != nil {
-			return Pathway{}, refuse(field("devenv.app"), "not allowed on a direct pathway")
+		if sky.App != nil {
+			return Pathway{}, refuse(field("sky.app"), "not allowed on a direct pathway")
 		}
-		endpoint, ok := devenv.Endpoint.(string)
+		endpoint, ok := sky.Endpoint.(string)
 		if !ok || !isHTTPSAddress(endpoint) {
-			return Pathway{}, refuse(field("devenv.endpoint"), "must be an https address")
+			return Pathway{}, refuse(field("sky.endpoint"), "must be an https address")
 		}
-		p.Devenv.Endpoint = endpoint
+		p.Sky.Endpoint = endpoint
 	case KindTeleport:
-		if devenv.Endpoint != nil {
-			return Pathway{}, refuse(field("devenv.endpoint"), "not allowed on a teleport pathway")
+		if sky.Endpoint != nil {
+			return Pathway{}, refuse(field("sky.endpoint"), "not allowed on a teleport pathway")
 		}
 		var proxy any
 		if rp.Teleport != nil {
@@ -334,7 +341,7 @@ func checkPathway(i int, rp rawPathway) (Pathway, error) {
 			return Pathway{}, refuse(field("teleport.proxy"), "must be a hostname, optionally with a port")
 		}
 		p.Teleport = &Teleport{Proxy: host}
-		if p.Devenv.App, err = requiredText(field("devenv.app"), devenv.App); err != nil {
+		if p.Sky.App, err = requiredText(field("sky.app"), sky.App); err != nil {
 			return Pathway{}, err
 		}
 	}

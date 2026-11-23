@@ -65,7 +65,7 @@ the server.
 ## Recommendation
 
 Rely on the default, and raise it with every `axon` release. It is the
-simplest behaviour, and the install line always fetches the latest `axon`,
+simplest behavior, and the install line always fetches the latest `axon`,
 whose default is recent.
 
 ## Resolution path

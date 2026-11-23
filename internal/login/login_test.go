@@ -24,7 +24,7 @@ import (
 )
 
 // fakeSky is a sky executable that records each run and acts out the
-// behaviour given for it: one line per run in the file "script".
+// behavior given for it: one line per run in the file "script".
 //
 //	ok      the login succeeds: the fake server now reports a user
 //	silent  sky exits 0 but the server still sees no login
@@ -38,8 +38,8 @@ n=$((n + 1))
 echo "$n" > "$dir/count"
 echo "$*" >> "$dir/args"
 env > "$dir/env.$n"
-behaviour=$(sed -n "${n}p" "$dir/script" 2>/dev/null)
-case "$behaviour" in
+behavior=$(sed -n "${n}p" "$dir/script" 2>/dev/null)
+case "$behavior" in
 silent) echo "Logged in" ;;
 needs) echo "Failed to log in (status: needs_auth)" >&2; exit 1 ;;
 fail) echo "boom" >&2; exit 2 ;;
@@ -90,9 +90,9 @@ func (c *fakeClient) Path() (string, error) {
 	return c.sky, nil
 }
 
-// exampleOrg is the organisation file the harness stores: a direct
+// exampleOrg is the config file the harness stores: a direct
 // pathway, campus, and a teleport pathway, remote. Every detail is made up.
-const exampleOrg = `format = 1
+const exampleOrg = `format = 2
 id = "example"
 
 [[pathway]]
@@ -102,7 +102,7 @@ name = "Campus"
 description = "Single sign-on in a browser. Needs the campus network."
 unreachable_hint = "Connect to the campus VPN and retry."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://sky.example.org"
 
 [[pathway]]
@@ -114,8 +114,8 @@ description = "Works from anywhere."
 [pathway.teleport]
 proxy = "teleport.example.org"
 
-[pathway.devenv]
-app = "devenv"
+[pathway.sky]
+app = "skypilot"
 `
 
 // harness is one login against a fake sky and a fake API server.
@@ -190,7 +190,7 @@ func newHarness(t *testing.T) *harness {
 	return h
 }
 
-// store adds data as an organisation file.
+// store adds data as a config file.
 func (h *harness) store(data string) {
 	h.t.Helper()
 	src, err := orgfile.ParseSource("-")
@@ -291,7 +291,7 @@ func TestDirectFirstLogin(t *testing.T) {
 	if h.email() != "ada@example.org" {
 		t.Errorf("email = %q", h.email())
 	}
-	if !strings.Contains(h.out.String(), "devenv: connected as ada@example.org (SkyPilot 0.13.0)") {
+	if !strings.Contains(h.out.String(), "sky: connected as ada@example.org (SkyPilot 0.13.0)") {
 		t.Errorf("output:\n%s", h.out.String())
 	}
 	if p, _, _ := axondir.New(h.home).Pathway(); p != "campus" {
@@ -331,7 +331,7 @@ func TestDirectIdempotent(t *testing.T) {
 	if !bytes.Equal(configBefore, configAfter) {
 		t.Error("the configuration changed")
 	}
-	if got := h.out.String(); got != "devenv: connected as ada@example.org (SkyPilot 0.13.0)\n" {
+	if got := h.out.String(); got != "sky: connected as ada@example.org (SkyPilot 0.13.0)\n" {
 		t.Errorf("output = %q", got)
 	}
 }
@@ -347,7 +347,7 @@ func TestDirectUnreachable(t *testing.T) {
 	h.directURL = "http://" + addr
 
 	err = h.run("campus")
-	want := "connect devenv: Can't reach " + addr + ". Connect to the campus VPN and retry."
+	want := "connect sky: Can't reach " + addr + ". Connect to the campus VPN and retry."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
@@ -395,7 +395,7 @@ func TestDirectLoginFails(t *testing.T) {
 	h := newHarness(t)
 	h.script("fail")
 	err := h.run("campus")
-	if err == nil || !strings.HasPrefix(err.Error(), "connect devenv: the SkyPilot login failed") {
+	if err == nil || !strings.HasPrefix(err.Error(), "connect sky: the SkyPilot login failed") {
 		t.Fatalf("err = %v", err)
 	}
 	if n := h.skyRuns(); n != 1 {
@@ -407,7 +407,7 @@ func TestDirectSilentFailureCaughtByIdentityCheck(t *testing.T) {
 	h := newHarness(t)
 	h.script("silent")
 	err := h.run("campus")
-	if err == nil || !strings.HasPrefix(err.Error(), "connect devenv: verify the login:") ||
+	if err == nil || !strings.HasPrefix(err.Error(), "connect sky: verify the login:") ||
 		!errors.Is(err, apiserver.ErrNotLoggedIn) {
 		t.Fatalf("err = %v", err)
 	}
@@ -434,7 +434,7 @@ func TestDirectBrowserWaitEnds(t *testing.T) {
 	h.script("hang")
 	start := time.Now()
 	err := h.run("campus")
-	want := "connect devenv: the login was not completed in the browser within 300ms. Run `axon login` again."
+	want := "connect sky: the login was not completed in the browser within 300ms. Run `axon login` again."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v", err)
 	}
@@ -454,7 +454,7 @@ func TestVersionSync(t *testing.T) {
 		t.Errorf("client moves = %q", got)
 	}
 	out := h.out.String()
-	if !strings.Contains(out, "devenv: SkyPilot client 0.12.3 -> 0.13.0") ||
+	if !strings.Contains(out, "sky: SkyPilot client 0.12.3 -> 0.13.0") ||
 		!strings.Contains(out, "connected as ada@example.org (SkyPilot 0.13.0)") {
 		t.Errorf("output:\n%s", out)
 	}

@@ -7,14 +7,14 @@ import (
 	"testing"
 )
 
-// sitePage is the documentation page that explains how to write an
-// organisation file.
-var sitePage = filepath.Join("..", "..", "docs", "site", "src", "content", "docs", "organisation-file.md")
+// sitePage is the documentation page that explains how to write a
+// config file.
+var sitePage = filepath.Join("..", "..", "docs", "site", "src", "content", "docs", "config-file.md")
 
 var tomlBlock = regexp.MustCompile("(?s)```toml\n(.*?)```")
 
 // TestSiteExamples checks that every TOML example on the documentation
-// page passes the checks of an organisation file, and that the page has an
+// page passes the checks of a config file, and that the page has an
 // example of each kind of pathway.
 func TestSiteExamples(t *testing.T) {
 	page, err := os.ReadFile(sitePage)

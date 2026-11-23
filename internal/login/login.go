@@ -1,4 +1,4 @@
-// Package login is axon login: it adds an organisation file when one is
+// Package login is axon login: it adds a config file when one is
 // given, determines the pathway, establishes the pathway's session, and
 // connects each command group.
 package login
@@ -15,21 +15,21 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/devenv"
 	"github.com/enigma-brain/axon/internal/orgfile"
+	skygroup "github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
 // Options are the inputs of one login.
 type Options struct {
-	// Org is the source given with --org: an https address, a file path,
+	// Config is the source given with --config: an https address, a file path,
 	// or "-" for standard input. When empty, no file is added.
-	Org string
+	Config string
 	// Pathway is the pathway identifier given with --pathway. When empty,
 	// the active pathway is used, or one is chosen.
 	Pathway string
-	// In is standard input: the organisation file with --org -, and
+	// In is standard input: the config file with --config -, and
 	// otherwise where answers to questions are read from.
 	In io.Reader
 	// Out is where progress and questions are written.
@@ -54,10 +54,10 @@ type login struct {
 	loginWait time.Duration
 	// environ is the environment the commands login runs start from.
 	environ func() []string
-	// readOrg reads an organisation file from its source.
+	// readOrg reads a config file from its source.
 	readOrg func(ctx context.Context, src orgfile.Source, stdin io.Reader) ([]byte, error)
 	// openTerminal opens the terminal, where questions are asked when
-	// standard input is the organisation file.
+	// standard input is the config file.
 	openTerminal func() (io.ReadCloser, error)
 	// teleport is what a teleport pathway works with.
 	teleport teleport
@@ -75,7 +75,7 @@ func Run(ctx context.Context, opts Options) error {
 		client:       skyClient{dir: dir},
 		health:       apiserver.Fetch,
 		cookieFile:   apiserver.CookieFile(home, os.Getenv),
-		endpoint:     devenv.Endpoint,
+		endpoint:     skygroup.Endpoint,
 		loginWait:    loginWait,
 		environ:      os.Environ,
 		readOrg:      orgfile.Read,
@@ -102,14 +102,14 @@ func (l *login) run(ctx context.Context, opts Options) error {
 		opts.Err = io.Discard
 	}
 
-	// 1. Add the organisation file that --org gives. With --org -,
+	// 1. Add the config file that --config gives. With --config -,
 	// standard input is the file, and questions go to the terminal.
 	answers := opts.In
 	var added *orgfile.File
-	if opts.Org != "" {
+	if opts.Config != "" {
 		f, in, closeIn, err := l.addOrg(ctx, opts)
 		if err != nil {
-			return fmt.Errorf("add the organisation file: %w", err)
+			return fmt.Errorf("add the config file: %w", err)
 		}
 		defer closeIn()
 		added, answers = &f, in
@@ -119,7 +119,7 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	// 2. Determine the pathway.
 	files, err := l.storedFiles(opts.Err)
 	if err != nil {
-		return fmt.Errorf("read the organisation files: %w", err)
+		return fmt.Errorf("read the config files: %w", err)
 	}
 	if len(files) == 0 {
 		return l.noOrg(opts)
@@ -137,6 +137,16 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	}
 	if err != nil {
 		return fmt.Errorf("determine the pathway: %w", err)
+	}
+
+	// A teleport pathway needs tsh. Without it the login stops here, before
+	// the pathway that was connected is left or the active one changes.
+	if p.Kind == orgfile.KindTeleport {
+		path, err := l.teleport.ensure(ctx, p.Teleport.Proxy)
+		if err != nil {
+			return fmt.Errorf("establish the Teleport session: %w", err)
+		}
+		l.teleport.path = path
 	}
 
 	// Leaving the pathway that was connected, or its settings for
@@ -159,17 +169,17 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	// A direct pathway has no session apart from each service's own.
 
 	// 5. Connect each command group.
-	if err := l.connectDevenv(ctx, p, opts); err != nil {
-		return fmt.Errorf("connect devenv: %w", err)
+	if err := l.connectSky(ctx, p, opts); err != nil {
+		return fmt.Errorf("connect sky: %w", err)
 	}
 	return nil
 }
 
-// errNoOrg reports that no organisation file is stored and --org was not
+// errNoOrg reports that no config file is stored and --config was not
 // given.
-var errNoOrg = errors.New("no organisation configuration. Run `axon login --org <source>` with the address or file your organisation gives you.")
+var errNoOrg = errors.New("no config file. Run `axon login --config <source>` with the address or file your organization gives you.")
 
-// noOrg ends a login that finds no stored organisation file to use. The
+// noOrg ends a login that finds no stored config file to use. The
 // active pathway's file is gone, or fails the checks, and no other is
 // stored: the pathway is left, which disconnects it, before login asks for
 // a file.
@@ -180,13 +190,13 @@ func (l *login) noOrg(opts Options) error {
 	return errNoOrg
 }
 
-// addOrg reads the file --org names, checks it and stores it. It returns
+// addOrg reads the file --config names, checks it and stores it. It returns
 // the stored file and where answers to questions are read from: standard
-// input, or with --org - the terminal. When there is no terminal, answers
+// input, or with --config - the terminal. When there is no terminal, answers
 // come from an empty input, so that a question with a flag stops and names
 // the flag, and one without is answered no. closeIn releases the terminal.
 func (l *login) addOrg(ctx context.Context, opts Options) (f orgfile.File, in io.Reader, closeIn func(), err error) {
-	src, err := orgfile.ParseSource(opts.Org)
+	src, err := orgfile.ParseSource(opts.Config)
 	if err != nil {
 		return orgfile.File{}, nil, nil, err
 	}
@@ -199,7 +209,7 @@ func (l *login) addOrg(ctx context.Context, opts Options) (f orgfile.File, in io
 	if err != nil {
 		return orgfile.File{}, nil, nil, err
 	}
-	fmt.Fprintf(opts.Out, "Stored the organisation file %s\n", store.Path(f.ID))
+	fmt.Fprintf(opts.Out, "Stored the config file %s\n", store.Path(f.ID))
 
 	in, closeIn = opts.In, func() {}
 	if src.String() == "-" {
@@ -211,7 +221,7 @@ func (l *login) addOrg(ctx context.Context, opts Options) (f orgfile.File, in io
 	return f, in, closeIn, nil
 }
 
-// storedFiles returns the stored organisation files that pass the checks,
+// storedFiles returns the stored config files that pass the checks,
 // and writes one line to warn for each one left out.
 func (l *login) storedFiles(warn io.Writer) ([]orgfile.File, error) {
 	files, problems, err := orgfile.NewStore(l.dir).List()

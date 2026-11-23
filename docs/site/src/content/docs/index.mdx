@@ -10,17 +10,18 @@ hero:
       icon: right-arrow
 ---
 
-`axon` is the command-line entry point to a platform run by an organisation.
+`axon` is the command-line entry point to a platform run by an organization.
 You install one tool and log in once with `axon login`. Each part of the
-platform is a command group of `axon`, named for that part rather than for the
-tool behind it. For example, dev environments are the command group
-`axon devenv`, and the tool behind it is SkyPilot. So the tool behind a group
-can change, and groups can be added, without changing how you reach them.
+platform is a command group of `axon`. A group that passes a tool's own
+commands straight through is named for the tool: `axon sky` runs SkyPilot's
+`sky` commands. A group that hides its tool behind commands of its own is named
+for the part of the platform it reaches, so the tool behind it can change
+without changing how you reach it.
 
-Your organisation decides how your laptop reaches its platform. Each way in is
-a **pathway**, and your organisation describes its pathways in an
-**organisation file** that it gives you. `axon` logs in by the pathway you are
-on, and names no organisation itself.
+Your organization decides how your laptop reaches its platform. Each way in is
+a **pathway**, and your organization describes its pathways in a
+**config file** that it gives you. `axon` logs in by the pathway you are
+on, and names no organization itself.
 
 ## What is built today
 
@@ -28,7 +29,7 @@ One command group:
 
 | Command group | Part of the platform | Tool behind it |
 |---|---|---|
-| [`axon devenv`](/axon/devenv/) | Dev environments, GPUs, jobs and volumes | [SkyPilot](/axon/devenv/skypilot/) |
+| [`axon sky`](/axon/sky/) | Dev environments, GPUs, jobs and volumes | SkyPilot |
 
 Two kinds of pathway:
 
@@ -37,7 +38,8 @@ Two kinds of pathway:
 | [Direct](/axon/pathways/direct/) | At the server's own address | The server's own, in a browser |
 | [Teleport](/axon/pathways/teleport/) | Through Teleport, by a tunnel that `axon` runs for you | Teleport's, in a browser when your certificate is not valid |
 
-`axon devenv` sends your commands to your organisation's SkyPilot API server.
+`axon sky` sends your commands to your organization's SkyPilot API server, with
+SkyPilot's own help: wherever SkyPilot says `sky`, type `axon sky`.
 `axon` installs the SkyPilot client it needs for its own use, and keeps
 everything it owns on your laptop in `~/.axon`.
 
@@ -45,14 +47,14 @@ everything it owns on your laptop in `~/.axon`.
 
 - [Installing](/axon/installing/): one line puts `axon` on your laptop, and the same
   line updates it.
-- [Logging in](/axon/logging-in/): add your organisation's file, choose how you
+- [Logging in](/axon/logging-in/): add your organization's config file, choose how you
   reach the server, and sign in.
-- [devenv](/axon/devenv/): the `axon devenv` commands, and
-  [its backend, SkyPilot](/axon/devenv/skypilot/).
+- [sky](/axon/sky/): running SkyPilot's commands with `axon sky`, and the
+  SkyPilot client `axon` installs.
 - [Direct](/axon/pathways/direct/) and [Teleport](/axon/pathways/teleport/): the
   two kinds of pathway, and what each needs on your laptop.
-- [Writing an organisation file](/axon/organisation-file/): for the person who sets
-  `axon` up for an organisation. A complete example for each kind of pathway.
+- [Writing a config file](/axon/config-file/): for the person who sets
+  `axon` up for an organization. A complete example for each kind of pathway.
 - [Files on your laptop](/axon/files/): what `axon` keeps, and where.
 - [Troubleshooting](/axon/troubleshooting/): what each message that asks you to act
   means.

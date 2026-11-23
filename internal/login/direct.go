@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/enigma-brain/axon/internal/apiserver"
-	"github.com/enigma-brain/axon/internal/devenv"
 	"github.com/enigma-brain/axon/internal/orgfile"
+	skygroup "github.com/enigma-brain/axon/internal/sky"
 )
 
 // needsAuth is the status sky api login ends with when the server still sees
@@ -30,7 +30,7 @@ const endpointVar = "SKYPILOT_API_SERVER_ENDPOINT"
 // or is stopped.
 const skyWaitDelay = 2 * time.Second
 
-// connectDirect connects devenv on a direct pathway. It returns the
+// connectDirect connects the sky group on a direct pathway. It returns the
 // server's health when the existing session is good; after a browser login it
 // returns an empty Health and the identity check that follows asks the server.
 func (l *login) connectDirect(ctx context.Context, p orgfile.Pathway, opts Options, sky, clientVersion string) (apiserver.Health, error) {
@@ -40,14 +40,14 @@ func (l *login) connectDirect(ctx context.Context, p orgfile.Pathway, opts Optio
 	case err == nil:
 		return h, nil
 	case errors.Is(err, apiserver.ErrUnreachable):
-		return apiserver.Health{}, errors.New(devenv.Unreachable(p, endpoint))
+		return apiserver.Health{}, errors.New(skygroup.Unreachable(p, endpoint))
 	case !errors.Is(err, apiserver.ErrNotLoggedIn):
 		return apiserver.Health{}, fmt.Errorf("check the SkyPilot API server: %w. Run `axon login` again.", err)
 	}
 
 	sawNeedsAuth, err := l.browserLogin(ctx, opts, sky, endpoint)
 	if err == nil && sawNeedsAuth {
-		fmt.Fprintf(opts.Out, "devenv: the login ended with %s; removing %s and logging in once more\n", needsAuth, l.cookieFile)
+		fmt.Fprintf(opts.Out, "sky: the login ended with %s; removing %s and logging in once more\n", needsAuth, l.cookieFile)
 		if err := os.Remove(l.cookieFile); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return apiserver.Health{}, fmt.Errorf("remove %s: %w. Remove it by hand and run `axon login` again.", l.cookieFile, err)
 		}
@@ -78,7 +78,7 @@ func (l *login) browserLogin(ctx context.Context, opts Options, sky, endpoint st
 	cmd.Stdout = io.MultiWriter(opts.Out, &seen)
 	cmd.Stderr = io.MultiWriter(opts.Err, &seen)
 
-	fmt.Fprintf(opts.Out, "devenv: logging in to %s in your browser\n", endpoint)
+	fmt.Fprintf(opts.Out, "sky: logging in to %s in your browser\n", endpoint)
 	runErr := cmd.Run()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return false, fmt.Errorf("the login was not completed in the browser within %s. %s", formatWait(l.loginWait), notCompletedHint)

@@ -20,7 +20,7 @@ stage as it is and changes nothing for a user of `axon login`.
 
 ## Options
 
-- **One login that connects every group.** The behaviour with one group.
+- **One login that connects every group.** The behavior with one group.
   One command to learn, and one place where a connection is repaired. With
   several groups, a user who needs one of them waits for every group's
   connect step, and a failure in one group fails the login.

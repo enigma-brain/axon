@@ -1,4 +1,4 @@
-package devenv
+package sky
 
 import (
 	"context"
@@ -23,13 +23,12 @@ var (
 	errSessionExpired  = errors.New("SkyPilot session expired. Run `axon login`.")
 	errNotAnswering    = errors.New("The SkyPilot API server is not answering. Retry later.")
 	errTeleportExpired = errors.New("Teleport session expired. Run `axon login`.")
-	errNoTsh           = errors.New("Teleport's client, tsh, is not found. Run `axon login`.")
 )
 
 const (
 	// restartLine is the one line the check prints when it restarts the
 	// tunnel.
-	restartLine = "axon: restarting the Teleport tunnel"
+	restartLine = "sky: restarting the Teleport tunnel"
 	// notRestarted begins the error of a tunnel whose process exited
 	// during the restart.
 	notRestarted = "Couldn't restart the Teleport tunnel. Run `axon login`."
@@ -47,8 +46,8 @@ type probes struct {
 	// clientVersion returns the installed client's version; false when none
 	// is installed.
 	clientVersion func(axondir.Dir) (string, bool, error)
-	// findTsh returns the path of a tsh without installing one.
-	findTsh func(axondir.Dir) (string, error)
+	// findTsh returns the path of the tsh on PATH.
+	findTsh func() (string, error)
 	// sessionValid reports whether the Teleport certificate for proxy is
 	// valid.
 	sessionValid func(ctx context.Context, tshPath, proxy string) (bool, error)
@@ -110,7 +109,7 @@ func Check(ctx context.Context, dir axondir.Dir, w io.Writer) (orgfile.Pathway, 
 
 func (p probes) run(ctx context.Context, dir axondir.Dir, pw orgfile.Pathway, w io.Writer) error {
 	// A pathway whose settings changed after it was connected, such as by
-	// a file that --org replaced, is not the one connected.
+	// a file that --config replaced, is not the one connected.
 	same, err := connected.Is(dir, pw)
 	if err != nil {
 		return err
@@ -172,10 +171,10 @@ func failure(ctx context.Context, p orgfile.Pathway, endpoint string, err error)
 // restartTunnel restarts the tunnel when the Teleport certificate is valid.
 // It returns nil once the restarted tunnel serves.
 func (p probes) restartTunnel(ctx context.Context, dir axondir.Dir, pw orgfile.Pathway, w io.Writer) error {
-	tshPath, err := p.findTsh(dir)
+	tshPath, err := p.findTsh()
 	switch {
 	case errors.Is(err, tsh.ErrNotFound):
-		return errNoTsh
+		return err
 	case err != nil:
 		return fmt.Errorf("find Teleport's client, tsh: %w. Run `axon login`.", err)
 	}
@@ -192,7 +191,7 @@ func (p probes) restartTunnel(ctx context.Context, dir axondir.Dir, pw orgfile.P
 	}
 
 	fmt.Fprintln(w, restartLine)
-	err = p.startTunnel(ctx, stateDir, tshPath, pw.Teleport.Proxy, pw.Devenv.App)
+	err = p.startTunnel(ctx, stateDir, tshPath, pw.Teleport.Proxy, pw.Sky.App)
 	var startErr *tunnel.StartError
 	var busy *tunnel.PortBusyError
 	switch {

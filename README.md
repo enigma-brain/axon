@@ -1,24 +1,23 @@
 # axon
 
-`axon` is one command-line entry point to a platform that an organisation
+`axon` is one command-line entry point to a platform that an organization
 runs. A user installs one tool and logs in once, with `axon login`. Each part
-of the platform is then a command group of `axon`, named for that part rather
-than for the tool behind it. For example, dev environments are the command
-group `axon devenv`, and the tool behind it is SkyPilot. `axon` is built so
-that the tool behind a group can change, and groups can be added, without
-users learning a new way in.
+of the platform is then a command group of `axon`. A group that passes a
+tool's own commands straight through is named for the tool: `axon sky` runs
+SkyPilot's `sky` commands against the organization's SkyPilot API server. A
+group that hides its tool behind commands of its own is named for the part of
+the platform it reaches, and the tool behind it can change without users
+learning a new way in.
 
-The organisation decides how a laptop reaches its platform. Each way in is a
-pathway, and the organisation describes its pathways in an organisation file
+The organization decides how a laptop reaches its platform. Each way in is a
+pathway, and the organization describes its pathways in a config file
 that it gives its users. `axon` logs in by whichever pathway the user is on,
-and names no organisation itself.
+and names no organization itself.
 
-The design is in [docs/design/DESIGN.md](docs/design/DESIGN.md). The commands
-of `axon devenv` are described in
-[docs/reference/devenv.md](docs/reference/devenv.md).
+The design is in [docs/design/DESIGN.md](docs/design/DESIGN.md).
 
 The documentation site, at <https://enigma-brain.github.io/axon/>, covers
-installing, logging in, dev environments, writing an organisation file and
+installing, logging in, dev environments, writing a config file and
 troubleshooting. This readme gives the short form of each; see the site for
 anything it does not cover.
 
@@ -28,7 +27,7 @@ One command group:
 
 | Command group | Part of the platform | Tool behind it |
 |---|---|---|
-| `axon devenv` | Dev environments, GPUs, jobs and volumes | SkyPilot |
+| `axon sky` | Dev environments, GPUs, jobs and volumes | SkyPilot |
 
 Two kinds of pathway:
 
@@ -37,7 +36,9 @@ Two kinds of pathway:
 | Direct | At the server's own address | The server's own, in a browser |
 | Teleport | Through Teleport, by a tunnel that `axon` runs | Teleport's, in a browser when the certificate is not valid |
 
-`axon devenv` sends its commands to the organisation's SkyPilot API server.
+`axon sky` passes every `sky` command to `axon`'s own SkyPilot client, against
+the organization's SkyPilot API server, with SkyPilot's own help. Wherever
+SkyPilot's help or hints say `sky`, type `axon sky`.
 `axon` installs the SkyPilot client it needs for its own use and keeps
 everything it owns on the laptop in `~/.axon`.
 
@@ -82,27 +83,27 @@ The same two steps install a named version:
 The install script exits non-zero, with a message that names what could not
 be downloaded or verified, when the installation fails.
 
-## Organisations
+## Organizations
 
-`axon` takes everything about the organisation it serves from an
-organisation file, which the organisation gives its members: the
+`axon` takes everything about the organization it serves from an
+config file, which the organization gives its members: the
 pathways, the addresses of its servers, and the text `axon` shows about
-them. `axon` itself names no organisation. The file's format is in
-[docs/design/DESIGN.md](docs/design/DESIGN.md#organisation-files).
+them. `axon` itself names no organization. The file's format is in
+[docs/design/DESIGN.md](docs/design/DESIGN.md#config-files).
 
-A pathway is a way to reach the organisation's API server. It is of one of
+A pathway is a way to reach the organization's API server. It is of one of
 two kinds: a direct pathway reaches the server at its own address, and a
 Teleport pathway reaches it through Teleport. A file holds one pathway or
 several, and a laptop holds any number of files.
 
 ### Adding a file
 
-The first login adds your organisation's file with `--org`, from one of
+The first login adds your organization's config file with `--config`, from one of
 three sources:
 
-    axon login --org https://example.org/axon.toml
-    axon login --org ~/Downloads/axon.toml
-    <command that prints the file> | axon login --org -
+    axon login --config https://example.org/axon.toml
+    axon login --config ~/Downloads/axon.toml
+    <command that prints the file> | axon login --config -
 
 The file is checked and stored as `~/.axon/orgs/<id>.toml`, named by the
 `id` it holds, and its source is recorded in `~/.axon/state/orgs/`. A file
@@ -111,12 +112,12 @@ changes. Adding a file whose `id` is stored already replaces that file;
 the other files stay as they are. Two files may not hold the same pathway
 identifier.
 
-With `--org -`, standard input is the file, so `axon login` asks its
+With `--config -`, standard input is the file, so `axon login` asks its
 questions on the terminal. Without a terminal, a question with a flag,
 such as which pathway, stops and names the flag; any other question is
 answered no.
 
-### When your organisation changes its file
+### When your organization changes its file
 
 How a change reaches your laptop depends on where the file came from:
 
@@ -124,13 +125,13 @@ How a change reaches your laptop depends on where the file came from:
   the pathway it uses again, before it connects, and stores the new one
   when it passes the checks and keeps its `id`. You do nothing; the change
   arrives at your next login. Only that one file is fetched, and a file
-  that `--org` added in the same login is not fetched twice. When the
+  that `--config` added in the same login is not fetched twice. When the
   fetch fails or the new file is refused, `axon` says so in one line and
   logs in with the file it has.
 - **A file path or standard input:** the file is read once. Run
-  `axon login --org` again with the new file.
+  `axon login --config` again with the new file.
 
-`axon devenv` never fetches a file; it uses the stored ones.
+`axon sky` never fetches a file; it uses the stored ones.
 
 When the new file changes the active pathway's servers, the login
 disconnects it from the old ones and connects it to the new ones, and the
@@ -147,16 +148,16 @@ the active pathway, the next `axon login` chooses another from the stored
 files and, once one is chosen, disconnects the pathway you left. When it
 was the last file, `axon login` disconnects the pathway you left, stopping
 its Teleport tunnel and forgetting the logged-in email, then stops and asks
-for `--org`. At each login a stored file that fails the checks is left out,
+for `--config`. At each login a stored file that fails the checks is left out,
 with one line naming it.
 
 ## Logging in
 
     axon login
 
-With no organisation file stored, `axon login` disconnects the pathway it
-had connected, if any, then stops and asks for `--org`.
-Otherwise it chooses the pathway, logs you in, and connects `axon devenv`.
+With no config file stored, `axon login` disconnects the pathway it
+had connected, if any, then stops and asks for `--config`.
+Otherwise it chooses the pathway, logs you in, and connects `axon sky`.
 
 ### Choosing the pathway
 
@@ -165,7 +166,7 @@ One pathway is active at a time, stored by its identifier in
 
 - **One pathway in all the stored files:** it is used without asking.
 - **More than one:** the first login asks which one you are on, offering
-  each by the name and description your organisation wrote, file by file in
+  each by the name and description your organization wrote, file by file in
   the order of the files' identifiers. Answer with the number or the
   identifier:
 
@@ -177,7 +178,7 @@ One pathway is active at a time, stored by its identifier in
 - **`--pathway <id>`** chooses without asking and makes that pathway the
   active one. It is how you switch. An identifier no stored file has is
   refused, with the list of those they have.
-- **`--org`** makes a pathway of the file it adds the active one, unless
+- **`--config`** makes a pathway of the file it adds the active one, unless
   the active pathway is already in that file. With several pathways in the
   file, it asks which of them.
 
@@ -198,14 +199,14 @@ between.
 ### On a direct pathway
 
 A direct pathway reaches the API server at its own address, which may
-answer only from your organisation's network.
+answer only from your organization's network.
 
-- **Connect to the network your organisation names first.** When the
+- **Connect to the network your organization names first.** When the
   server does not answer, `axon login` says "Can't reach `<host>`.",
-  followed by your organisation's hint when its file gives one, and stops
+  followed by your organization's hint when its file gives one, and stops
   without opening a browser.
 - **The login opens in your default browser.** Sign in with your
-  organisation's account and click "Authorize"; `axon` waits for the page
+  organization's account and click "Authorize"; `axon` waits for the page
   to complete. When your session is still good, no browser opens.
 - **The wait ends after five minutes.** If the login has not been completed
   in the browser by then, `axon` stops and asks you to run `axon login` again.
@@ -219,13 +220,14 @@ answer only from your organisation's network.
 A Teleport pathway reaches the API server through Teleport, from anywhere.
 `axon login` does what the manual Teleport steps did:
 
-- **It finds `tsh`**, Teleport's client, or offers to install it.
+- **It finds `tsh`**, Teleport's client, on your `PATH`. `tsh` is a
+  prerequisite of a Teleport pathway; `axon` does not install it.
 - **It logs you in to Teleport** with `tsh login --proxy=<proxy>`, which
-  opens your organisation's sign-in page in a browser. Where no browser
+  opens your organization's sign-in page in a browser. Where no browser
   opens by itself, as on WSL, `tsh` prints a link instead: open it in a
   browser to finish the sign-in. When your Teleport certificate is still
   valid, nothing opens. The certificate lasts as long
-  as your organisation's Teleport sets.
+  as your organization's Teleport sets.
 - **It brings up the tunnel**,
   `tsh --proxy=<proxy> proxy app <application> --port 46581`, after a fresh
   application login (`tsh --proxy=<proxy> apps login <application>`), where
@@ -242,32 +244,21 @@ A Teleport pathway reaches the API server through Teleport, from anywhere.
   login`, only when the client is pointed elsewhere. No browser opens:
   Teleport supplies your identity.
 
-#### Installing tsh
+#### tsh
 
-A Teleport pathway logs in through Teleport's client, `tsh`. When a
-`tsh` is on your `PATH`, `axon` uses it and never replaces it; when its
-version is too old or too new for the Teleport proxy, `axon` names both
-versions and stops, and you update that `tsh`.
+A Teleport pathway logs in through Teleport's client, `tsh`, which you
+install before you log in, from Teleport's
+[install instructions](https://goteleport.com/docs/installation/). `axon`
+uses the `tsh` on your `PATH` and never replaces it. With none, `axon login`
+stops before any login step:
 
-When there is no `tsh`, on macOS or on Linux on x86-64, `axon login` offers
-to install one:
+    axon: establish the Teleport session: this pathway needs Teleport's client, tsh, and no tsh was found on PATH. Install it from https://goteleport.com/docs/installation/ and run `axon login` again.
 
-    Teleport's client, tsh, is not installed.
-    Install tsh <proxy's version> into ~/.axon/tools? [Y/n]
-
-- **Press Enter to install.** `axon` downloads Teleport's archive at the
-  proxy's version, a few hundred megabytes, printing its size and each quarter of the progress, and checks it against
-  the checksum Teleport publishes. It keeps `tsh` in `~/.axon/tools/` for its
-  own use and does not put it on your `PATH`. Nothing asks for `sudo` or a
-  password.
-- **The login carries on.** Once `tsh` is installed, `axon login` goes
-  straight on to the Teleport login.
-- **Answer `n` to install it yourself.** `axon` prints Teleport's install
-  link and stops; run `axon login` again once `tsh` is on your `PATH`. A
-  failed download or check stops the same way.
-- **Later logins download nothing.** When the proxy moves to a version
-  `axon`'s `tsh` does not support, the next login replaces it without
-  asking.
+When the `tsh` on your `PATH` is too old or too new for the Teleport proxy,
+`axon` names both versions and stops; install a `tsh` whose major version is
+the proxy's or one behind it. A `tsh`
+that an earlier `axon` kept in `~/.axon/tools/tsh` is not used; delete that
+folder whenever you like.
 
 #### The tunnel
 
@@ -277,15 +268,15 @@ carry on.
 
 **What stops the tunnel:**
 
-- **The Teleport certificate expires**, after the time your organisation's
+- **The Teleport certificate expires**, after the time your organization's
   Teleport sets.
 - **The laptop restarts.**
 - **`axon login` replaces it**, when the tunnel is down or the server does not
   know you through it. This interrupts sessions through it.
 - **You switch pathways** with `axon login --pathway <id>`, or with
-  `axon login --org` and another file.
+  `axon login --config` and another file.
 
-**To restore it,** run `axon login`. `axon devenv` also restarts a stopped
+**To restore it,** run `axon login`. `axon sky` also restarts a stopped
 tunnel by itself while the certificate is still valid.
 
 **When the tunnel does not start:**
@@ -298,26 +289,49 @@ tunnel by itself while the certificate is still valid.
   server, or Teleport's connection to it, is not answering. Your Teleport
   login is fine, so retry later.
 
+## Logging out
+
+    axon logout
+
+`axon logout` undoes what `axon login` did, by `axon`'s own records: it runs
+`sky api logout` with `axon`'s client, stops the Teleport tunnel, ends the
+Teleport session for the connected pathway's proxy with `tsh logout`, and
+removes the record of the connected pathway and the logged-in email. It
+keeps the config files and the active pathway, so `axon login` logs in
+again. It prints one line per step, and says why it skipped a step that does
+not apply, such as `tsh` not on `PATH`. A failed step is reported and the
+others still run; the records are then kept, and running `axon logout` again
+retries. To clear a shared machine completely, run `axon logout`, then
+delete `~/.axon` and `~/.sky`. On a Teleport pathway, Teleport keeps its
+session in `~/.tsh`: when `axon logout` skipped the Teleport step, run
+`tsh logout` before you leave the machine.
+
 ## Running commands
 
-    axon devenv status
+    axon sky status
+    axon sky launch --help
 
-Before each command, `axon devenv` checks the connection to the API server.
+Every argument goes to SkyPilot unchanged, and `--help` prints SkyPilot's own
+help. Four commands are refused, because `axon` manages what they would
+change: `axon sky api login` (use `axon login`), `axon sky api logout` (use
+`axon logout`), `axon sky api start` and `axon sky api stop`.
+
+Before each command, `axon sky` checks the connection to the API server.
 It never opens a browser and never installs anything; when the check fails,
 it stops and says what to do:
 
 | Message | What to do |
 |---|---|
-| `` Run `axon login` first. `` | No organisation file is stored, no login has run on this laptop, it did not finish, or the pathway's file changed since it connected. |
+| `` Run `axon login` first. `` | No config file is stored, no login has run on this laptop, it did not finish, or the pathway's file changed since it connected. |
 | `` SkyPilot session expired. Run `axon login`. `` | Log in again. |
 | `` Teleport session expired. Run `axon login`. `` | Log in again; the Teleport certificate has run out. |
 | `` Run `axon login` to update the SkyPilot client. `` | The server runs another SkyPilot version; the login moves the client to it. |
-| `Can't reach <host>.` | The server does not answer from where you are. Your organisation's hint, when it gives one, follows and says what to do. |
+| `Can't reach <host>.` | The server does not answer from where you are. Your organization's hint, when it gives one, follows and says what to do. |
 | `The SkyPilot API server is not answering. Retry later.` | The server itself is down; logging in again does not help. |
 | `` Couldn't restart the Teleport tunnel. Run `axon login`. `` | The tunnel's log follows the message; the login starts a fresh tunnel. |
 
 On a Teleport pathway, a stopped tunnel is restarted for you when your
-Teleport certificate is still valid, with the line `axon: restarting the
+Teleport certificate is still valid, with the line `sky: restarting the
 Teleport tunnel`. The restart waits up to 10 seconds for the tunnel.
 
 ## Developing
@@ -380,8 +394,8 @@ workflow, and the Mac suite runs it on macOS on Apple silicon and on Intel.
 ### The smoke test
 
 `smoke_test.go` runs the built `axon` as a user would, in an empty home
-directory with an empty `PATH`: `axon login --org` adds a made-up
-organisation file, installs the SkyPilot client for real, and stops at the
+directory with an empty `PATH`: `axon login --config` adds a made-up
+config file, installs the SkyPilot client for real, and stops at the
 endpoint's reachability check, before the browser login. The endpoint is on
 the loopback address, so the test reaches no server. It downloads the client,
 so it runs only with:
@@ -394,49 +408,14 @@ suite runs it on macOS on Apple silicon and on Intel. Before a release is
 published, it runs on all three against the binary the release's
 `install.sh` installed.
 
-### The tsh install
+### tsh
 
-`internal/tsh` finds Teleport's client for a Teleport pathway. It reads
-the proxy's version from the proxy's `/webapi/ping` endpoint, uses
-a `tsh` on `PATH` whose major version is the proxy's or one behind, and
-otherwise uses its own. On Linux on x86-64 and on macOS, after the user
-agrees, it downloads Teleport's archive at the proxy's version from
-`https://cdn.teleport.dev`, checks it against the `.sha256` file published
-beside it, and keeps only `tsh`. On macOS the archive is the one for the
-Mac's architecture, `darwin-arm64` or `darwin-amd64`, and `tsh` is the
-application bundle `tsh.app`, kept whole: its binary is signed to run only
-from inside the bundle. Only directories and regular files inside
-`teleport/tsh.app/` are extracted; any other entry there fails the install.
-
-| Path under `~/.axon/tools/` | Holds |
-|---|---|
-| `tsh/<version>/tsh` | `axon`'s own `tsh`, on Linux. |
-| `tsh/<version>/tsh.app/` | `axon`'s own `tsh` bundle, on macOS; it runs `tsh.app/Contents/MacOS/tsh`. |
-| `tsh/current` | Its version, written once an install succeeds. |
-
-Entries under `tsh/` whose names begin with a dot are installs in progress;
-they are removed once they are an hour old, as are earlier versions. Every
-download stops when no data arrives for 30 seconds.
-
-The unit tests use a fake proxy, fake archives for Linux and macOS and a
-fake `tsh`, and no network. A real install, which downloads about 180 to
-215 MB into a temporary home directory and runs the installed `tsh version`,
-runs on Linux on x86-64 or on macOS with no `tsh` on `PATH`:
-
-    AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/tsh
-
-CI runs it on Linux when a change touches `internal/tsh/` or the workflow,
-and the Mac suite runs it on macOS on Apple silicon and on Intel.
-
-### Command reference
-
-The help text of every `axon devenv` command is in
-`internal/devenv/commands.go`. `docs/reference/devenv.md` is generated from
-it; after editing the help text, regenerate the page and commit it:
-
-    go generate ./...
-
-A test fails while the committed page differs from the generated one.
+`internal/tsh` finds Teleport's client on `PATH` for a Teleport pathway,
+and runs it for the logins, the certificate check and the logout. It reads
+the proxy's version from the proxy's `/webapi/ping` endpoint and uses the
+`tsh` on `PATH` only when its major version is the proxy's or one behind.
+It never downloads `tsh`. The tests use a fake proxy and a fake `tsh` on a
+`PATH` that holds nothing else.
 
 ### Releasing
 
@@ -471,16 +450,14 @@ and is part of `go test ./...`.
 | `main.go` | The entry point. Sends every failure through `internal/fail`. |
 | `install.sh` | The install script that the install line runs. |
 | `.goreleaser.yaml` | How a release is built. |
-| `internal/cli` | The command tree: `login` and `devenv`. |
+| `internal/cli` | The command tree: `login`, `logout` and `sky`. |
 | `internal/fail` | Prints failures to standard error, prefixed `axon:`, and exits non-zero. |
-| `internal/orgfile` | Organisation files: reading them from a source, checking them, and storing them in `~/.axon/orgs/`. |
+| `internal/orgfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/orgs/`. |
 | `internal/axondir` | `~/.axon`: the configuration file, `tools/` and `state/`. |
 | `internal/connected` | The record of the connected pathway and its settings, in `~/.axon/state/pathway.toml`. |
-| `internal/login` | `axon login`: adding a file, choosing the pathway, disconnecting the one left, the stages, the devenv connect steps, and each kind's login in `direct.go` and `teleport.go`. `browser.go` holds the length of the browser wait. |
-| `internal/devenv` | The `axon devenv` command group, its help text, its connection check, and each pathway kind's endpoint. |
-| `internal/devenv/gendoc` | Writes the command reference; run by `go generate`. |
-| `docs/reference/` | The generated command reference. |
+| `internal/login` | `axon login` and `axon logout` (`logout.go`): adding a file, choosing the pathway, disconnecting the one left, the stages, the sky group's connect steps, and each kind's login in `direct.go` and `teleport.go`. `browser.go` holds the length of the browser wait. |
+| `internal/sky` | The `axon sky` command group: its refusals, its connection check, and each pathway kind's endpoint. |
 | `internal/apiserver` | The SkyPilot API server's health request, with SkyPilot's cookies and the client's version headers. |
 | `internal/skyclient` | `axon`'s own SkyPilot client. |
-| `internal/tsh` | Teleport's client: install, login, application login, certificate check. |
+| `internal/tsh` | Teleport's client: finding it on `PATH`, login, application login, certificate check. |
 | `internal/tunnel` | The Teleport tunnel to the API server. |

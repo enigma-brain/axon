@@ -1,20 +1,20 @@
-# axon devenv repairs only what needs no user action
+# axon sky repairs only what needs no user action
 
 ## Context
 
-Before it forwards a command, `axon devenv` checks that the API server
+Before it forwards a command, `axon sky` checks that the API server
 answers and that the login is good. The check fails for several reasons: the
 tunnel has stopped, the Teleport certificate or the server's own login
-session has expired, the organisation's network is out of reach, or the
+session has expired, the organization's network is out of reach, or the
 client's version differs from the server's.
 
 Some of these are fixed in under a second with no one present. Others need a
 browser, a network or VPN connection, or a download of several minutes.
-`axon devenv` commands run in scripts and agent sessions as well as at a prompt.
+`axon sky` commands run in scripts and agent sessions as well as at a prompt.
 
 ## Rationale
 
-`axon devenv` restarts a stopped tunnel when the Teleport certificate is
+`axon sky` restarts a stopped tunnel when the Teleport certificate is
 still valid, says in one line that it did, and checks the connection again
 before it runs the command. It restarts the tunnel once: a tunnel that is
 still down after the restart stops the command. When the restarted tunnel's
@@ -28,7 +28,7 @@ and the exact next step.
 
 - A reboot or a closed laptop does not cost the user a manual login when
   nothing has expired.
-- A `devenv` command never opens a browser and never starts an install, so
+- An `axon sky` command never opens a browser and never starts an install, so
   it does not hang in a script and its running time stays predictable.
 - Each failure has its own message, so the user is told to connect to the
   network when the network is the problem and to log in when the login is.

@@ -35,11 +35,11 @@ func (c skyClient) Ensure(ctx context.Context, version string, progress io.Write
 
 func (c skyClient) Path() (string, error) { return skyclient.Path(c.dir) }
 
-// connectDevenv runs the four steps that connect devenv: make sure the client
+// connectSky runs the four steps that connect the sky group: make sure the client
 // is installed, connect and log it in by the pathway's steps, verify the
 // identity the server reports and record the email, and sync the client's
 // version with the server's.
-func (l *login) connectDevenv(ctx context.Context, p orgfile.Pathway, opts Options) error {
+func (l *login) connectSky(ctx context.Context, p orgfile.Pathway, opts Options) error {
 	// 1. The client is installed.
 	version, installed, err := l.client.Version()
 	if err != nil {
@@ -98,7 +98,7 @@ func (l *login) connectDevenv(ctx context.Context, p orgfile.Pathway, opts Optio
 	// 4. The client's version is the server's.
 	switch {
 	case health.ServerVersion == "":
-		fmt.Fprintf(opts.Out, "devenv: the server did not report its version; the SkyPilot client stays at %s\n", version)
+		fmt.Fprintf(opts.Out, "sky: the server did not report its version; the SkyPilot client stays at %s\n", version)
 	case health.ServerVersion != version:
 		from, to, err := l.client.Ensure(ctx, health.ServerVersion, opts.Out)
 		if errors.Is(err, skyclient.ErrUnavailable) {
@@ -108,7 +108,7 @@ func (l *login) connectDevenv(ctx context.Context, p orgfile.Pathway, opts Optio
 			return fmt.Errorf("update the SkyPilot client from %s to %s: %w. Check your network and run `axon login` again.",
 				version, health.ServerVersion, err)
 		}
-		fmt.Fprintf(opts.Out, "devenv: SkyPilot client %s -> %s, the server's version\n", from, to)
+		fmt.Fprintf(opts.Out, "sky: SkyPilot client %s -> %s, the server's version\n", from, to)
 		version = to
 	}
 
@@ -122,7 +122,7 @@ func (l *login) connectDevenv(ctx context.Context, p orgfile.Pathway, opts Optio
 		}
 	}
 
-	fmt.Fprintf(opts.Out, "devenv: connected as %s (SkyPilot %s)\n", health.User, version)
+	fmt.Fprintf(opts.Out, "sky: connected as %s (SkyPilot %s)\n", health.User, version)
 	return nil
 }
 

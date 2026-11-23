@@ -46,7 +46,7 @@ func lockTools(ctx context.Context, tools string, progress io.Writer) (unlock fu
 			return nil, fmt.Errorf("lock %s: %w", path, err)
 		}
 		if !waiting {
-			fmt.Fprintln(progress, "devenv: waiting for another axon to finish installing the SkyPilot client")
+			fmt.Fprintln(progress, "sky: waiting for another axon to finish installing the SkyPilot client")
 			waiting = true
 		}
 		select {

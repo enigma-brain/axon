@@ -18,17 +18,18 @@ import (
 
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/connected"
+	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
 // fakeTsh is the path of the fake tsh, built by TestMain into a file named
-// tsh so that the tunnel package recognises its command line.
+// tsh so that the tunnel package recognizes its command line.
 var fakeTsh string
 
 // The made-up Teleport proxy and application the tests log in to.
 const (
 	testProxy = "teleport.example.org"
-	testApp   = "devenv"
+	testApp   = "skypilot"
 )
 
 // testPort is a free port the tests' tunnels listen on, so that a real
@@ -119,7 +120,7 @@ func newMetaHarness(t *testing.T) *metaHarness {
 	h.writeTsh("upstream", h.directURL)
 	t.Setenv("FAKETSH_DIR", h.tshDir)
 
-	h.l.teleport.ensure = func(context.Context, axondir.Dir, string, io.Reader, io.Writer) (string, error) {
+	h.l.teleport.ensure = func(context.Context, string) (string, error) {
 		return fakeTsh, nil
 	}
 	environ := h.l.environ
@@ -179,7 +180,7 @@ func (h *metaHarness) tshCalls() []string {
 func (h *metaHarness) endpoint() string { return "http://localhost:" + strconv.Itoa(testPort) }
 
 func (h *metaHarness) proxyCall() string {
-	return fmt.Sprintf("--proxy=teleport.example.org proxy app devenv --port %d", testPort)
+	return fmt.Sprintf("--proxy=teleport.example.org proxy app skypilot --port %d", testPort)
 }
 
 func contains(calls []string, call string) bool {
@@ -198,7 +199,7 @@ func TestTeleportFirstLogin(t *testing.T) {
 	}
 
 	calls := h.tshCalls()
-	for _, want := range []string{"status --format=json", "login --proxy=teleport.example.org", "--proxy=teleport.example.org apps login devenv", h.proxyCall()} {
+	for _, want := range []string{"status --format=json", "login --proxy=teleport.example.org", "--proxy=teleport.example.org apps login skypilot", h.proxyCall()} {
 		if !contains(calls, want) {
 			t.Errorf("tsh calls %q lack %q", calls, want)
 		}
@@ -219,7 +220,7 @@ func TestTeleportFirstLogin(t *testing.T) {
 	if got := h.email(); got != h.user {
 		t.Errorf("recorded email = %q, want %q", got, h.user)
 	}
-	if !strings.Contains(h.out.String(), "devenv: connected as "+h.user) {
+	if !strings.Contains(h.out.String(), "sky: connected as "+h.user) {
 		t.Errorf("output lacks the connected line:\n%s", h.out.String())
 	}
 }
@@ -240,7 +241,7 @@ func TestTeleportRepeatedLoginKeepsTunnel(t *testing.T) {
 		t.Errorf("tunnel after = %+v, want the same process %d serving", after, before.PID)
 	}
 	calls := h.tshCalls()
-	for _, unwanted := range []string{"login --proxy=teleport.example.org", "--proxy=teleport.example.org apps login devenv", h.proxyCall()} {
+	for _, unwanted := range []string{"login --proxy=teleport.example.org", "--proxy=teleport.example.org apps login skypilot", h.proxyCall()} {
 		if contains(calls, unwanted) {
 			t.Errorf("the repeated login ran tsh %q", unwanted)
 		}
@@ -269,7 +270,7 @@ func TestTeleportReplacesDeadTunnel(t *testing.T) {
 	if !after.Healthy || after.PID == before.PID {
 		t.Errorf("tunnel after = %+v, want a new process serving", after)
 	}
-	if calls := h.tshCalls(); !contains(calls, "--proxy=teleport.example.org apps login devenv") {
+	if calls := h.tshCalls(); !contains(calls, "--proxy=teleport.example.org apps login skypilot") {
 		t.Errorf("tsh calls %q lack the application login", calls)
 	}
 }
@@ -288,7 +289,7 @@ func TestTeleportPortHeld(t *testing.T) {
 		t.Fatalf("err = %v, want a *tunnel.PortBusyError", err)
 	}
 	msg := err.Error()
-	for _, want := range []string{"connect devenv: ", "port ", "process " + strconv.Itoa(os.Getpid()), "Stop that process and run `axon login` again."} {
+	for _, want := range []string{"connect sky: ", "port ", "process " + strconv.Itoa(os.Getpid()), "Stop that process and run `axon login` again."} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error %q lacks %q", msg, want)
 		}
@@ -358,17 +359,56 @@ func TestTeleportValidCertificateSkipsTeleportLogin(t *testing.T) {
 	}
 }
 
+// With no tsh on PATH, the login stops before any login step, with the
+// real lookup, which makes no request.
 func TestTeleportTshMissingStops(t *testing.T) {
 	h := newMetaHarness(t)
-	h.l.teleport.ensure = func(context.Context, axondir.Dir, string, io.Reader, io.Writer) (string, error) {
-		return "", errors.New("tsh was not installed")
-	}
+	h.l.teleport.ensure = tsh.Ensure
 	err := h.run("remote")
-	if err == nil || !strings.HasPrefix(err.Error(), "establish the Teleport session: tsh was not installed") {
-		t.Fatalf("err = %v", err)
+	want := "establish the Teleport session: this pathway needs Teleport's client, tsh, and no tsh was found on PATH. Install it from https://goteleport.com/docs/installation/ and run `axon login` again."
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
 	}
 	if h.skyRuns() != 0 || len(h.tshCalls()) != 0 {
 		t.Error("login went past the session stage")
+	}
+}
+
+// A missing tsh leaves the pathway that was connected as it was: the
+// active pathway and its record do not change.
+func TestTeleportTshMissingKeepsThePreviousPathway(t *testing.T) {
+	h := newMetaHarness(t)
+	h.script("ok")
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login on campus: %v\n%s", err, h.out.String())
+	}
+	h.l.teleport.ensure = tsh.Ensure
+	if err := h.run("remote"); err == nil || !strings.Contains(err.Error(), "no tsh was found on PATH") {
+		t.Fatalf("login on remote: err = %v", err)
+	}
+	if h.active() != "campus" || h.record().ID != "campus" || h.email() == "" {
+		t.Errorf("active = %q, record = %+v, email = %q; want campus kept", h.active(), h.record(), h.email())
+	}
+}
+
+// The login uses the tsh it finds on PATH.
+func TestTeleportUsesTshOnPath(t *testing.T) {
+	h := newMetaHarness(t)
+	t.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+filepath.Dir(fakeTsh))
+	var found string
+	h.l.teleport.ensure = func(context.Context, string) (string, error) {
+		path, err := tsh.Find()
+		found = path
+		return path, err
+	}
+	if err := h.run("remote"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	if found != fakeTsh {
+		t.Errorf("found tsh at %q, want %q", found, fakeTsh)
+	}
+	if calls := h.tshCalls(); !contains(calls, "--proxy=teleport.example.org apps login skypilot") {
+		t.Errorf("tsh calls = %q", calls)
 	}
 }
 
@@ -397,7 +437,7 @@ func TestSwitchStopsRecordedTunnelByItsRecord(t *testing.T) {
 	if !st.Running {
 		t.Fatal("no tunnel after the teleport login")
 	}
-	// Disconnecting needs no organisation file: with the file that named
+	// Disconnecting needs no config file: with the file that named
 	// the pathway gone, the records are enough.
 	if err := os.Remove(filepath.Join(h.home, ".axon", "orgs", "example.toml")); err != nil {
 		t.Fatal(err)
@@ -406,7 +446,7 @@ func TestSwitchStopsRecordedTunnelByItsRecord(t *testing.T) {
 	if err := h.run("lab"); err != nil {
 		t.Fatalf("direct login: %v\n%s", err, h.out.String())
 	}
-	if !strings.Contains(h.out.String(), "devenv: stopping the Teleport tunnel") {
+	if !strings.Contains(h.out.String(), "sky: stopping the Teleport tunnel") {
 		t.Errorf("output %q does not say the tunnel stopped", h.out.String())
 	}
 	waitUntil(t, func() bool {
@@ -435,7 +475,7 @@ func TestTeleportTunnelExitsPrintsLog(t *testing.T) {
 		t.Fatalf("err = %v, want a *tunnel.StartError for an exited tunnel", err)
 	}
 	msg := err.Error()
-	for _, want := range []string{"connect devenv: ", "ERROR: app certificate has expired", "Run `axon login` again."} {
+	for _, want := range []string{"connect sky: ", "ERROR: app certificate has expired", "Run `axon login` again."} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error %q lacks %q", msg, want)
 		}
@@ -533,7 +573,7 @@ func TestTeleportSyncsClientBeforeSkyLogin(t *testing.T) {
 
 // lastFileGone runs a teleport login, then has orgs change as gone, and
 // checks that the next login disconnects by the records, stopping the
-// tunnel, before it asks for --org.
+// tunnel, before it asks for --config.
 func lastFileGone(t *testing.T, gone func(h *metaHarness)) {
 	h := newMetaHarness(t)
 	if err := h.run("remote"); err != nil {
@@ -552,7 +592,7 @@ func lastFileGone(t *testing.T, gone func(h *metaHarness)) {
 	if err := h.run(""); !errors.Is(err, errNoOrg) {
 		t.Fatalf("err = %v, want errNoOrg", err)
 	}
-	if !strings.Contains(h.out.String(), "devenv: stopping the Teleport tunnel") {
+	if !strings.Contains(h.out.String(), "sky: stopping the Teleport tunnel") {
 		t.Errorf("output %q does not say the tunnel stopped", h.out.String())
 	}
 	waitUntil(t, func() bool { return syscall.Kill(st.PID, 0) != nil })

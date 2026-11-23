@@ -2,11 +2,11 @@
 
 ## Context
 
-`axon` is used by the members of every organisation that adopts it. They
+`axon` is used by the members of every organization that adopts it. They
 have no access to anything `axon`'s maintainers keep private, and they need
 to read how to install `axon`, log in and use it.
 
-The documentation holds nothing about any one organisation: an organisation's
+The documentation holds nothing about any one organization: an organization's
 own details come from its configuration, so there is nothing in the pages that
 needs hiding.
 

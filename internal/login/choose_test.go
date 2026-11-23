@@ -15,8 +15,8 @@ import (
 	"github.com/enigma-brain/axon/internal/orgfile"
 )
 
-// otherOrg is a second organisation file, with one direct pathway, lab.
-const otherOrg = `format = 1
+// otherOrg is a second config file, with one direct pathway, lab.
+const otherOrg = `format = 2
 id = "other"
 
 [[pathway]]
@@ -25,11 +25,11 @@ kind = "direct"
 name = "Lab"
 description = "A browser login. Works from the lab."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://lab.example.org"
 `
 
-// noFiles removes every stored organisation file.
+// noFiles removes every stored config file.
 func (h *harness) noFiles() {
 	h.t.Helper()
 	if err := os.RemoveAll(filepath.Join(h.home, ".axon", "orgs")); err != nil {
@@ -51,11 +51,11 @@ func (h *harness) active() string {
 	return id
 }
 
-func TestNoOrganisationFileStops(t *testing.T) {
+func TestNoOrganizationFileStops(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
 	err := h.run("")
-	want := "no organisation configuration. Run `axon login --org <source>` with the address or file your organisation gives you."
+	want := "no config file. Run `axon login --config <source>` with the address or file your organization gives you."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
@@ -72,7 +72,7 @@ func TestNoOrganisationFileStops(t *testing.T) {
 
 // With the last file gone and no tunnel recorded, login still leaves the
 // pathway: it removes the recorded email and the record of the connected
-// pathway, then asks for --org.
+// pathway, then asks for --config.
 func TestLastFileDeletedWithoutTunnelDisconnects(t *testing.T) {
 	h := newHarness(t)
 	h.logIn()
@@ -102,7 +102,7 @@ func TestLastFileDeletedWithoutTunnelDisconnects(t *testing.T) {
 	}
 }
 
-// A laptop set up before organisation files has a pathway stored under an
+// A laptop set up before config files has a pathway stored under an
 // old name and no file: login stops with the same message.
 func TestOldPathwayWithoutFileStops(t *testing.T) {
 	h := newHarness(t)
@@ -218,7 +218,7 @@ func TestUnknownPathwayIsRefused(t *testing.T) {
 	h := newHarness(t)
 	h.store(otherOrg)
 	err := h.run("nope")
-	want := `determine the pathway: no stored organisation file has the pathway "nope". The stored pathways are campus, remote and lab.`
+	want := `determine the pathway: no stored config file has the pathway "nope". The stored pathways are campus, remote and lab.`
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
@@ -253,14 +253,14 @@ func TestOrgFromPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.logIn()
-	if err := h.login(Options{Org: path}); err != nil {
+	if err := h.login(Options{Config: path}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	stored := filepath.Join(h.home, ".axon", "orgs", "other.toml")
 	if data, _ := os.ReadFile(stored); string(data) != otherOrg {
 		t.Errorf("stored file = %q", data)
 	}
-	if !strings.HasPrefix(h.out.String(), "Stored the organisation file "+stored+"\n") {
+	if !strings.HasPrefix(h.out.String(), "Stored the config file "+stored+"\n") {
 		t.Errorf("output:\n%s", h.out.String())
 	}
 	if h.active() != "lab" {
@@ -279,7 +279,7 @@ func TestOrgFromAddress(t *testing.T) {
 		return []byte(otherOrg), nil
 	}
 	h.logIn()
-	if err := h.login(Options{Org: address}); err != nil {
+	if err := h.login(Options{Config: address}); err != nil {
 		t.Fatalf("login: %v", err)
 	}
 	src, ok, err := orgfile.NewStore(axondir.New(h.home)).Source("other")
@@ -297,7 +297,7 @@ func TestOrgFromStdinWithTwoPathwaysAsksOnTheTerminal(t *testing.T) {
 	tty := &closer{Reader: strings.NewReader("1\n")}
 	h.l.openTerminal = func() (io.ReadCloser, error) { return tty, nil }
 	h.logIn()
-	if err := h.login(Options{Org: "-", In: strings.NewReader(exampleOrg)}); err != nil {
+	if err := h.login(Options{Config: "-", In: strings.NewReader(exampleOrg)}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	if h.active() != "campus" {
@@ -311,7 +311,7 @@ func TestOrgFromStdinWithTwoPathwaysAsksOnTheTerminal(t *testing.T) {
 func TestOrgFromStdinWithoutTerminalNamesTheFlag(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
-	err := h.login(Options{Org: "-", In: strings.NewReader(exampleOrg)})
+	err := h.login(Options{Config: "-", In: strings.NewReader(exampleOrg)})
 	want := "determine the pathway: no pathway chosen. Run `axon login --pathway <id>` with one of campus and remote."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
@@ -319,7 +319,7 @@ func TestOrgFromStdinWithoutTerminalNamesTheFlag(t *testing.T) {
 	// The file was added; the flag answers the question.
 	h.logIn()
 	h.out.Reset()
-	if err := h.login(Options{Org: "-", Pathway: "campus", In: strings.NewReader(exampleOrg)}); err != nil {
+	if err := h.login(Options{Config: "-", Pathway: "campus", In: strings.NewReader(exampleOrg)}); err != nil {
 		t.Fatalf("login with --pathway: %v", err)
 	}
 	if h.active() != "campus" {
@@ -336,14 +336,14 @@ func TestOrgKeepsActivePathwayInTheAddedFile(t *testing.T) {
 	h.l.readOrg = func(context.Context, orgfile.Source, io.Reader) ([]byte, error) { return []byte(otherOrg), nil }
 	h.logIn()
 	// The active pathway is not in the added file, which has one pathway.
-	if err := h.login(Options{Org: "https://example.org/other.toml"}); err != nil {
+	if err := h.login(Options{Config: "https://example.org/other.toml"}); err != nil {
 		t.Fatal(err)
 	}
 	if h.active() != "lab" {
 		t.Errorf("active pathway = %q, want lab, the added file's", h.active())
 	}
 	// Now it is: adding the file again keeps it, without asking.
-	if err := h.login(Options{Org: "https://example.org/other.toml"}); err != nil {
+	if err := h.login(Options{Config: "https://example.org/other.toml"}); err != nil {
 		t.Fatal(err)
 	}
 	if h.active() != "lab" {
@@ -357,7 +357,7 @@ func TestOrgKeepsActivePathwayInTheAddedFile(t *testing.T) {
 	}
 	h.l.readOrg = func(context.Context, orgfile.Source, io.Reader) ([]byte, error) { return []byte(exampleOrg), nil }
 	h.out.Reset()
-	if err := h.login(Options{Org: "https://example.org/example.toml"}); err != nil {
+	if err := h.login(Options{Config: "https://example.org/example.toml"}); err != nil {
 		t.Fatal(err)
 	}
 	if h.active() != "campus" || strings.Contains(h.out.String(), "Which pathway") {
@@ -373,7 +373,7 @@ func TestOrgOffersOnlyTheAddedFilesPathways(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.l.readOrg = func(context.Context, orgfile.Source, io.Reader) ([]byte, error) { return []byte(exampleOrg), nil }
-	err := h.login(Options{Org: "https://example.org/example.toml"})
+	err := h.login(Options{Config: "https://example.org/example.toml"})
 	if err == nil || !strings.HasSuffix(err.Error(), "with one of campus and remote.") {
 		t.Fatalf("err = %v", err)
 	}
@@ -393,8 +393,8 @@ func TestRefusedOrgChangesNothing(t *testing.T) {
 	if err := os.WriteFile(path, []byte(clash), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	err := h.login(Options{Org: path})
-	if err == nil || !strings.HasPrefix(err.Error(), "add the organisation file: ") || !strings.Contains(err.Error(), "example.toml") {
+	err := h.login(Options{Config: path})
+	if err == nil || !strings.HasPrefix(err.Error(), "add the config file: ") || !strings.Contains(err.Error(), "example.toml") {
 		t.Fatalf("err = %v, want a refusal naming the stored file", err)
 	}
 	if after := snapshot(t, filepath.Join(h.home, ".axon")); !equalMaps(before, after) {
@@ -412,7 +412,7 @@ func TestConnectedRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "format = 1\nid = \"campus\"\nkind = \"direct\"\ndevenv_endpoint = \"https://sky.example.org\"\n"
+	want := "format = 2\nid = \"campus\"\nkind = \"direct\"\nsky_endpoint = \"https://sky.example.org\"\n"
 	if string(data) != want {
 		t.Errorf("record = %q, want %q", data, want)
 	}
@@ -443,7 +443,7 @@ func TestDisconnectRemovesTheEmailOnlyOnAChange(t *testing.T) {
 
 	// The same pathway with other settings for machines is a change.
 	moved := campus
-	moved.Devenv.Endpoint = "https://sky2.example.org"
+	moved.Sky.Endpoint = "https://sky2.example.org"
 	if err := h.l.disconnectUnless(moved, opts); err != nil {
 		t.Fatal(err)
 	}
@@ -468,7 +468,7 @@ func TestDisconnectRemovesTheEmailOnlyOnAChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec, _, _ := connected.Read(dir)
-	if rec != (connected.Record{Format: 1, ID: "remote", Kind: "teleport", TeleportProxy: testProxy, DevenvApp: testApp}) {
+	if rec != (connected.Record{Format: 2, ID: "remote", Kind: "teleport", TeleportProxy: testProxy, SkyApp: testApp}) {
 		t.Errorf("record = %+v", rec)
 	}
 }
