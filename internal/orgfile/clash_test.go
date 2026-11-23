@@ -319,3 +319,52 @@ func TestRollbackContinuesAfterARestoreFails(t *testing.T) {
 		t.Errorf("the new file stayed: %v", err)
 	}
 }
+
+// A file that was removed and could not be restored is kept elsewhere,
+// and the error names where.
+func TestAnUnrestoredFileIsKept(t *testing.T) {
+	s, home := newStore(t)
+	keep := t.TempDir()
+	keepDir = func() string { return keep }
+	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
+	original, err := os.ReadFile(s.Path("a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	added := directOrg("b", "two", "Campus", "https://b.example.org")
+	c, err := s.Inspect([]byte(added), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The old file is removed, its record's removal fails, and putting the
+	// old file back fails.
+	record := filepath.Join(home, ".axon", "state", "orgs", "a.toml")
+	removeFile = func(path string) error {
+		if path == record {
+			return errors.New("injected removal failure")
+		}
+		return os.Remove(path)
+	}
+	replaceFile = func(path string, data []byte) error {
+		if path == s.Path("a") {
+			return errors.New("injected restore failure")
+		}
+		return axondir.ReplaceFile(path, data)
+	}
+	t.Cleanup(func() { removeFile, replaceFile, keepDir = os.Remove, axondir.ReplaceFile, os.TempDir })
+	_, err = s.Put([]byte(added), PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{c.Clashes[0].Stored}})
+	if err == nil {
+		t.Fatal("Put succeeded")
+	}
+	entries, _ := os.ReadDir(keep)
+	if len(entries) != 1 {
+		t.Fatalf("kept %v, want one file", entries)
+	}
+	kept := filepath.Join(keep, entries[0].Name())
+	if data, _ := os.ReadFile(kept); string(data) != string(original) {
+		t.Errorf("kept %q, want the old file", data)
+	}
+	if !strings.Contains(err.Error(), "its previous content is in "+kept) {
+		t.Errorf("error %q does not name %s", err, kept)
+	}
+}

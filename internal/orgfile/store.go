@@ -401,7 +401,11 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 		var unrestored []string
 		for i := len(saved) - 1; i >= 0; i-- {
 			if undo := saved[i].restore(); undo != nil {
-				unrestored = append(unrestored, fmt.Sprintf("%s could not be restored: %v", saved[i].path, undo))
+				msg := fmt.Sprintf("%s could not be restored: %v", saved[i].path, undo)
+				if kept, err := saved[i].keep(); err == nil && kept != "" {
+					msg += fmt.Sprintf(" (its previous content is in %s)", kept)
+				}
+				unrestored = append(unrestored, msg)
 			}
 		}
 		if len(unrestored) > 0 {
@@ -444,6 +448,28 @@ func saveFile(path string) (savedFile, error) {
 		return savedFile{}, fmt.Errorf("read %s: %w", path, unwrapPath(err))
 	}
 	return savedFile{path: path, data: data, existed: true}, nil
+}
+
+// keepDir is where keep writes a file it could not restore. Tests replace
+// it.
+var keepDir = os.TempDir
+
+// keep writes the saved content of a file that existed to a new file in
+// keepDir, so that it outlives the put, and returns that file's path. For a
+// file that did not exist it writes nothing and returns "".
+func (f savedFile) keep() (string, error) {
+	if !f.existed {
+		return "", nil
+	}
+	out, err := os.CreateTemp(keepDir(), "axon-"+filepath.Base(f.path)+"-*")
+	if err != nil {
+		return "", err
+	}
+	if _, err := out.Write(f.data); err != nil {
+		out.Close()
+		return "", err
+	}
+	return out.Name(), out.Close()
 }
 
 // restore puts the file back as it was saved.
