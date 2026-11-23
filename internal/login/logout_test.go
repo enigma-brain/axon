@@ -105,7 +105,7 @@ func TestLogoutTeleport(t *testing.T) {
 		"sky: stopping the Teleport tunnel on port 46581",
 		"teleport: logged out of teleport.example.org",
 		lineRemoved,
-		"Kept the config files in "+orgs,
+		"Kept the config files in "+orgs+"; run `axon login` to log in again",
 	)
 	if h.skyRuns() != runs+1 || lastSkyArgs(t, h.harness) != "api logout" {
 		t.Errorf("sky ran %d more times, last with %q; want api logout once", h.skyRuns()-runs, lastSkyArgs(t, h.harness))
@@ -152,7 +152,7 @@ func TestLogoutDirect(t *testing.T) {
 	wantLines(t, r.out.String(),
 		lineSkyLoggedOut,
 		lineRemoved,
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs"),
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
 	)
 	if lastSkyArgs(t, h) != "api logout" {
 		t.Errorf("sky ran with %q", lastSkyArgs(t, h))
@@ -178,7 +178,7 @@ func TestLogoutSkipsSteps(t *testing.T) {
 		"sky: stopping the Teleport tunnel on port 46581",
 		"teleport: skipped logging out of teleport.example.org: tsh is not on PATH",
 		lineRemoved,
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs"),
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
 	)
 	if h.skyRuns() != runs {
 		t.Error("sky ran without a client")
@@ -239,7 +239,7 @@ func TestLogoutFailingStepDoesNotStopTheOthers(t *testing.T) {
 	wantLines(t, r.out.String(),
 		"sky: stopping the Teleport tunnel on port 46581",
 		"teleport: logged out of teleport.example.org",
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs"),
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
 	)
 	if calls := h.tshCalls(); !contains(calls, "logout --proxy=teleport.example.org") {
 		t.Errorf("tsh calls = %q", calls)
@@ -272,7 +272,7 @@ func TestLogoutWithAnEarlierAxonsRecord(t *testing.T) {
 		"sky: stopping the Teleport tunnel on port 46581",
 		lineTeleportOld,
 		lineRemoved,
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs"),
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
 	)
 	if calls := h.tshCalls(); len(calls) != 0 {
 		t.Errorf("tsh ran: %q", calls)

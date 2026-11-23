@@ -30,7 +30,7 @@ const (
 	lineTeleportNone = "teleport: skipped logging out of %s: tsh is not on PATH"
 	lineTeleportOld  = "teleport: skipped logging out of Teleport: the record of the connected pathway is from an earlier axon. Run `tsh logout` to end a Teleport session."
 	lineRemoved      = "Removed the record of the connected pathway and the logged-in email"
-	lineKept         = "Kept the config files in %s"
+	lineKept         = "Kept the config files in %s; run `axon login` to log in again"
 )
 
 // errLogoutFailed ends a logout in which a step failed.

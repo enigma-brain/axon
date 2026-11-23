@@ -172,7 +172,7 @@ sky: logged out of the SkyPilot API server
 sky: stopping the Teleport tunnel on port 46581
 teleport: logged out of <proxy>
 Removed the record of the connected pathway and the logged-in email
-Kept the config files in <home>/.axon/orgs
+Kept the config files in <home>/.axon/orgs; run `axon login` to log in again
 ```
 
 A step that does not apply says why it was skipped:
