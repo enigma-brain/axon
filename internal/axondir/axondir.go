@@ -67,6 +67,10 @@ func (d Dir) OrgsDir() (string, error) { return d.ensure(orgsDir) }
 // when it does not exist.
 func (d Dir) ToolsDir() (string, error) { return d.ensure(toolsDir) }
 
+// ToolsPath returns the path of the directory for the tools axon installs,
+// without creating it.
+func (d Dir) ToolsPath() string { return filepath.Join(d.root, toolsDir) }
+
 // StateDir returns the directory for the state axon records, creating it
 // when it does not exist.
 func (d Dir) StateDir() (string, error) { return d.ensure(stateDir) }

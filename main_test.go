@@ -192,6 +192,18 @@ func TestBinary(t *testing.T) {
 		}
 	})
 
+	t.Run("sky help with no client creates nothing", func(t *testing.T) {
+		h := t.TempDir()
+		_, stderr, err := runAxon(t, bin, h, nil, "sky", "--help")
+		wantFailure(t, "sky --help", err)
+		if stderr != "axon: the SkyPilot client is not installed. Run `axon login` first.\n" {
+			t.Errorf("stderr = %q", stderr)
+		}
+		if _, err := os.Stat(filepath.Join(h, ".axon")); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("sky --help created ~/.axon: %v", err)
+		}
+	})
+
 	t.Run("logout with nothing logged in", func(t *testing.T) {
 		out, stderr, err := runAxon(t, bin, home(t), nil, "logout")
 		if err != nil || out != "Nothing is logged in.\n" || stderr != "" {

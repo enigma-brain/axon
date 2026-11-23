@@ -801,3 +801,14 @@ func TestEnsureWaitHonorsCancellation(t *testing.T) {
 		t.Error("Ensure downloaded while another install held the lock")
 	}
 }
+
+// Reading the version of a client that is not installed creates nothing.
+func TestVersionCreatesNothing(t *testing.T) {
+	home := t.TempDir()
+	if _, installed, err := Version(axondir.New(home)); installed || err != nil {
+		t.Fatalf("Version = %v, %v; want not installed", installed, err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".axon")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("Version created ~/.axon: %v", err)
+	}
+}
