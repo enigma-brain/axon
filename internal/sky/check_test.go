@@ -115,7 +115,7 @@ func connectedProbes() probes {
 		},
 		cookieFile:    func() (string, error) { return "", nil },
 		clientVersion: func(axondir.Dir) (string, bool, error) { return clientVersion, true, nil },
-		findTsh:       func(axondir.Dir) (string, error) { return "", errors.New("unexpected tsh lookup") },
+		findTsh:       func() (string, error) { return "", errors.New("unexpected tsh lookup") },
 		sessionValid: func(context.Context, string, string) (bool, error) {
 			return false, errors.New("unexpected certificate check")
 		},
@@ -160,7 +160,7 @@ func newWorld(t *testing.T) *world {
 
 func (w *world) probes() probes {
 	p := helperProbes(w.server.URL())
-	p.findTsh = func(axondir.Dir) (string, error) {
+	p.findTsh = func() (string, error) {
 		if w.tshErr != nil {
 			return "", w.tshErr
 		}
@@ -285,7 +285,7 @@ func TestCheckStops(t *testing.T) {
 		{
 			name: "Teleport: tsh is not found", pathway: "remote",
 			setup: func(w *world) { w.server.set(answerDrop, clientVersion); w.tshErr = tsh.ErrNotFound },
-			want:  "Teleport's client, tsh, is not found. Run `axon login`.", requests: 1,
+			want:  "this pathway needs Teleport's client, tsh, and no tsh was found on PATH. Install it from https://goteleport.com/docs/installation/ and run `axon login` again.", requests: 1,
 		},
 		{
 			name: "Teleport: the tunnel's process exits during the restart", pathway: "remote",

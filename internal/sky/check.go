@@ -23,7 +23,6 @@ var (
 	errSessionExpired  = errors.New("SkyPilot session expired. Run `axon login`.")
 	errNotAnswering    = errors.New("The SkyPilot API server is not answering. Retry later.")
 	errTeleportExpired = errors.New("Teleport session expired. Run `axon login`.")
-	errNoTsh           = errors.New("Teleport's client, tsh, is not found. Run `axon login`.")
 )
 
 const (
@@ -47,8 +46,8 @@ type probes struct {
 	// clientVersion returns the installed client's version; false when none
 	// is installed.
 	clientVersion func(axondir.Dir) (string, bool, error)
-	// findTsh returns the path of a tsh without installing one.
-	findTsh func(axondir.Dir) (string, error)
+	// findTsh returns the path of the tsh on PATH.
+	findTsh func() (string, error)
 	// sessionValid reports whether the Teleport certificate for proxy is
 	// valid.
 	sessionValid func(ctx context.Context, tshPath, proxy string) (bool, error)
@@ -172,10 +171,10 @@ func failure(ctx context.Context, p orgfile.Pathway, endpoint string, err error)
 // restartTunnel restarts the tunnel when the Teleport certificate is valid.
 // It returns nil once the restarted tunnel serves.
 func (p probes) restartTunnel(ctx context.Context, dir axondir.Dir, pw orgfile.Pathway, w io.Writer) error {
-	tshPath, err := p.findTsh(dir)
+	tshPath, err := p.findTsh()
 	switch {
 	case errors.Is(err, tsh.ErrNotFound):
-		return errNoTsh
+		return err
 	case err != nil:
 		return fmt.Errorf("find Teleport's client, tsh: %w. Run `axon login`.", err)
 	}

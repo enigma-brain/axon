@@ -57,7 +57,5 @@ jobs:
           go-version-file: go.mod
       - name: Install the SkyPilot client into an empty home and run sky --version
         run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
-      - name: Run axon login with an example organization file in an empty home
+      - name: Run axon login with an example config file in an empty home
         run: go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
-      - name: Install tsh into an empty home and run tsh version
-        run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/tsh

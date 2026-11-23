@@ -21,7 +21,6 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       skyclient: ${{ steps.filter.outputs.skyclient }}
-      tsh: ${{ steps.filter.outputs.tsh }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -56,16 +55,14 @@ jobs:
 
           matches() { echo "$changed" | grep -qE "$1"; }
           workflow='^\.github/workflows/ci\.yml$'
-          code=false skyclient=false tsh=false
+          code=false skyclient=false
           if matches "\.go\$|^go\.(mod|sum)\$|^internal/|^install\.sh\$|^\.goreleaser\.yaml\$|^\.github/release-gate/|$workflow"; then
             code=true
           fi
           if matches "^internal/skyclient/|$workflow"; then skyclient=true; fi
-          if matches "^internal/tsh/|$workflow"; then tsh=true; fi
           {
             echo "code=$code"
             echo "skyclient=$skyclient"
-            echo "tsh=$tsh"
           } >> "$GITHUB_OUTPUT"
 
   test:
@@ -167,6 +164,3 @@ jobs:
         run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
       - name: Run axon login with an example config file in an empty home
         run: go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
-      - name: Install tsh into an empty home and run tsh version
-        if: needs.changes.outputs.tsh == 'true'
-        run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/tsh

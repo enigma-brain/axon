@@ -18,6 +18,7 @@ import (
 
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/connected"
+	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
@@ -119,7 +120,7 @@ func newMetaHarness(t *testing.T) *metaHarness {
 	h.writeTsh("upstream", h.directURL)
 	t.Setenv("FAKETSH_DIR", h.tshDir)
 
-	h.l.teleport.ensure = func(context.Context, axondir.Dir, string, io.Reader, io.Writer) (string, error) {
+	h.l.teleport.ensure = func(context.Context, string) (string, error) {
 		return fakeTsh, nil
 	}
 	environ := h.l.environ
@@ -358,17 +359,39 @@ func TestTeleportValidCertificateSkipsTeleportLogin(t *testing.T) {
 	}
 }
 
+// With no tsh on PATH, the login stops before any login step, with the
+// real lookup, which makes no request.
 func TestTeleportTshMissingStops(t *testing.T) {
 	h := newMetaHarness(t)
-	h.l.teleport.ensure = func(context.Context, axondir.Dir, string, io.Reader, io.Writer) (string, error) {
-		return "", errors.New("tsh was not installed")
-	}
+	h.l.teleport.ensure = tsh.Ensure
 	err := h.run("remote")
-	if err == nil || !strings.HasPrefix(err.Error(), "establish the Teleport session: tsh was not installed") {
-		t.Fatalf("err = %v", err)
+	want := "establish the Teleport session: this pathway needs Teleport's client, tsh, and no tsh was found on PATH. Install it from https://goteleport.com/docs/installation/ and run `axon login` again."
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
 	}
 	if h.skyRuns() != 0 || len(h.tshCalls()) != 0 {
 		t.Error("login went past the session stage")
+	}
+}
+
+// The login uses the tsh it finds on PATH.
+func TestTeleportUsesTshOnPath(t *testing.T) {
+	h := newMetaHarness(t)
+	t.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+filepath.Dir(fakeTsh))
+	var found string
+	h.l.teleport.ensure = func(context.Context, string) (string, error) {
+		path, err := tsh.Find()
+		found = path
+		return path, err
+	}
+	if err := h.run("remote"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	if found != fakeTsh {
+		t.Errorf("found tsh at %q, want %q", found, fakeTsh)
+	}
+	if calls := h.tshCalls(); !contains(calls, "--proxy=teleport.example.org apps login skypilot") {
+		t.Errorf("tsh calls = %q", calls)
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -14,7 +13,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/enigma-brain/axon/internal/apiserver"
-	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/orgfile"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
@@ -32,9 +30,9 @@ var errNoIdentity = errors.New("the SkyPilot API server did not report your Tele
 // teleport is what login does with Teleport. Run fills it with the tsh
 // package; tests replace ensure, which asks the live proxy for its version.
 type teleport struct {
-	// ensure returns the path of a tsh the proxy supports, installing one
-	// when none is present.
-	ensure func(ctx context.Context, dir axondir.Dir, proxy string, in io.Reader, out io.Writer) (string, error)
+	// ensure returns the path of the tsh on PATH when the proxy supports
+	// its version.
+	ensure func(ctx context.Context, proxy string) (string, error)
 	// newTunnel returns the tunnel to the Teleport application app through
 	// the Teleport proxy proxy, run with tshPath and recorded in stateDir.
 	newTunnel func(stateDir, tshPath, proxy, app string) *tunnel.Tunnel
@@ -50,7 +48,7 @@ type teleport struct {
 // login, so no browser opens.
 func (l *login) establishTeleportSession(ctx context.Context, p orgfile.Pathway, opts Options) error {
 	proxy := p.Teleport.Proxy
-	path, err := l.teleport.ensure(ctx, l.dir, proxy, opts.In, opts.Out)
+	path, err := l.teleport.ensure(ctx, proxy)
 	if err != nil {
 		return err
 	}
