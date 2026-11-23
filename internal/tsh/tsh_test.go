@@ -439,3 +439,28 @@ func TestLogout(t *testing.T) {
 		t.Error("Logout accepted a bad proxy")
 	}
 }
+
+// A tsh logout that exits without ending the session is reported.
+func TestLogoutThatEndsNoSession(t *testing.T) {
+	f := newFixture(t)
+	path := f.putOnPath("18.11.7")
+	t.Setenv("FAKETSH_STATUS", fmt.Sprintf(`{"active": {"profile_url": "https://teleport.example.org:443", "valid_until": %q}}`,
+		time.Now().Add(time.Hour).UTC().Format(time.RFC3339)))
+	err := Logout(context.Background(), path, testProxy)
+	if !errors.Is(err, ErrStillLoggedIn) || !strings.Contains(err.Error(), "tsh logout --proxy=teleport.example.org --user=<user>") {
+		t.Errorf("Logout returned %v, want ErrStillLoggedIn with the command to run", err)
+	}
+}
+
+// A tsh found only through a relative entry of PATH is an error, not an
+// absent tsh, and is not run.
+func TestFindRefusesARelativePathEntry(t *testing.T) {
+	f := newFixture(t)
+	f.putOnPath("18.11.7")
+	t.Chdir(f.bin)
+	t.Setenv("PATH", ".")
+	path, err := Find()
+	if err == nil || errors.Is(err, ErrNotFound) || path != "" {
+		t.Errorf("Find = %q, %v; want an error that is not ErrNotFound", path, err)
+	}
+}

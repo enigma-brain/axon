@@ -41,8 +41,13 @@ var ErrNotFound = fmt.Errorf("this pathway needs Teleport's client, tsh, and no 
 // none.
 func Find() (string, error) {
 	path, err := exec.LookPath("tsh")
-	if err != nil {
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
 		return "", ErrNotFound
+	case err != nil:
+		// Such as a tsh found only through a relative entry of PATH, which
+		// is not run.
+		return "", fmt.Errorf("find tsh on PATH: %w", err)
 	}
 	return path, nil
 }
@@ -152,9 +157,13 @@ func SessionValid(ctx context.Context, tshPath, proxy string) (bool, error) {
 	return status.Active.ValidUntil.After(now()), nil
 }
 
-// Logout ends the Teleport session for the proxy at proxy. It runs tsh
-// without a terminal and returns tsh's own output in the error when tsh
-// fails.
+// ErrStillLoggedIn reports a tsh logout that exited without ending the
+// session, such as when several identities are logged in to the proxy.
+var ErrStillLoggedIn = errors.New("the Teleport session is still valid after tsh logout")
+
+// Logout ends the Teleport session for the proxy at proxy, and checks that
+// it ended. It runs tsh without a terminal and returns tsh's own output in
+// the error when tsh fails.
 func Logout(ctx context.Context, tshPath, proxy string) error {
 	if err := CheckProxy(proxy); err != nil {
 		return err
@@ -165,6 +174,13 @@ func Logout(ctx context.Context, tshPath, proxy string) error {
 			return fmt.Errorf("tsh logout --proxy=%s: %w: %s", proxy, err, msg)
 		}
 		return fmt.Errorf("tsh logout --proxy=%s: %w", proxy, err)
+	}
+	valid, err := SessionValid(ctx, tshPath, proxy)
+	if err != nil {
+		return err
+	}
+	if valid {
+		return fmt.Errorf("%w. Run `tsh logout --proxy=%s --user=<user>` for each user tsh lists", ErrStillLoggedIn, proxy)
 	}
 	return nil
 }
