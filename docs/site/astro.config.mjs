@@ -24,13 +24,7 @@ export default defineConfig({
         {
           label: 'Command groups',
           items: [
-            {
-              label: 'devenv',
-              items: [
-                { label: 'Overview', slug: 'devenv' },
-                { label: 'Backend: SkyPilot', slug: 'devenv/skypilot' },
-              ],
-            },
+            { label: 'sky', slug: 'sky' },
           ],
         },
         {

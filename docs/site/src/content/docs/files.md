@@ -37,7 +37,7 @@ To remove everything `axon` keeps, delete `~/.axon`. The next login needs
 Files that another program writes stay where they are:
 
 - SkyPilot's, in `~/.sky`: see
-  [Backend: SkyPilot](/axon/devenv/skypilot/#skypilots-files-in-sky).
+  [sky](/axon/sky/#skypilots-files-in-sky).
 - Teleport's, in `~/.tsh`: see
   [Teleport](/axon/pathways/teleport/#teleports-files-in-tsh).
 

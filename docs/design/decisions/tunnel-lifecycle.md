@@ -4,7 +4,7 @@
 
 On a teleport pathway the API server is reached through a local tunnel,
 `tsh proxy app`, that listens on a port of the laptop. The tunnel has to
-stay up after `axon login` returns. `axon devenv` commands use it, and so do
+stay up after `axon login` returns. `axon sky` commands use it, and so do
 `ssh` to a cluster, VS Code Remote-SSH and the SkyPilot dashboard, none of
 which run through `axon`.
 

@@ -25,7 +25,7 @@ client at that version and says so.
 - The compiled default removes the circular dependency of the first run: a
   client exists to log in with, and the sync follows.
 
-`axon devenv` makes the same comparison but only reports a difference. A
+`axon sky` makes the same comparison but only reports a difference. A
 reinstall is a long operation, and it belongs to `axon login`.
 
 ## Alternatives considered

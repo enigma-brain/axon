@@ -15,13 +15,13 @@ the API server's own, in a browser.
    browser.
 2. **The sign-in opens in your default browser.** Sign in with your
    organisation's account and click "Authorize". `axon` waits for the page to
-   complete, and prints `devenv: logging in to <address> in your browser`.
+   complete, and prints `sky: logging in to <address> in your browser`.
    When your session is still good, no browser opens.
 3. **The wait ends after five minutes.** If the login is not completed in the
    browser by then, `axon` stops and asks you to run `axon login` again.
 
 What else the login does on this kind of pathway, such as clearing a stale
-session, is on the [backend's page](/axon/devenv/skypilot/#on-a-direct-pathway).
+session, is on the [sky page](/axon/sky/#on-a-direct-pathway).
 
 ## When something fails
 

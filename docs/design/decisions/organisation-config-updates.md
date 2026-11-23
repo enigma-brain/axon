@@ -8,7 +8,7 @@ The configuration reaches a laptop from a URL, a file or standard input.
 Only a URL can be read again without the user.
 
 `axon login` is the command that already touches the network to put things
-right. `axon devenv` runs in scripts and makes a single request to the API
+right. `axon sky` runs in scripts and makes a single request to the API
 server before each command.
 
 ## Rationale
@@ -30,7 +30,7 @@ hands out a new file.
   successfully, with nothing for the user to do.
 - A login does not fail because the configuration's host is briefly out of
   reach while the stored file still works.
-- `axon devenv` adds no request for the configuration, and keeps its
+- `axon sky` adds no request for the configuration, and keeps its
   predictable running time.
 - A login reaches only the hosts of the pathway in use; a file the user is
   not using is not fetched, and its host being down costs nothing.
@@ -41,7 +41,7 @@ hands out a new file.
 
 - **Fetch only when the user gives `--org` again.** Every change needs a
   message to every member, and laptops that miss it keep stale hosts.
-- **Fetch in `axon devenv` too, when the stored copy is old.** A command in
+- **Fetch in `axon sky` too, when the stored copy is old.** A command in
   a script gains a second network request and a failure mode that has
   nothing to do with the command.
 - **Read a file source again at every login.** A file that has moved or

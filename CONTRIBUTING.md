@@ -153,8 +153,8 @@ when Pages is switched on for the repository, and skips publishing, with a
 note in the run summary, when it is not.
 
 The site holds no organisation detail, under the rule in
-[What stays out](#what-stays-out). It has no links to SkyPilot's
-documentation.
+[What stays out](#what-stays-out). It links to SkyPilot's documentation
+only from the page of the `sky` command group.
 
 ## Continuous integration
 

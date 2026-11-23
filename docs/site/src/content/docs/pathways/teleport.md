@@ -22,8 +22,8 @@ so you run no `tsh` command by hand.
    its log in `~/.axon/state/tunnel.log`. `ssh` to a cluster, VS Code
    Remote-SSH and the dashboard at `http://localhost:46581` all go through it.
 4. **It points each command group at the tunnel.** What this means for
-   `axon devenv` is on the
-   [backend's page](/axon/devenv/skypilot/#on-a-teleport-pathway).
+   `axon sky` is on the
+   [sky page](/axon/sky/#on-a-teleport-pathway).
 
 The tunnel is `axon`'s own: a process on port 46581 that is not `axon`'s
 tunnel makes `axon login` stop and name it.
@@ -74,11 +74,11 @@ The tunnel stops when:
   through it, which interrupts sessions through it;
 - you switch pathways.
 
-To restore it, run `axon login`. `axon devenv` also restarts a stopped tunnel
+To restore it, run `axon login`. `axon sky` also restarts a stopped tunnel
 by itself while your certificate is valid, with the line:
 
 ```text
-axon: restarting the Teleport tunnel
+sky: restarting the Teleport tunnel
 ```
 
 ## Teleport's files in ~/.tsh

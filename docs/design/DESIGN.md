@@ -14,12 +14,17 @@
 
 `axon` is the command-line entry point to a platform run by an
 organisation. A user installs one tool, logs in once, and reaches each part
-of the platform through a command group named for it. What sits behind a
-command group is free to change without the user learning a new path.
+of the platform through a command group.
 
-`axon` has one command group, `devenv`, which is the user's way to the
-organisation's SkyPilot API server: dev environments, GPUs, jobs and
-volumes.
+A command group that passes a tool's own commands straight through is
+named for the tool. A command group that hides the tool behind commands of
+its own is named for the part of the platform it reaches, and what sits
+behind it is free to change without the user learning a new path
+[{D!}](decisions/command-group-names.md).
+
+`axon` has one command group, `sky`, which passes SkyPilot's `sky` commands
+through to the organisation's SkyPilot API server: dev environments, GPUs,
+jobs and volumes.
 
 `axon` is written in Go and is a single binary that runs on the user's
 laptop. It has no server component.
@@ -224,7 +229,7 @@ pathway remains, it says in one line which pathway it now uses.
 A file from a file path or standard input is read once, when `--org` is
 given. Updating it is running `axon login --org` again with the new file.
 
-`axon devenv` never fetches a file. It uses the stored ones.
+`axon sky` never fetches a file. It uses the stored ones.
 
 At each `axon login`, `axon` reads every stored file and applies the checks
 above. A stored file that fails them is left out, with one line that names
@@ -238,14 +243,14 @@ When no file is stored and `--org` is not given, `axon login` stops with:
 "axon: no organisation configuration. Run `axon login --org <source>` with
 the address or file your organisation gives you."
 
-`axon devenv` with no file stops with: "Run `axon login` first."
+`axon sky` with no file stops with: "Run `axon login` first."
 
 ## Commands
 
 | Command | Behaviour |
 |---|---|
 | `axon login [--org <source>] [--pathway <id>]` | Adds an organisation file when `--org` is given, determines the pathway, establishes its session, and connects every command group. |
-| `axon devenv <command> [args]` | Checks the connection, then runs the `sky` command of the same name with the same arguments. |
+| `axon sky [args]` | Checks the connection, then runs `axon`'s own SkyPilot client with the same arguments. |
 | `axon --version` | Prints the version of `axon`. |
 | `axon --help` | Lists the commands. |
 
@@ -374,13 +379,15 @@ installs it at the version the pathway's proxy reports
 When the install fails or the user declines it, `axon` prints Teleport's
 install link and stops.
 
-## devenv
+## sky
 
-The `devenv` command group is the user's way to the organisation's
-SkyPilot API server. Its backend is SkyPilot, and it has one backend. The
-parts of `axon` that are specific to SkyPilot are kept together, inside
-`devenv`, and no swappable backend is built. Everything `axon` does with
-SkyPilot is in this section.
+The `sky` command group is the user's way to the organisation's SkyPilot
+API server. It passes SkyPilot's own commands through. The parts of `axon`
+that are specific to SkyPilot are kept together, inside `sky`. Everything
+`axon` does with SkyPilot is in this section.
+
+Each line `axon` prints about the `sky` group's progress, during `axon
+login` and before a command runs, begins `sky:`.
 
 | Pathway kind | Endpoint the SkyPilot client uses |
 |---|---|
@@ -393,9 +400,9 @@ organisation.
 SkyPilot's own configuration and session stay in `~/.sky/`, where SkyPilot
 keeps them.
 
-### What login does for devenv
+### What login does for sky
 
-When `axon login` connects `devenv`, it runs these steps in order:
+When `axon login` connects `sky`, it runs these steps in order:
 
 1. Make sure the SkyPilot client is installed.
 2. Connect and log the client in, by the pathway kind's steps below.
@@ -489,7 +496,7 @@ A teleport pathway is for machines that only the user logs in to
 [{Q?}](questions/tunnel-local-access.md).
 
 The tunnel does not survive the expiry of the Teleport certificate or a
-reboot. `axon login` restores it, and `axon devenv` restores it when the
+reboot. `axon login` restores it, and `axon sky` restores it when the
 certificate is still valid. Leaving a teleport pathway stops it, by the
 recorded process ID and command line alone.
 
@@ -527,45 +534,34 @@ default to the latest SkyPilot release that it is tested against.
 
 ### Commands
 
-Each `axon devenv` command runs the `sky` command of the same name and
-passes its arguments and flags through unchanged, including flags that
-`axon`'s help does not mention [{D!}](decisions/devenv-command-mapping.md).
-`axon devenv launch -c dev task.yaml` runs `sky launch -c dev task.yaml`.
+`axon sky` runs `axon`'s own SkyPilot client and passes it every argument
+unchanged, whatever the command, including commands that a later SkyPilot
+release adds [{D!}](decisions/sky-command-coverage.md).
+`axon sky launch -c dev task.yaml` runs `sky launch -c dev task.yaml`.
 
-`axon devenv` accepts the commands in this table and no others
-[{D!}](decisions/devenv-command-coverage.md).
+Four commands are refused by name, because the endpoint, the login and the
+API server belong to `axon login` and `axon logout`:
 
-| Group | `axon devenv` command | Runs |
-|---|---|---|
-| Dev environments | `launch` | `sky launch` |
-| | `status` | `sky status` |
-| | `down` | `sky down` |
-| | `autostop` | `sky autostop` |
-| | `exec` | `sky exec` |
-| | `logs` | `sky logs` |
-| | `queue` | `sky queue` |
-| GPUs | `gpus list` | `sky gpus list` |
-| Managed jobs | `jobs launch` | `sky jobs launch` |
-| | `jobs queue` | `sky jobs queue` |
-| | `jobs logs` | `sky jobs logs` |
-| | `jobs cancel` | `sky jobs cancel` |
-| Volumes | `volumes ls` | `sky volumes ls` |
+| Command | Refusal |
+|---|---|
+| `axon sky api login` | Points to `axon login`. |
+| `axon sky api logout` | Points to `axon logout`. |
+| `axon sky api start` | Says that `axon` connects to the organisation's API server and does not start one on the laptop. |
+| `axon sky api stop` | The same as `api start`. |
 
-Any other command is refused with a message that `axon devenv` does not
-cover it. SkyPilot's `api` commands are never covered: the endpoint, the
-login and the local API server belong to `axon login`.
+A refused command is refused with `--help` too. Every other `api` command
+passes through.
 
-`axon devenv` sets no task file, queue or label. What a command launches is
+`axon sky` sets no task file, queue or label. What a command launches is
 decided by its arguments.
 
-### Help and documentation
+### Help
 
-`axon devenv --help` lists the covered commands. `axon devenv <command>
---help` prints help written for `axon`; it does not print SkyPilot's. The
-help names no organisation detail.
-
-The help text of every command is kept in the repository in one place, and
-the command reference is produced from it.
+`axon sky` with no arguments, and any `axon sky` command with `--help` or
+`-h` before a `--`, prints SkyPilot's own help. `axon` runs the client for
+it without the connection check, so help needs the installed client and no
+login. SkyPilot's help and hints name `sky` commands; the user types each
+as `axon sky`.
 
 ### Running a command
 
@@ -579,7 +575,7 @@ replacing any value the user's shell exports. `axon login` sets neither:
 | `SKYPILOT_API_SERVER_ENDPOINT` | The pathway's endpoint | The client talks to the pathway's server, whatever endpoint the shell exports. |
 | `SKYPILOT_USER` | The logged-in email | The pre-launch volume checks, which run as the laptop username when the variable is unset, run as the email, so a user's own volume passes when the laptop username differs from the email's local part. |
 
-`axon devenv` never starts an API server on the laptop. SkyPilot starts one
+`axon sky` never starts an API server on the laptop. SkyPilot starts one
 only when the endpoint is the reserved local address, `http://localhost:46580`
 or its `127.0.0.1` and `0.0.0.0` forms, and nothing answers there. No
 pathway's endpoint is that address: a `direct` endpoint is `https`, and a
@@ -591,11 +587,11 @@ rewritten, so hints that `sky` prints name `sky` commands.
 
 ### Connection check
 
-Before it forwards a command, `axon devenv` makes one request to the API
+Before it forwards a command, `axon sky` makes one request to the API
 server's health endpoint and acts on the result. It repairs only what needs
 no action from the user [{D!}](decisions/connection-repair.md).
 
-| Condition | What `axon devenv` does |
+| Condition | What `axon sky` does |
 |---|---|
 | The server answers, reports the user's identity, and its version equals the client's | Runs the command. |
 | No login has run on this laptop | Stops: "Run `axon login` first." |
@@ -608,7 +604,7 @@ no action from the user [{D!}](decisions/connection-repair.md).
 | Direct: the server answers with an error that is not about the login | Stops: "The SkyPilot API server is not answering. Retry later." |
 | The client's version differs from the server's | Stops: "Run `axon login` to update the SkyPilot client." |
 
-`axon devenv` never opens a browser and never starts an install.
+`axon sky` never opens a browser and never starts an install.
 
 ## Failures
 
@@ -621,7 +617,7 @@ text field from an organisation file as it is written.
 
 A message names a product only when it comes from the part of `axon` that
 uses that product [{D!}](decisions/product-names-in-messages.md).
-"SkyPilot" appears only in messages from `devenv`. "Teleport" appears only
+"SkyPilot" appears only in messages from `sky`. "Teleport" appears only
 in messages about a `teleport` pathway. The general parts of `axon`, which
 are the stages of login, the pathway prompt, the organisation's
 configuration and the form of a failure, name neither.
@@ -686,5 +682,6 @@ members of any organisation that uses `axon`
 - Its source is a [Starlight](https://starlight.astro.build) project in
   `docs/site`.
 - It is served from GitHub Pages at `https://enigma-brain.github.io/axon/`.
-- It holds nothing about any one organisation, and links to no SkyPilot
-  documentation.
+- It holds nothing about any one organisation.
+- It links to SkyPilot's documentation only from the page of the `sky`
+  command group.

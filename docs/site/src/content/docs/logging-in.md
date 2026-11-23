@@ -98,8 +98,8 @@ A login runs these stages and stops at the first that fails:
 4. Sign in on the pathway, by its kind's steps: those of a
    [direct](/axon/pathways/direct/) or a [Teleport](/axon/pathways/teleport/)
    pathway.
-5. Connect each command group. For `axon devenv`, its
-   [backend's page](/axon/devenv/skypilot/#what-the-login-does-for-devenv) says
+5. Connect each command group. For `axon sky`, its
+   [page](/axon/sky/#what-the-login-does-for-sky) says
    what this installs and checks.
 
 When it succeeds, `axon` records your email in `~/.axon/state/email`, and
@@ -119,7 +119,7 @@ How a change reaches your laptop depends on where the file came from:
 - **A file path or standard input:** the file is read once. Run `axon login --org`
   again with the new file.
 
-`axon devenv` never fetches a file. It uses the stored ones.
+`axon sky` never fetches a file. It uses the stored ones.
 
 When the new file changes the servers of your active pathway, the login
 disconnects it from the old ones and connects it to the new ones, and the

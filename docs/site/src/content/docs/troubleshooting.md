@@ -10,7 +10,7 @@ path, it appears here as `<host>` or `<path>`. To find a message, search this
 page for its words with your browser's search.
 
 A message from a step of the login may begin with the name of the stage that
-failed, such as `connect devenv:` or `establish the Teleport session:`, before
+failed, such as `connect sky:` or `establish the Teleport session:`, before
 the text shown here.
 
 Most problems end with the same step: run `axon login` again.
@@ -239,7 +239,7 @@ says what to do, such as connecting to a network. Then run `axon login` again.
 ### The browser login timed out
 
 ```text
-axon: connect devenv: the login was not completed in the browser within 5 minutes. Run `axon login` again.
+axon: connect sky: the login was not completed in the browser within 5 minutes. Run `axon login` again.
 ```
 
 The browser sign-in was not finished. Run `axon login` again, sign in and click
@@ -419,9 +419,9 @@ read SkyPilot's configuration <path>: <reason>. Fix or remove the file and run `
 
 SkyPilot's configuration file is not valid. Fix it or remove it, then run `axon login`.
 
-## Running `axon devenv`
+## Running `axon sky`
 
-`axon devenv` checks the connection before each command, and stops with one of these
+`axon sky` checks the connection before each command, and stops with one of these
 when the check fails. Each message states the action for that failure.
 
 ### You have not logged in
@@ -482,7 +482,7 @@ the tunnel. Logging in again does not help. Retry later.
 axon: Couldn't restart the Teleport tunnel. Run `axon login`.
 ```
 
-`axon devenv` tried to restart a stopped tunnel, and the tunnel's process exited. The tail
+`axon sky` tried to restart a stopped tunnel, and the tunnel's process exited. The tail
 of the tunnel's log follows the message. Run `axon login`, which starts a fresh tunnel.
 
 ### A client axon keeps is missing
@@ -495,13 +495,15 @@ axon: Teleport's client, tsh, is not found. Run `axon login`.
 The client or `tsh` that `axon` keeps in `~/.axon/tools/` is missing. Run `axon login`,
 which installs it.
 
-### The command is not covered by axon devenv
+### The command is not available in axon sky
 
 ```text
-axon: axon devenv does not cover "<command>". Run "axon devenv --help" for the commands it covers
-axon: axon devenv does not cover "<command>". The <group> commands it covers are <list>
+axon: `axon sky api login` is not available. Run `axon login` to log in.
+axon: `axon sky api logout` is not available. Run `axon logout` to log out.
+axon: `axon sky api start` is not available: axon connects to your organization's API server and does not start one on this computer.
+axon: `axon sky api stop` is not available: axon connects to your organization's API server and does not start one on this computer.
 ```
 
-`axon devenv` runs only the commands on the [devenv page](/axon/devenv/#the-commands).
-The second form is for a command in a group that `axon` covers in part, and names the
-commands it does cover.
+These four commands manage what `axon` itself sets up. Log in with `axon login` and
+log out with `axon logout`. Every other command runs; see the
+[sky page](/axon/sky/#the-commands-axon-refuses).

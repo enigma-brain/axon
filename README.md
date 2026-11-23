@@ -2,20 +2,19 @@
 
 `axon` is one command-line entry point to a platform that an organisation
 runs. A user installs one tool and logs in once, with `axon login`. Each part
-of the platform is then a command group of `axon`, named for that part rather
-than for the tool behind it. For example, dev environments are the command
-group `axon devenv`, and the tool behind it is SkyPilot. `axon` is built so
-that the tool behind a group can change, and groups can be added, without
-users learning a new way in.
+of the platform is then a command group of `axon`. A group that passes a
+tool's own commands straight through is named for the tool: `axon sky` runs
+SkyPilot's `sky` commands against the organisation's SkyPilot API server. A
+group that hides its tool behind commands of its own is named for the part of
+the platform it reaches, and the tool behind it can change without users
+learning a new way in.
 
 The organisation decides how a laptop reaches its platform. Each way in is a
 pathway, and the organisation describes its pathways in an organisation file
 that it gives its users. `axon` logs in by whichever pathway the user is on,
 and names no organisation itself.
 
-The design is in [docs/design/DESIGN.md](docs/design/DESIGN.md). The commands
-of `axon devenv` are described in
-[docs/reference/devenv.md](docs/reference/devenv.md).
+The design is in [docs/design/DESIGN.md](docs/design/DESIGN.md).
 
 The documentation site, at <https://enigma-brain.github.io/axon/>, covers
 installing, logging in, dev environments, writing an organisation file and
@@ -28,7 +27,7 @@ One command group:
 
 | Command group | Part of the platform | Tool behind it |
 |---|---|---|
-| `axon devenv` | Dev environments, GPUs, jobs and volumes | SkyPilot |
+| `axon sky` | Dev environments, GPUs, jobs and volumes | SkyPilot |
 
 Two kinds of pathway:
 
@@ -37,7 +36,9 @@ Two kinds of pathway:
 | Direct | At the server's own address | The server's own, in a browser |
 | Teleport | Through Teleport, by a tunnel that `axon` runs | Teleport's, in a browser when the certificate is not valid |
 
-`axon devenv` sends its commands to the organisation's SkyPilot API server.
+`axon sky` passes every `sky` command to `axon`'s own SkyPilot client, against
+the organisation's SkyPilot API server, with SkyPilot's own help. Wherever
+SkyPilot's help or hints say `sky`, type `axon sky`.
 `axon` installs the SkyPilot client it needs for its own use and keeps
 everything it owns on the laptop in `~/.axon`.
 
@@ -130,7 +131,7 @@ How a change reaches your laptop depends on where the file came from:
 - **A file path or standard input:** the file is read once. Run
   `axon login --org` again with the new file.
 
-`axon devenv` never fetches a file; it uses the stored ones.
+`axon sky` never fetches a file; it uses the stored ones.
 
 When the new file changes the active pathway's servers, the login
 disconnects it from the old ones and connects it to the new ones, and the
@@ -156,7 +157,7 @@ with one line naming it.
 
 With no organisation file stored, `axon login` disconnects the pathway it
 had connected, if any, then stops and asks for `--org`.
-Otherwise it chooses the pathway, logs you in, and connects `axon devenv`.
+Otherwise it chooses the pathway, logs you in, and connects `axon sky`.
 
 ### Choosing the pathway
 
@@ -285,7 +286,7 @@ carry on.
 - **You switch pathways** with `axon login --pathway <id>`, or with
   `axon login --org` and another file.
 
-**To restore it,** run `axon login`. `axon devenv` also restarts a stopped
+**To restore it,** run `axon login`. `axon sky` also restarts a stopped
 tunnel by itself while the certificate is still valid.
 
 **When the tunnel does not start:**
@@ -300,9 +301,15 @@ tunnel by itself while the certificate is still valid.
 
 ## Running commands
 
-    axon devenv status
+    axon sky status
+    axon sky launch --help
 
-Before each command, `axon devenv` checks the connection to the API server.
+Every argument goes to SkyPilot unchanged, and `--help` prints SkyPilot's own
+help. Four commands are refused, because `axon` manages what they would
+change: `axon sky api login` (use `axon login`), `axon sky api logout` (use
+`axon logout`), `axon sky api start` and `axon sky api stop`.
+
+Before each command, `axon sky` checks the connection to the API server.
 It never opens a browser and never installs anything; when the check fails,
 it stops and says what to do:
 
@@ -317,7 +324,7 @@ it stops and says what to do:
 | `` Couldn't restart the Teleport tunnel. Run `axon login`. `` | The tunnel's log follows the message; the login starts a fresh tunnel. |
 
 On a Teleport pathway, a stopped tunnel is restarted for you when your
-Teleport certificate is still valid, with the line `axon: restarting the
+Teleport certificate is still valid, with the line `sky: restarting the
 Teleport tunnel`. The restart waits up to 10 seconds for the tunnel.
 
 ## Developing
@@ -428,16 +435,6 @@ runs on Linux on x86-64 or on macOS with no `tsh` on `PATH`:
 CI runs it on Linux when a change touches `internal/tsh/` or the workflow,
 and the Mac suite runs it on macOS on Apple silicon and on Intel.
 
-### Command reference
-
-The help text of every `axon devenv` command is in
-`internal/devenv/commands.go`. `docs/reference/devenv.md` is generated from
-it; after editing the help text, regenerate the page and commit it:
-
-    go generate ./...
-
-A test fails while the committed page differs from the generated one.
-
 ### Releasing
 
 Pushing a tag `v<version>` runs `.github/workflows/release.yml`. GoReleaser,
@@ -471,15 +468,13 @@ and is part of `go test ./...`.
 | `main.go` | The entry point. Sends every failure through `internal/fail`. |
 | `install.sh` | The install script that the install line runs. |
 | `.goreleaser.yaml` | How a release is built. |
-| `internal/cli` | The command tree: `login` and `devenv`. |
+| `internal/cli` | The command tree: `login` and `sky`. |
 | `internal/fail` | Prints failures to standard error, prefixed `axon:`, and exits non-zero. |
 | `internal/orgfile` | Organisation files: reading them from a source, checking them, and storing them in `~/.axon/orgs/`. |
 | `internal/axondir` | `~/.axon`: the configuration file, `tools/` and `state/`. |
 | `internal/connected` | The record of the connected pathway and its settings, in `~/.axon/state/pathway.toml`. |
-| `internal/login` | `axon login`: adding a file, choosing the pathway, disconnecting the one left, the stages, the devenv connect steps, and each kind's login in `direct.go` and `teleport.go`. `browser.go` holds the length of the browser wait. |
-| `internal/devenv` | The `axon devenv` command group, its help text, its connection check, and each pathway kind's endpoint. |
-| `internal/devenv/gendoc` | Writes the command reference; run by `go generate`. |
-| `docs/reference/` | The generated command reference. |
+| `internal/login` | `axon login`: adding a file, choosing the pathway, disconnecting the one left, the stages, the sky group's connect steps, and each kind's login in `direct.go` and `teleport.go`. `browser.go` holds the length of the browser wait. |
+| `internal/sky` | The `axon sky` command group: its refusals, its connection check, and each pathway kind's endpoint. |
 | `internal/apiserver` | The SkyPilot API server's health request, with SkyPilot's cookies and the client's version headers. |
 | `internal/skyclient` | `axon`'s own SkyPilot client. |
 | `internal/tsh` | Teleport's client: install, login, application login, certificate check. |
