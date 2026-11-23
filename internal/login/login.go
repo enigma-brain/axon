@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/orgfile"
@@ -29,6 +31,20 @@ type Options struct {
 	// Pathway is the pathway identifier given with --pathway. When empty,
 	// the active pathway is used, or one is chosen.
 	Pathway string
+	// SkyEndpoint, given with --sky-endpoint, makes a direct pathway to the
+	// API server at that address.
+	SkyEndpoint string
+	// TeleportProxy, given with --teleport-proxy, makes a teleport pathway
+	// through that proxy, to the application SkyApp, or skypilot when
+	// SkyApp is empty.
+	TeleportProxy string
+	SkyApp        string
+	// Name, given with --name, is the name of the pathway SkyEndpoint or
+	// TeleportProxy makes. When empty, it is the address.
+	Name string
+	// Replace, given with --replace, answers yes to every question about
+	// replacing a stored pathway or config file.
+	Replace bool
 	// In is standard input: the config file with --config -, and
 	// otherwise where answers to questions are read from.
 	In io.Reader
@@ -61,6 +77,13 @@ type login struct {
 	openTerminal func() (io.ReadCloser, error)
 	// teleport is what a teleport pathway works with.
 	teleport teleport
+	// isTerminal reports whether in is a terminal, where a pathway can be
+	// asked for.
+	isTerminal func(in io.Reader) bool
+	// probeSky and probeProxy check that a hand-made pathway's server
+	// answers: the API server, or the Teleport proxy.
+	probeSky   func(ctx context.Context, endpoint string) error
+	probeProxy func(ctx context.Context, proxy string) error
 }
 
 // Run runs axon login.
@@ -85,6 +108,9 @@ func Run(ctx context.Context, opts Options) error {
 			newTunnel: tunnel.New,
 			skyConfig: filepath.Join(home, ".sky", "config.yaml"),
 		},
+		isTerminal: isTerminal,
+		probeSky:   probeSky,
+		probeProxy: tsh.Ping,
 	}
 	return l.run(ctx, opts)
 }
@@ -101,6 +127,9 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	if opts.Err == nil {
 		opts.Err = io.Discard
 	}
+	if err := checkFlags(opts); err != nil {
+		return err
+	}
 
 	// 1. Add the config file that --config gives. With --config -,
 	// standard input is the file, and questions go to the terminal.
@@ -116,10 +145,33 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	}
 	opts.In = answers
 
-	// 2. Determine the pathway.
+	// Or make the pathway the flags give.
+	if handFlags(opts) {
+		f, err := l.makeFromFlags(ctx, opts)
+		if err != nil {
+			return fmt.Errorf("make the pathway: %w", err)
+		}
+		added = &f
+	}
+
+	// 2. Determine the pathway. With nothing stored, one is made from
+	// answers at the terminal.
 	files, err := l.storedFiles(opts.Err)
 	if err != nil {
 		return fmt.Errorf("read the config files: %w", err)
+	}
+	if len(files) == 0 && added == nil && opts.Pathway == "" && l.isTerminal != nil && l.isTerminal(opts.In) {
+		if err := l.disconnectAll(opts); err != nil {
+			return fmt.Errorf("disconnect the previous pathway: %w. Run `axon login` again.", err)
+		}
+		f, err := l.makeAtPrompt(ctx, opts)
+		if err != nil {
+			return fmt.Errorf("make the pathway: %w", err)
+		}
+		added = &f
+		if files, err = l.storedFiles(io.Discard); err != nil {
+			return fmt.Errorf("read the config files: %w", err)
+		}
 	}
 	if len(files) == 0 {
 		return l.noOrg(opts)
@@ -175,14 +227,26 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	return nil
 }
 
-// errNoOrg reports that no config file is stored and --config was not
-// given.
-var errNoOrg = errors.New("no config file. Run `axon login --config <source>` with the address or file your organization gives you.")
+// errNoOrg reports that no config file is stored, and none was given or
+// made.
+var errNoOrg = errors.New(msgNoPathwayNoTerminal)
 
-// noOrg ends a login that finds no stored config file to use. The
-// active pathway's file is gone, or fails the checks, and no other is
-// stored: the pathway is left, which disconnects it, before login asks for
-// a file.
+// isTerminal reports whether in is a terminal: a file whose terminal
+// settings can be read. /dev/null is a character device but not a
+// terminal.
+func isTerminal(in io.Reader) bool {
+	f, ok := in.(*os.File)
+	if !ok {
+		return false
+	}
+	_, err := unix.IoctlGetTermios(int(f.Fd()), getTermios)
+	return err == nil
+}
+
+// noOrg ends a login that finds no stored config file to use and cannot
+// ask for a pathway. The active pathway's file is gone, or fails the checks,
+// and no other is stored: the pathway is left, which disconnects it, before
+// login says how to make one.
 func (l *login) noOrg(opts Options) error {
 	if err := l.disconnectAll(opts); err != nil {
 		return fmt.Errorf("disconnect the previous pathway: %w. Run `axon login` again.", err)
@@ -190,11 +254,14 @@ func (l *login) noOrg(opts Options) error {
 	return errNoOrg
 }
 
-// addOrg reads the file --config names, checks it and stores it. It returns
-// the stored file and where answers to questions are read from: standard
-// input, or with --config - the terminal. When there is no terminal, answers
-// come from an empty input, so that a question with a flag stops and names
-// the flag, and one without is answered no. closeIn releases the terminal.
+// addOrg reads the file --config names, checks it and stores it, asking
+// first about each stored pathway it clashes with and about a lower
+// revision. It returns the file the login goes on with, the stored copy
+// when a lower revision was declined, and where answers to questions are
+// read from: standard input, or with --config - the terminal. When there is
+// no terminal, answers come from an empty input, so that a question with a
+// flag stops and names the flag, and one without is answered no. closeIn
+// releases the terminal.
 func (l *login) addOrg(ctx context.Context, opts Options) (f orgfile.File, in io.Reader, closeIn func(), err error) {
 	src, err := orgfile.ParseSource(opts.Config)
 	if err != nil {
@@ -204,13 +271,6 @@ func (l *login) addOrg(ctx context.Context, opts Options) (f orgfile.File, in io
 	if err != nil {
 		return orgfile.File{}, nil, nil, err
 	}
-	store := orgfile.NewStore(l.dir)
-	f, err = store.Add(data, src)
-	if err != nil {
-		return orgfile.File{}, nil, nil, err
-	}
-	fmt.Fprintf(opts.Out, "Stored the config file %s\n", store.Path(f.ID))
-
 	in, closeIn = opts.In, func() {}
 	if src.String() == "-" {
 		in = strings.NewReader("")
@@ -218,6 +278,64 @@ func (l *login) addOrg(ctx context.Context, opts Options) (f orgfile.File, in io
 			in, closeIn = tty, func() { tty.Close() }
 		}
 	}
+	fail := func(err error) (orgfile.File, io.Reader, func(), error) {
+		closeIn()
+		return orgfile.File{}, nil, nil, err
+	}
+
+	store := orgfile.NewStore(l.dir)
+	change, err := store.Inspect(data, false)
+	if err != nil {
+		return fail(err)
+	}
+	outcome, err := resolveClashes(store, change, opts.Replace, in, opts.Out)
+	var noTerminal *errClashNoTerminal
+	if errors.As(err, &noTerminal) {
+		c := noTerminal.clash
+		return fail(fmt.Errorf(msgConfigClashNoTerminal, c.Added.Name, c.Pathway.Name, store.Path(c.Stored.ID)))
+	}
+	if err != nil {
+		return fail(err)
+	}
+	if c := outcome.declined; c != nil {
+		return fail(fmt.Errorf(msgConfigNotAdded, c.Added.Name, store.Path(c.Stored.ID)))
+	}
+
+	put := orgfile.PutOptions{Origin: orgfile.FromSource(src), Remove: outcome.remove}
+	if change.Lower() {
+		prev := change.Previous
+		yes := opts.Replace
+		if !yes {
+			fmt.Fprintf(opts.Out, msgLowerRevision, store.Path(prev.ID), prev.Revision, change.File.Revision)
+			yes, err = askYesNo(in, opts.Out, fmt.Sprintf(msgLowerPrompt, change.File.Revision))
+			if errors.Is(err, errNoAnswer) {
+				fmt.Fprintf(opts.Err, msgLowerRevisionWarning, src, change.File.Revision, prev.Revision)
+				return *prev, in, closeIn, nil
+			}
+			if err != nil {
+				return fail(err)
+			}
+		}
+		if !yes {
+			fmt.Fprintf(opts.Out, msgKeptRevision, prev.Revision)
+			return *prev, in, closeIn, nil
+		}
+		put.AllowLower = true
+	}
+
+	if err := l.leaveRemoved(change, put.Remove, opts); err != nil {
+		return fail(err)
+	}
+	f, err = store.Put(data, put)
+	if err != nil {
+		return fail(err)
+	}
+	reportRemoved(store, change, put.Remove, opts.Out)
+	previous := change.Previous
+	if previous != nil && !previous.HasRevision && !f.HasRevision {
+		previous = nil
+	}
+	reportStored(opts.Out, store.Path(f.ID), f, previous)
 	return f, in, closeIn, nil
 }
 

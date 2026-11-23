@@ -34,28 +34,32 @@ func Execute(ctx context.Context, version string) error {
 }
 
 func newLogin() *cobra.Command {
-	var config, pathway string
+	var opts login.Options
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Log in and connect every command group",
 		Long: `Log in and connect every command group.
 
-The first login needs your organization's config file, which --config adds. With
-more than one pathway in the stored files, login asks which one you are
-on, once; --pathway chooses without asking, and is how you switch.`,
+The first login makes a pathway: login asks how you reach the SkyPilot API
+server, or takes the answers from --sky-endpoint, or from --teleport-proxy and
+--sky-app. An organization with many members can hand out a config file
+instead, which --config adds. With more than one stored pathway, login asks
+which one you are on, once; --pathway chooses without asking, and is how you
+switch.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return login.Run(cmd.Context(), login.Options{
-				Config:  config,
-				Pathway: pathway,
-				In:      cmd.InOrStdin(),
-				Out:     cmd.OutOrStdout(),
-				Err:     cmd.ErrOrStderr(),
-			})
+			opts.In, opts.Out, opts.Err = cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()
+			return login.Run(cmd.Context(), opts)
 		},
 	}
-	cmd.Flags().StringVar(&config, "config", "", "add your organization's config file from an https address, a file path, or - for standard input")
-	cmd.Flags().StringVar(&pathway, "pathway", "", "the identifier of the pathway to log in by, from any stored config file")
+	f := cmd.Flags()
+	f.StringVar(&opts.Config, "config", "", "add your organization's config file from an https address, a file path, or - for standard input")
+	f.StringVar(&opts.Pathway, "pathway", "", "the identifier of the pathway to log in by, from any stored config file")
+	f.StringVar(&opts.SkyEndpoint, "sky-endpoint", "", "make a pathway to a SkyPilot API server you reach directly, at this https address")
+	f.StringVar(&opts.TeleportProxy, "teleport-proxy", "", "make a pathway through Teleport, with this Teleport proxy (host or host:port)")
+	f.StringVar(&opts.SkyApp, "sky-app", "", "with --teleport-proxy, the Teleport application that serves SkyPilot (default skypilot)")
+	f.StringVar(&opts.Name, "name", "", "with --sky-endpoint or --teleport-proxy, the pathway's name (default: the address)")
+	f.BoolVar(&opts.Replace, "replace", false, "answer yes to every question about replacing a stored pathway or config file")
 	return cmd
 }
 

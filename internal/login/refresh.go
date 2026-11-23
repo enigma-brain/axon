@@ -2,8 +2,10 @@ package login
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/enigma-brain/axon/internal/orgfile"
 )
@@ -36,20 +38,51 @@ func (l *login) refresh(ctx context.Context, p orgfile.Pathway, added *orgfile.F
 		return p, nil
 	}
 
+	// The stored copy, as it was, for the line that reports the update.
+	var previous *orgfile.File
+	if prev, err := os.ReadFile(path); err == nil {
+		if pf, err := orgfile.Parse(prev); err == nil {
+			previous = &pf
+		}
+	}
+
 	data, err := l.readOrg(ctx, src, nil)
 	var (
 		f       orgfile.File
 		changed bool
 	)
 	if err == nil {
-		f, changed, err = store.Refresh(p.File, data, src, false)
+		f, changed, err = store.Refresh(p.File, data, src, opts.Replace)
+	}
+	var lower *orgfile.LowerRevisionError
+	if errors.As(err, &lower) {
+		fmt.Fprintf(opts.Out, msgLowerRevision, path, lower.Stored, lower.New)
+		yes, askErr := askYesNo(opts.In, opts.Out, fmt.Sprintf(msgLowerPrompt, lower.New))
+		switch {
+		case errors.Is(askErr, errNoAnswer):
+			fmt.Fprintf(opts.Err, msgLowerRevisionWarning, src, lower.New, lower.Stored)
+			return p, nil
+		case askErr != nil:
+			return orgfile.Pathway{}, askErr
+		case !yes:
+			fmt.Fprintf(opts.Out, msgKeptRevision, lower.Stored)
+			return p, nil
+		}
+		f, changed, err = store.Refresh(p.File, data, src, true)
 	}
 	if err != nil {
 		fmt.Fprintf(opts.Err, "axon: could not update %s from %s: %v. Using the stored file.\n", path, src, err)
 		return p, nil
 	}
 	if changed {
-		fmt.Fprintf(opts.Out, "Updated the config file %s\n", path)
+		if previous != nil && !previous.HasRevision && !f.HasRevision {
+			previous = nil
+		}
+		if previous == nil {
+			fmt.Fprintf(opts.Out, msgUpdatedFile, path)
+		} else {
+			reportStored(opts.Out, path, f, previous)
+		}
 	}
 	if fresh, ok := find(f.Pathways, p.ID); ok {
 		return fresh, nil

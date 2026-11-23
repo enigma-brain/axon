@@ -181,7 +181,7 @@ func TestBinary(t *testing.T) {
 		h := home(t)
 		_, stderr, err := runAxon(t, bin, h, nil, "login")
 		wantFailure(t, "login", err)
-		want := "axon: no config file. Run `axon login --config <source>` with the address or file your organization gives you.\n"
+		want := "axon: no pathway is set up, and there is no terminal to ask on. Run `axon login --sky-endpoint <address>` for a SkyPilot API server you reach directly, `axon login --teleport-proxy <address>` for one through Teleport, or `axon login --config <source>` with the file your organization gives you.\n"
 		if stderr != want {
 			t.Errorf("login: stderr = %q, want %q", stderr, want)
 		}
@@ -218,7 +218,7 @@ func TestBinary(t *testing.T) {
 		}
 		_, stderr, err := runAxon(t, bin, h, nil, "login")
 		wantFailure(t, "login", err)
-		if !strings.HasPrefix(stderr, "axon: no config file.") {
+		if !strings.HasPrefix(stderr, "axon: no pathway is set up,") {
 			t.Errorf("stderr = %q", stderr)
 		}
 	})
@@ -385,7 +385,7 @@ func TestBinary(t *testing.T) {
 		wantFailure(t, "login", err)
 		stored := filepath.Join(h, ".axon", "orgs", "example-older.toml")
 		want = "axon: left out " + stored + ": the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.\n" +
-			"axon: no config file. Run `axon login --config <source>` with the address or file your organization gives you.\n"
+			"axon: no pathway is set up, and there is no terminal to ask on. Run `axon login --sky-endpoint <address>` for a SkyPilot API server you reach directly, `axon login --teleport-proxy <address>` for one through Teleport, or `axon login --config <source>` with the file your organization gives you.\n"
 		if stderr != want {
 			t.Errorf("stored: stderr = %q, want %q", stderr, want)
 		}
