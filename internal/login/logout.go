@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/orgfile"
@@ -26,6 +27,7 @@ const (
 	lineSkyLoggedOut = "sky: logged out of the SkyPilot API server"
 	lineSkyNoClient  = "sky: skipped logging out of SkyPilot: the SkyPilot client is not installed"
 	lineSkyNoLogin   = "sky: skipped logging out of SkyPilot: the SkyPilot client is not logged in"
+	lineSkyCookies   = "sky: removed the saved login for %s"
 	lineTeleportOut  = "teleport: logged out of %s"
 	lineTeleportNone = "teleport: skipped logging out of %s: tsh is not on PATH"
 	lineTeleportOld  = "teleport: skipped logging out of Teleport: the record of the connected pathway is from an earlier axon. Run `tsh logout` to end a Teleport session."
@@ -55,6 +57,9 @@ type logout struct {
 	// skyConfig is SkyPilot's user configuration file, where sky api
 	// login stores the endpoint.
 	skyConfig string
+	// cookieFile is SkyPilot's cookie file, where the client keeps the
+	// API server's session cookie.
+	cookieFile string
 	// environ is the environment sky api logout starts from.
 	environ func() []string
 	// findTsh returns the path of the tsh on PATH.
@@ -63,8 +68,9 @@ type logout struct {
 	tshLogout func(ctx context.Context, tshPath, proxy string) error
 }
 
-// Logout runs axon logout: it logs the SkyPilot client out, stops the
-// recorded tunnel, ends the Teleport session of the connected pathway, and
+// Logout runs axon logout: it logs the SkyPilot client out, removes the
+// API server's cookies from SkyPilot's cookie file, stops the recorded
+// tunnel, ends the Teleport session of the connected pathway, and
 // removes the records of the connection. It keeps the config files and the
 // active pathway. It works by axon's own records alone, never by a config
 // file.
@@ -75,12 +81,13 @@ func Logout(ctx context.Context, opts LogoutOptions) error {
 	}
 	dir := axondir.New(home)
 	lo := &logout{
-		dir:       dir,
-		client:    skyClient{dir: dir},
-		skyConfig: skyConfigPath(home, os.Getenv),
-		environ:   os.Environ,
-		findTsh:   tsh.Find,
-		tshLogout: tsh.Logout,
+		dir:        dir,
+		client:     skyClient{dir: dir},
+		skyConfig:  skyConfigPath(home, os.Getenv),
+		cookieFile: apiserver.CookieFile(home, os.Getenv),
+		environ:    os.Environ,
+		findTsh:    tsh.Find,
+		tshLogout:  tsh.Logout,
 	}
 	return lo.run(ctx, opts)
 }
@@ -132,7 +139,19 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 		fail("log out of SkyPilot", err)
 	}
 
-	// 2. The tunnel, by its own record.
+	// 2. The API server's cookies, which sky api logout leaves in the
+	// cookie file. Only a direct pathway records an endpoint.
+	if hasRecord && rec.SkyEndpoint != "" {
+		n, err := apiserver.RemoveCookies(lo.cookieFile, rec.SkyEndpoint)
+		switch {
+		case err != nil:
+			fail("remove the saved SkyPilot login", err)
+		case n > 0:
+			fmt.Fprintf(opts.Out, lineSkyCookies+"\n", rec.SkyEndpoint)
+		}
+	}
+
+	// 3. The tunnel, by its own record.
 	if running {
 		fmt.Fprintf(opts.Out, "sky: stopping the Teleport tunnel on port %d\n", tunnel.Port)
 		if err := tunnel.StopRecorded(stateDir); err != nil {
@@ -140,7 +159,7 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 		}
 	}
 
-	// 3. The Teleport session of the connected pathway.
+	// 4. The Teleport session of the connected pathway.
 	switch {
 	case hasRecord && rec.Kind == string(orgfile.KindTeleport) && rec.TeleportProxy != "":
 		if err := lo.teleportLogout(ctx, opts, rec.TeleportProxy); err != nil {
@@ -150,7 +169,7 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 		fmt.Fprintln(opts.Out, lineTeleportOld)
 	}
 
-	// 4. The records of the connection.
+	// 5. The records of the connection.
 	if !failed {
 		if err := lo.removeRecords(); err != nil {
 			fail("remove the records of the connection", err)

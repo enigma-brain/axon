@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,10 +35,11 @@ type logoutRun struct {
 // client and the fake tsh at tshPath; an empty tshPath is no tsh on PATH.
 func newLogout(h *harness, tshPath string) *logout {
 	return &logout{
-		dir:       axondir.New(h.home),
-		client:    h.client,
-		skyConfig: h.l.teleport.skyConfig,
-		environ:   h.l.environ,
+		dir:        axondir.New(h.home),
+		client:     h.client,
+		skyConfig:  h.l.teleport.skyConfig,
+		cookieFile: h.cookieFile,
+		environ:    h.l.environ,
 		findTsh: func() (string, error) {
 			if tshPath == "" {
 				return "", tsh.ErrNotFound
@@ -141,6 +143,7 @@ func TestLogoutDirect(t *testing.T) {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	writeSkyConfig(t, h, h.directURL)
+	writeCookieFile(t, h)
 
 	// A direct pathway has no Teleport session, so tsh is not looked for.
 	lo := newLogout(h, "")
@@ -151,11 +154,179 @@ func TestLogoutDirect(t *testing.T) {
 	}
 	wantLines(t, r.out.String(),
 		lineSkyLoggedOut,
+		"sky: removed the saved login for "+campusEndpoint,
 		lineRemoved,
 		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
 	)
 	if lastSkyArgs(t, h) != "api logout" {
 		t.Errorf("sky ran with %q", lastSkyArgs(t, h))
+	}
+	wantCookieFile(t, h, otherServerCookie)
+}
+
+// campusEndpoint is the endpoint the harness's config file gives the direct
+// pathway, campus, and so the one axon records.
+const campusEndpoint = "https://sky.example.org"
+
+// otherServerCookie is a cookie for a server other than the harness's.
+const otherServerCookie = "other.example.org\tFALSE\t/\tTRUE\t0\t_oauth2_proxy\tkeep"
+
+// writeCookieFile saves, in SkyPilot's cookie file, a session cookie for
+// campus's API server and one for another server.
+func writeCookieFile(t *testing.T, h *harness) {
+	t.Helper()
+	lines := "# Netscape HTTP Cookie File\n" +
+		"sky.example.org\tFALSE\t/\tFALSE\t0\t_oauth2_proxy\tsession\n" +
+		otherServerCookie + "\n"
+	if err := os.MkdirAll(filepath.Dir(h.cookieFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(h.cookieFile, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// wantCookieFile checks that SkyPilot's cookie file holds the header and
+// the given cookie lines alone.
+func wantCookieFile(t *testing.T, h *harness, cookies ...string) {
+	t.Helper()
+	data, err := os.ReadFile(h.cookieFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "# Netscape HTTP Cookie File\n"
+	for _, c := range cookies {
+		want += c + "\n"
+	}
+	if string(data) != want {
+		t.Errorf("cookie file:\n%s\nwant:\n%s", data, want)
+	}
+}
+
+func TestLogoutRemovesTheCookieWithoutAClient(t *testing.T) {
+	h := newHarness(t)
+	h.script("ok")
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	writeCookieFile(t, h)
+	h.client.installed = false
+
+	r := (&logoutRun{lo: newLogout(h, "")}).run()
+	if r.err != nil {
+		t.Fatalf("logout: %v\n%s", r.err, r.errOut.String())
+	}
+	wantLines(t, r.out.String(),
+		lineSkyNoClient,
+		"sky: removed the saved login for "+campusEndpoint,
+		lineRemoved,
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+	)
+	wantCookieFile(t, h, otherServerCookie)
+}
+
+func TestLogoutRemovesTheCookieWhenSkyLogoutFails(t *testing.T) {
+	h := newHarness(t)
+	h.script("ok", "fail")
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	writeSkyConfig(t, h, h.directURL)
+	writeCookieFile(t, h)
+
+	r := (&logoutRun{lo: newLogout(h, "")}).run()
+	if r.err == nil {
+		t.Fatal("logout succeeded after sky api logout failed")
+	}
+	wantLines(t, r.out.String(),
+		"sky: removed the saved login for "+campusEndpoint,
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+	)
+	wantCookieFile(t, h, otherServerCookie)
+}
+
+func TestLogoutWithNoCookieFile(t *testing.T) {
+	h := newHarness(t)
+	h.script("ok")
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	writeSkyConfig(t, h, h.directURL)
+
+	r := (&logoutRun{lo: newLogout(h, "")}).run()
+	if r.err != nil {
+		t.Fatalf("logout: %v\n%s", r.err, r.errOut.String())
+	}
+	wantLines(t, r.out.String(),
+		lineSkyLoggedOut,
+		lineRemoved,
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+	)
+	if _, err := os.Stat(h.cookieFile); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the cookie file exists after the logout: %v", err)
+	}
+}
+
+func TestLogoutWithNoCookieForTheServer(t *testing.T) {
+	h := newHarness(t)
+	h.script("ok")
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	writeSkyConfig(t, h, h.directURL)
+	if err := os.MkdirAll(filepath.Dir(h.cookieFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(h.cookieFile, []byte("# Netscape HTTP Cookie File\n"+otherServerCookie+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	r := (&logoutRun{lo: newLogout(h, "")}).run()
+	if r.err != nil {
+		t.Fatalf("logout: %v\n%s", r.err, r.errOut.String())
+	}
+	wantLines(t, r.out.String(),
+		lineSkyLoggedOut,
+		lineRemoved,
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+	)
+	wantCookieFile(t, h, otherServerCookie)
+}
+
+func TestLogoutWhenTheCookieFileCannotBeRewritten(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes to a read-only directory")
+	}
+	h := newHarness(t)
+	h.script("ok")
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	writeSkyConfig(t, h, h.directURL)
+	writeCookieFile(t, h)
+	dir := filepath.Dir(h.cookieFile)
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+
+	r := (&logoutRun{lo: newLogout(h, "")}).run()
+	if r.err == nil || r.err.Error() != "logout did not finish. Run `axon logout` again." {
+		t.Fatalf("err = %v", r.err)
+	}
+	if !strings.HasPrefix(r.errOut.String(), "axon: could not remove the saved SkyPilot login: rewrite the SkyPilot cookie file "+h.cookieFile) {
+		t.Errorf("stderr = %q", r.errOut.String())
+	}
+	wantLines(t, r.out.String(),
+		lineSkyLoggedOut,
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+	)
+	// The records stay, so that logging out again retries.
+	if _, ok, _ := axondir.New(h.home).Email(); !ok {
+		t.Error("the email was removed after a failed step")
+	}
+	if _, ok, _ := connected.Read(axondir.New(h.home)); !ok {
+		t.Error("the connected pathway was removed after a failed step")
 	}
 }
 
