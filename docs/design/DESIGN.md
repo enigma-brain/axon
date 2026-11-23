@@ -390,18 +390,27 @@ gone. It runs these steps in order:
    own client and with `SKYPILOT_API_SERVER_ENDPOINT` unset. When the client
    is not installed, or stores no endpoint, the step is skipped; `axon
    logout` never installs the client.
-2. Stop the recorded Teleport tunnel, when it runs.
-3. When the recorded pathway is a `teleport` pathway, end the Teleport
+2. When the recorded pathway has an API server endpoint, as a `direct`
+   pathway does, remove from SkyPilot's cookie file every cookie for that
+   endpoint: each cookie whose domain matches its host and whose path
+   covers its path or lies below it. `sky api logout` leaves these
+   cookies, and a saved cookie logs the next `axon login` in without the
+   browser. Every other line of the file is kept as it was. The step runs
+   whatever step 1's result, and when the client is not installed. With
+   no cookie file, or no cookie for the endpoint, it is silent.
+3. Stop the recorded Teleport tunnel, when it runs.
+4. When the recorded pathway is a `teleport` pathway, end the Teleport
    session for its proxy with `tsh logout`
    [{D!}](decisions/logout.md), and check that the certificate is no
    longer valid. When `tsh logout` leaves it valid, as with several
    identities on the proxy, the step fails and names the `tsh logout`
    command to run. When no `tsh` is on `PATH`, the step is skipped.
-4. Remove the record of the connected pathway and the logged-in email.
+5. Remove the record of the connected pathway and the logged-in email.
 
 It keeps the config files and the active pathway, so `axon login` with no
 flags logs in again. It prints one line for each step it took or skipped,
-and one line saying that the config files were kept. With nothing logged in
+except the silent cases of step 2, and one line saying that the config
+files were kept. With nothing logged in
 it says so and exits with success.
 
 A step that fails is reported, and the later steps still run. The records
