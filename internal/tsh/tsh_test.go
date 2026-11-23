@@ -638,17 +638,17 @@ func TestAppLogin(t *testing.T) {
 	path := f.putOnPath("18.11.7")
 	for _, proxy := range []string{testProxy, "teleport.example.org:3080"} {
 		os.Remove(os.Getenv("FAKETSH_LOG"))
-		if err := AppLogin(context.Background(), path, proxy, "devenv"); err != nil {
+		if err := AppLogin(context.Background(), path, proxy, "skypilot"); err != nil {
 			t.Fatalf("AppLogin: %v", err)
 		}
-		if got, want := readLog(t), "--proxy="+proxy+" apps login devenv\n"; got != want {
+		if got, want := readLog(t), "--proxy="+proxy+" apps login skypilot\n"; got != want {
 			t.Errorf("tsh ran with %q, want %q", got, want)
 		}
 	}
 
 	t.Setenv("FAKETSH_EXIT", "1")
-	err := AppLogin(context.Background(), path, testProxy, "devenv")
-	if err == nil || !strings.HasPrefix(err.Error(), "Teleport application login (tsh --proxy=teleport.example.org apps login devenv): exit status 1") {
+	err := AppLogin(context.Background(), path, testProxy, "skypilot")
+	if err == nil || !strings.HasPrefix(err.Error(), "Teleport application login (tsh --proxy=teleport.example.org apps login skypilot): exit status 1") {
 		t.Errorf("AppLogin returned %v, want the step named", err)
 	}
 	for _, app := range []string{"", "--proxy=x", "dev env"} {
@@ -668,7 +668,7 @@ func TestBadProxyIsRefused(t *testing.T) {
 			if err := Login(context.Background(), path, proxy); err == nil {
 				t.Error("Login accepted it")
 			}
-			if err := AppLogin(context.Background(), path, proxy, "devenv"); err == nil {
+			if err := AppLogin(context.Background(), path, proxy, "skypilot"); err == nil {
 				t.Error("AppLogin accepted it")
 			}
 			if _, err := SessionValid(context.Background(), path, proxy); err == nil {

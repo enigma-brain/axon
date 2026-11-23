@@ -412,7 +412,7 @@ func TestConnectedRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "format = 1\nid = \"campus\"\nkind = \"direct\"\ndevenv_endpoint = \"https://sky.example.org\"\n"
+	want := "format = 2\nid = \"campus\"\nkind = \"direct\"\nsky_endpoint = \"https://sky.example.org\"\n"
 	if string(data) != want {
 		t.Errorf("record = %q, want %q", data, want)
 	}
@@ -468,7 +468,7 @@ func TestDisconnectRemovesTheEmailOnlyOnAChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec, _, _ := connected.Read(dir)
-	if rec != (connected.Record{Format: 1, ID: "remote", Kind: "teleport", TeleportProxy: testProxy, DevenvApp: testApp}) {
+	if rec != (connected.Record{Format: 2, ID: "remote", Kind: "teleport", TeleportProxy: testProxy, SkyApp: testApp}) {
 		t.Errorf("record = %+v", rec)
 	}
 }

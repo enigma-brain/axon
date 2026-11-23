@@ -1,4 +1,4 @@
-package devenv
+package sky
 
 import (
 	"context"
@@ -29,7 +29,7 @@ var (
 const (
 	// restartLine is the one line the check prints when it restarts the
 	// tunnel.
-	restartLine = "axon: restarting the Teleport tunnel"
+	restartLine = "sky: restarting the Teleport tunnel"
 	// notRestarted begins the error of a tunnel whose process exited
 	// during the restart.
 	notRestarted = "Couldn't restart the Teleport tunnel. Run `axon login`."

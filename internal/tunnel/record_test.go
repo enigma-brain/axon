@@ -64,7 +64,7 @@ func TestRecordHoldsTheCommandLine(t *testing.T) {
 	if rec.PID != st.PID {
 		t.Errorf("recorded process ID = %d, want %d", rec.PID, st.PID)
 	}
-	want := "--proxy=teleport.example.org proxy app devenv --port " + strconv.Itoa(testPort)
+	want := "--proxy=teleport.example.org proxy app skypilot --port " + strconv.Itoa(testPort)
 	if got := strings.Join(rec.Args, " "); got != want {
 		t.Errorf("recorded arguments = %q, want %q", got, want)
 	}

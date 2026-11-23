@@ -15,8 +15,8 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/devenv"
 	"github.com/enigma-brain/axon/internal/orgfile"
+	skygroup "github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -75,7 +75,7 @@ func Run(ctx context.Context, opts Options) error {
 		client:       skyClient{dir: dir},
 		health:       apiserver.Fetch,
 		cookieFile:   apiserver.CookieFile(home, os.Getenv),
-		endpoint:     devenv.Endpoint,
+		endpoint:     skygroup.Endpoint,
 		loginWait:    loginWait,
 		environ:      os.Environ,
 		readOrg:      orgfile.Read,
@@ -159,8 +159,8 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	// A direct pathway has no session apart from each service's own.
 
 	// 5. Connect each command group.
-	if err := l.connectDevenv(ctx, p, opts); err != nil {
-		return fmt.Errorf("connect devenv: %w", err)
+	if err := l.connectSky(ctx, p, opts); err != nil {
+		return fmt.Errorf("connect sky: %w", err)
 	}
 	return nil
 }

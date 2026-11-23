@@ -23,7 +23,7 @@ var fakeTsh string
 // The made-up Teleport proxy and application the tests' tunnels reach.
 const (
 	testProxy = "teleport.example.org"
-	testApp   = "devenv"
+	testApp   = "skypilot"
 )
 
 // testPort is a free port the tests' tunnels listen on, so that a real
@@ -207,10 +207,10 @@ func (tn *Tunnel) record(pid int) error {
 
 func TestNew(t *testing.T) {
 	for proxy, want := range map[string]string{
-		"teleport.example.org":      "--proxy=teleport.example.org proxy app devenv --port 46581",
-		"teleport.example.org:3080": "--proxy=teleport.example.org:3080 proxy app devenv --port 46581",
+		"teleport.example.org":      "--proxy=teleport.example.org proxy app skypilot --port 46581",
+		"teleport.example.org:3080": "--proxy=teleport.example.org:3080 proxy app skypilot --port 46581",
 	} {
-		tn := New("/state", "/bin/tsh", proxy, "devenv")
+		tn := New("/state", "/bin/tsh", proxy, "skypilot")
 		if got := strings.Join(tn.args(), " "); got != want {
 			t.Errorf("args = %q, want %q", got, want)
 		}
@@ -271,7 +271,7 @@ func TestStartOutlivesAxon(t *testing.T) {
 		}
 	}
 	log, err := os.ReadFile(tn.logPath())
-	if err != nil || !strings.Contains(string(log), "Proxying connections to devenv") {
+	if err != nil || !strings.Contains(string(log), "Proxying connections to skypilot") {
 		t.Errorf("log = %q, %v, want the tunnel's output", log, err)
 	}
 }

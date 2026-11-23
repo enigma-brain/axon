@@ -24,30 +24,31 @@ import (
 const (
 	file = "pathway.toml"
 	// format is the format of the record this axon writes. A record of
-	// another format is treated as no record.
-	format = 1
+	// another format, such as one an older axon wrote, is treated as no
+	// record.
+	format = 2
 )
 
 // Record is the content of the record: the pathway's identifier, its kind,
 // and its settings for machines, each empty when the kind has none. Text
 // for people is not recorded: a change to it alone changes nothing.
 type Record struct {
-	Format         int    `toml:"format"`
-	ID             string `toml:"id"`
-	Kind           string `toml:"kind"`
-	TeleportProxy  string `toml:"teleport_proxy,omitempty"`
-	DevenvEndpoint string `toml:"devenv_endpoint,omitempty"`
-	DevenvApp      string `toml:"devenv_app,omitempty"`
+	Format        int    `toml:"format"`
+	ID            string `toml:"id"`
+	Kind          string `toml:"kind"`
+	TeleportProxy string `toml:"teleport_proxy,omitempty"`
+	SkyEndpoint   string `toml:"sky_endpoint,omitempty"`
+	SkyApp        string `toml:"sky_app,omitempty"`
 }
 
 // Of returns the record of p.
 func Of(p orgfile.Pathway) Record {
 	r := Record{
-		Format:         format,
-		ID:             p.ID,
-		Kind:           string(p.Kind),
-		DevenvEndpoint: p.Devenv.Endpoint,
-		DevenvApp:      p.Devenv.App,
+		Format:      format,
+		ID:          p.ID,
+		Kind:        string(p.Kind),
+		SkyEndpoint: p.Devenv.Endpoint,
+		SkyApp:      p.Devenv.App,
 	}
 	if p.Teleport != nil {
 		r.TeleportProxy = p.Teleport.Proxy

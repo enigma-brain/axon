@@ -1,4 +1,4 @@
-package devenv
+package sky
 
 import (
 	"errors"
@@ -11,7 +11,7 @@ import (
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
-// ErrNoLogin reports that axon devenv has nothing to connect to: no
+// ErrNoLogin reports that axon sky has nothing to connect to: no
 // organisation file, no active pathway, an active pathway no stored file
 // has, or no recorded login.
 var ErrNoLogin = errors.New("Run `axon login` first.")

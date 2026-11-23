@@ -1,4 +1,4 @@
-package devenv
+package sky
 
 import (
 	"context"
@@ -174,7 +174,7 @@ func (w *world) probes() probes {
 	}
 	p.startTunnel = func(_ context.Context, stateDir, path, proxy, app string) error {
 		w.starts++
-		if path != fakeTshPath || filepath.Base(stateDir) != "state" || proxy != "teleport.example.org" || app != "devenv" {
+		if path != fakeTshPath || filepath.Base(stateDir) != "state" || proxy != "teleport.example.org" || app != "skypilot" {
 			return fmt.Errorf("tunnel started with %q in %q to %q through %q", path, stateDir, app, proxy)
 		}
 		return w.start(w.server)
@@ -182,14 +182,14 @@ func (w *world) probes() probes {
 	return p
 }
 
-// runChecked logs in on pathway p, runs axon devenv status under w's
+// runChecked logs in on pathway p, runs axon sky status under w's
 // probes, and returns the captured sky calls, standard error and error.
 func runChecked(t *testing.T, p string, w *world) (*[]call, string, error) {
 	t.Helper()
 	dir := login(t, p, "ada@example.org")
 	calls := capture(t)
 	check = w.probes()
-	_, errOut, err := run("status")
+	_, errOut, err := runSky("status")
 	if _, statErr := os.Stat(filepath.Join(dir.Root(), "tools")); !errors.Is(statErr, os.ErrNotExist) {
 		t.Errorf("something was written under ~/.axon/tools: %v", statErr)
 	}
@@ -411,7 +411,7 @@ func TestCheckSendsCookiesOnlyToADirectEndpoint(t *testing.T) {
 			capture(t)
 			check = w.probes()
 			check.cookieFile = func() (string, error) { return jar, nil }
-			if _, _, err := run("status"); err != nil {
+			if _, _, err := runSky("status"); err != nil {
 				t.Fatal(err)
 			}
 			w.server.mu.Lock()
@@ -430,7 +430,7 @@ func TestCheckStopsWithoutAClient(t *testing.T) {
 	calls := capture(t)
 	check = w.probes()
 	check.clientVersion = func(axondir.Dir) (string, bool, error) { return "", false, nil }
-	_, _, err := run("status")
+	_, _, err := runSky("status")
 	if err == nil || err.Error() != "the SkyPilot client is not installed. Run `axon login` first." {
 		t.Errorf("err = %v", err)
 	}
@@ -545,7 +545,7 @@ func TestCommandRunsWithTheCheckedEmail(t *testing.T) {
 		return health(ctx, endpoint, opts)
 	}
 	check = p
-	if _, _, err := run("status"); err != nil {
+	if _, _, err := runSky("status"); err != nil {
 		t.Fatal(err)
 	}
 	if len(*calls) != 1 || !slices.Contains((*calls)[0].env, userVar+"=ada@example.org") {

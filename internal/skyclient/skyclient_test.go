@@ -203,12 +203,12 @@ func TestEnsureFirstInstall(t *testing.T) {
 		t.Errorf("Ensure moved from %q to %q, want from \"\" to 0.13.0", from, to)
 	}
 
-	want := "devenv: installing the SkyPilot client 0.13.0, with its own uv and Python, into " + f.tools + ".\n" +
-		"devenv: your system's Python and packages are not changed.\n" +
-		"  uv " + uvVersion + " 25% 50% 75% 100% done\n" +
-		"  Python " + pythonVersion + " done\n" +
-		"  SkyPilot 0.13.0 done\n" +
-		"devenv: installed the SkyPilot client 0.13.0\n"
+	want := "sky: installing the SkyPilot client 0.13.0, with its own uv and Python, into " + f.tools + ".\n" +
+		"sky: your system's Python and packages are not changed.\n" +
+		"sky: uv " + uvVersion + " 25% 50% 75% 100% done\n" +
+		"sky: Python " + pythonVersion + " done\n" +
+		"sky: SkyPilot 0.13.0 done\n" +
+		"sky: installed the SkyPilot client 0.13.0\n"
 	if progress.String() != want {
 		t.Errorf("progress:\n%s\nwant:\n%s", progress.String(), want)
 	}
@@ -262,11 +262,11 @@ func TestEnsureReinstallOpensWithLocation(t *testing.T) {
 	if _, _, err := Ensure(context.Background(), f.dir, "0.14.1", &progress); err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
-	want := "devenv: installing the SkyPilot client 0.14.1, with its own uv and Python, into " + f.tools + ".\n" +
-		"devenv: your system's Python and packages are not changed.\n" +
-		"  Python " + pythonVersion + " done\n" +
-		"  SkyPilot 0.14.1 done\n" +
-		"devenv: installed the SkyPilot client 0.14.1\n"
+	want := "sky: installing the SkyPilot client 0.14.1, with its own uv and Python, into " + f.tools + ".\n" +
+		"sky: your system's Python and packages are not changed.\n" +
+		"sky: Python " + pythonVersion + " done\n" +
+		"sky: SkyPilot 0.14.1 done\n" +
+		"sky: installed the SkyPilot client 0.14.1\n"
 	if progress.String() != want {
 		t.Errorf("progress:\n%s\nwant:\n%s", progress.String(), want)
 	}
@@ -283,7 +283,7 @@ func TestEnsureLongStepShowsItIsWorking(t *testing.T) {
 	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", &progress); err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
-	if !strings.Contains(progress.String(), "  SkyPilot 0.13.0 ...") {
+	if !strings.Contains(progress.String(), "sky: SkyPilot 0.13.0 ...") {
 		t.Errorf("the package step added no dots while it ran:\n%s", progress.String())
 	}
 	if !strings.Contains(progress.String(), ". done\n") {
@@ -364,7 +364,7 @@ func TestEnsureFailedPackageKeepsPreviousClient(t *testing.T) {
 	if err == nil {
 		t.Fatal("Ensure succeeded with a failing package install")
 	}
-	if !strings.Contains(progress.String(), "  SkyPilot 0.14.1 failed\n") {
+	if !strings.Contains(progress.String(), "sky: SkyPilot 0.14.1 failed\n") {
 		t.Errorf("progress does not mark the step failed:\n%s", progress.String())
 	}
 	for _, want := range []string{
@@ -724,7 +724,7 @@ func concurrentEnsure(t *testing.T, f *fixture, first, second string) (a, b ensu
 		secondDone <- ensureResult{from, to, err}
 	}()
 	waitFor("the second install to report that it waits", func() bool {
-		return strings.Contains(progress.String(), "devenv: waiting for another axon")
+		return strings.Contains(progress.String(), "sky: waiting for another axon")
 	})
 
 	releaseFirst()
@@ -744,7 +744,7 @@ func TestConcurrentEnsureSameVersionInstallsOnce(t *testing.T) {
 	if b.from != "0.13.0" || b.to != "0.13.0" {
 		t.Errorf("second Ensure moved from %q to %q, want no change", b.from, b.to)
 	}
-	if !strings.Contains(progress, "devenv: waiting for another axon") {
+	if !strings.Contains(progress, "sky: waiting for another axon") {
 		t.Errorf("the second Ensure did not say it waited: %q", progress)
 	}
 	if n := strings.Count(f.uvLog(t), "uv pip install"); n != 1 {
@@ -764,7 +764,7 @@ func TestConcurrentEnsureOtherVersionWaitsThenReinstalls(t *testing.T) {
 	if b.from != "0.13.0" || b.to != "0.14.1" {
 		t.Errorf("second Ensure moved from %q to %q, want 0.13.0 to 0.14.1", b.from, b.to)
 	}
-	if !strings.Contains(progress, "devenv: waiting for another axon") {
+	if !strings.Contains(progress, "sky: waiting for another axon") {
 		t.Errorf("the second Ensure did not say it waited: %q", progress)
 	}
 	if v, ok, err := Version(f.dir); err != nil || !ok || v != "0.14.1" {
@@ -794,7 +794,7 @@ func TestEnsureWaitHonoursCancellation(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Ensure error = %v, want the context's deadline", err)
 	}
-	if !strings.Contains(progress.String(), "devenv: waiting for another axon") {
+	if !strings.Contains(progress.String(), "sky: waiting for another axon") {
 		t.Errorf("Ensure did not say it waited: %q", progress.String())
 	}
 	if f.requests.Load() != 0 {

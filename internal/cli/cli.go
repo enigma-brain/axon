@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/enigma-brain/axon/internal/devenv"
 	"github.com/enigma-brain/axon/internal/login"
+	"github.com/enigma-brain/axon/internal/sky"
 )
 
 // NewRoot returns the axon command, which reports version for --version.
@@ -24,7 +24,7 @@ func NewRoot(version string) *cobra.Command {
 	root.CompletionOptions.DisableDefaultCmd = true
 	root.SetHelpCommand(&cobra.Command{Use: "no-help", Hidden: true})
 
-	root.AddCommand(newLogin(), devenv.Command())
+	root.AddCommand(newLogin(), sky.Command())
 	return root
 }
 

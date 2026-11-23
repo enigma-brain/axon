@@ -1,4 +1,4 @@
-package devenv
+package sky
 
 import (
 	"context"
@@ -27,13 +27,8 @@ var skyPath = skyclient.Path
 var execSky = syscall.Exec
 
 // forward checks the connection, writing what the check repairs to w, then
-// replaces the axon process with the sky command of c's words followed by
-// args.
-func forward(ctx context.Context, w io.Writer, c command, args []string) error {
-	dir, err := axondir.Default()
-	if err != nil {
-		return err
-	}
+// replaces the axon process with sky and args.
+func forward(ctx context.Context, w io.Writer, dir axondir.Dir, args []string) error {
 	p, email, err := Check(ctx, dir, w)
 	if err != nil {
 		return err
@@ -42,13 +37,31 @@ func forward(ctx context.Context, w io.Writer, c command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("find the SkyPilot client: %w", err)
 	}
-	argv := append([]string{path}, c.words...)
-	argv = append(argv, args...)
-	env := environ(os.Environ(), Endpoint(p), email)
+	return run(path, args, environ(os.Environ(), Endpoint(p), email))
+}
+
+// run replaces the axon process with the sky at path, given args and env.
+func run(path string, args, env []string) error {
+	argv := append([]string{path}, args...)
 	if err := execSky(path, argv, env); err != nil {
 		return fmt.Errorf("run the SkyPilot client %s: %w", path, err)
 	}
 	return nil
+}
+
+// helpEnviron returns the environment sky's help runs with: the one a
+// forwarded command gets when a login is recorded, and the process's own
+// otherwise.
+func helpEnviron(dir axondir.Dir) []string {
+	p, err := activePathway(dir)
+	if err != nil {
+		return os.Environ()
+	}
+	email, ok, err := dir.Email()
+	if err != nil || !ok {
+		return os.Environ()
+	}
+	return environ(os.Environ(), Endpoint(p), email)
 }
 
 // environ returns base with the SkyPilot endpoint and user set to endpoint

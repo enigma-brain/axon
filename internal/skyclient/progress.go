@@ -16,7 +16,7 @@ var tickInterval = 5 * time.Second
 // the line. run receives the writer to report on.
 func step(progress io.Writer, label string, ticks bool, run func(out io.Writer) error) error {
 	out := &lockedWriter{w: progress}
-	fmt.Fprintf(out, "  %s", label)
+	fmt.Fprintf(out, "sky: %s", label)
 
 	stop := make(chan struct{})
 	var wg sync.WaitGroup

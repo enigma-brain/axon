@@ -108,8 +108,8 @@ func Ensure(ctx context.Context, dir axondir.Dir, version string, progress io.Wr
 		return from, version, nil
 	}
 
-	fmt.Fprintf(progress, "devenv: installing the SkyPilot client %s, with its own uv and Python, into %s.\n", version, tools)
-	fmt.Fprintln(progress, "devenv: your system's Python and packages are not changed.")
+	fmt.Fprintf(progress, "sky: installing the SkyPilot client %s, with its own uv and Python, into %s.\n", version, tools)
+	fmt.Fprintln(progress, "sky: your system's Python and packages are not changed.")
 
 	uv, err := ensureUV(ctx, tools, progress)
 	if err != nil {
@@ -130,7 +130,7 @@ func Ensure(ctx context.Context, dir axondir.Dir, version string, progress io.Wr
 	if err != nil {
 		return "", "", fmt.Errorf("install SkyPilot %s (%s): %w", version, skypilotPackage, err)
 	}
-	fmt.Fprintf(progress, "devenv: installed the SkyPilot client %s\n", version)
+	fmt.Fprintf(progress, "sky: installed the SkyPilot client %s\n", version)
 	return from, version, nil
 }
 
@@ -194,6 +194,9 @@ func Version(dir axondir.Dir) (version string, installed bool, err error) {
 	return version, true, nil
 }
 
+// ErrNotInstalled reports that axon has not installed its SkyPilot client.
+var ErrNotInstalled = errors.New("the SkyPilot client is not installed. Run `axon login`")
+
 // Path returns the absolute path of the client's sky executable.
 func Path(dir axondir.Dir) (string, error) {
 	version, installed, err := Version(dir)
@@ -201,7 +204,7 @@ func Path(dir axondir.Dir) (string, error) {
 		return "", err
 	}
 	if !installed {
-		return "", errors.New("the SkyPilot client is not installed. Run `axon login`")
+		return "", ErrNotInstalled
 	}
 	tools, err := dir.ToolsDir()
 	if err != nil {

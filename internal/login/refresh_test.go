@@ -226,7 +226,7 @@ func TestRefreshOfTheSameFileSaysNothing(t *testing.T) {
 	if err := h.run(""); err != nil {
 		t.Fatal(err)
 	}
-	if got := h.out.String(); got != "devenv: connected as ada@example.org (SkyPilot 0.13.0)\n" {
+	if got := h.out.String(); got != "sky: connected as ada@example.org (SkyPilot 0.13.0)\n" {
 		t.Errorf("output = %q", got)
 	}
 	if h.errOut.Len() != 0 {
@@ -444,7 +444,7 @@ func TestRefreshedSettingsReconnectDirectPathway(t *testing.T) {
 	if h.active() != "campus" {
 		t.Errorf("active = %q, want campus kept", h.active())
 	}
-	if got := h.record().DevenvEndpoint; got != "https://sky2.example.org" {
+	if got := h.record().SkyEndpoint; got != "https://sky2.example.org" {
 		t.Errorf("recorded endpoint = %q, want the new one", got)
 	}
 	if os.SameFile(before, h.emailFile()) {
@@ -491,18 +491,18 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 	}
 	h.tshCalls()
 
-	orgs.publish("/example.toml", strings.Replace(exampleOrg, `app = "devenv"`, `app = "devenv2"`, 1))
+	orgs.publish("/example.toml", strings.Replace(exampleOrg, `app = "skypilot"`, `app = "skypilot2"`, 1))
 	stateDir, err := axondir.New(h.home).StateDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	moved := h.l.teleport.newTunnel(stateDir, fakeTsh, testProxy, "devenv2")
+	moved := h.l.teleport.newTunnel(stateDir, fakeTsh, testProxy, "skypilot2")
 	t.Cleanup(func() { moved.Stop() })
 
 	if err := h.run(""); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
-	if !strings.Contains(h.out.String(), "devenv: stopping the Teleport tunnel") {
+	if !strings.Contains(h.out.String(), "sky: stopping the Teleport tunnel") {
 		t.Errorf("output does not say the old tunnel stopped:\n%s", h.out.String())
 	}
 	if st := h.tunnelStatus(); st.Running {
@@ -512,10 +512,10 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 	if err != nil || !st.Healthy {
 		t.Errorf("tunnel to the new application = %+v, %v; want it serving", st, err)
 	}
-	if want := fmt.Sprintf("--proxy=%s proxy app devenv2 --port %d", testProxy, testPort); !contains(h.tshCalls(), want) {
+	if want := fmt.Sprintf("--proxy=%s proxy app skypilot2 --port %d", testProxy, testPort); !contains(h.tshCalls(), want) {
 		t.Errorf("tsh did not run %q", want)
 	}
-	if h.active() != "remote" || h.record().DevenvApp != "devenv2" {
-		t.Errorf("active = %q, record = %+v; want remote with devenv2", h.active(), h.record())
+	if h.active() != "remote" || h.record().SkyApp != "skypilot2" {
+		t.Errorf("active = %q, record = %+v; want remote with skypilot2", h.active(), h.record())
 	}
 }

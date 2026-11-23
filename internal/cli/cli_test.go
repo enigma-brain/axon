@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/devenv"
+	"github.com/enigma-brain/axon/internal/sky"
 )
 
 // twoPathways is an organisation file with two made-up pathways.
@@ -63,7 +63,7 @@ func run(t *testing.T, args ...string) (string, error) {
 	return out.String(), err
 }
 
-func TestHelpListsOnlyLoginAndDevenv(t *testing.T) {
+func TestHelpListsOnlyLoginAndSky(t *testing.T) {
 	out, err := run(t, "--help")
 	if err != nil {
 		t.Fatal(err)
@@ -79,8 +79,8 @@ func TestHelpListsOnlyLoginAndDevenv(t *testing.T) {
 			names = append(names, f[0])
 		}
 	}
-	if got := strings.Join(names, " "); got != "devenv login" {
-		t.Errorf("help lists %q, want %q", got, "devenv login")
+	if got := strings.Join(names, " "); got != "login sky" {
+		t.Errorf("help lists %q, want %q", got, "login sky")
 	}
 }
 
@@ -147,13 +147,20 @@ func TestLoginWithoutTerminalAsksForFlag(t *testing.T) {
 	}
 }
 
-func TestDevenvIsWired(t *testing.T) {
+func TestSkyIsWired(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	out, err := run(t, "devenv", "--help")
-	if err != nil || !strings.Contains(out, "jobs launch") {
-		t.Errorf("devenv --help: err = %v, output:\n%s", err, out)
+	// With no client installed, sky's help stops before running anything.
+	if _, err := run(t, "sky", "--help"); err == nil || !strings.Contains(err.Error(), "SkyPilot client is not installed") {
+		t.Errorf("sky --help with no client: err = %v", err)
 	}
-	if _, err := run(t, "devenv", "launch", "-c", "dev", "task.yaml"); !errors.Is(err, devenv.ErrNoLogin) {
-		t.Errorf("devenv launch without a login: err = %v, want %v", err, devenv.ErrNoLogin)
+	if _, err := run(t, "sky", "launch", "-c", "dev", "task.yaml"); !errors.Is(err, sky.ErrNoLogin) {
+		t.Errorf("sky launch without a login: err = %v, want %v", err, sky.ErrNoLogin)
+	}
+}
+
+func TestDevenvIsGone(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if _, err := run(t, "devenv", "status"); err == nil || !strings.Contains(err.Error(), "unknown command") {
+		t.Errorf("axon devenv: err = %v, want unknown command", err)
 	}
 }

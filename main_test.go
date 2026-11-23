@@ -109,13 +109,13 @@ description = "From anywhere."
 proxy = "teleport.example.org"
 
 [pathway.devenv]
-app = "devenv"
+app = "skypilot"
 `
 )
 
-// stopped is how a login that reached the devenv connection ends inside
-// the fence.
-const stopped = "axon: connect devenv: check the SkyPilot client: "
+// stopped is how a login that reached the sky group's connection ends
+// inside the fence.
+const stopped = "axon: connect sky: check the SkyPilot client: "
 
 // stores writes data as the stored organisation file id under home.
 func stores(t *testing.T, home, id, data string) {
@@ -158,7 +158,7 @@ func TestBinary(t *testing.T) {
 			t.Errorf("--version = %q, %v", out, err)
 		}
 		out, _, err = runAxon(t, bin, home(t), nil, "--help")
-		if err != nil || !strings.Contains(out, "login") || !strings.Contains(out, "devenv") {
+		if err != nil || !strings.Contains(out, "login") || !strings.Contains(out, "sky") {
 			t.Errorf("--help = %q, %v", out, err)
 		}
 	})
@@ -171,10 +171,10 @@ func TestBinary(t *testing.T) {
 		if stderr != want {
 			t.Errorf("login: stderr = %q, want %q", stderr, want)
 		}
-		_, stderr, err = runAxon(t, bin, h, nil, "devenv", "status")
-		wantFailure(t, "devenv", err)
+		_, stderr, err = runAxon(t, bin, h, nil, "sky", "status")
+		wantFailure(t, "sky", err)
 		if stderr != "axon: Run `axon login` first.\n" {
-			t.Errorf("devenv: stderr = %q", stderr)
+			t.Errorf("sky: stderr = %q", stderr)
 		}
 	})
 
@@ -338,7 +338,8 @@ func TestBinary(t *testing.T) {
 		args []string
 		want string
 	}{
-		{[]string{"devenv", "stop"}, "axon: axon devenv does not cover \"stop\"."},
+		{[]string{"devenv", "status"}, "axon: unknown command \"devenv\""},
+		{[]string{"sky", "api", "stop"}, "axon: `axon sky api stop` is not available:"},
 		{[]string{"bogus"}, "axon: unknown command \"bogus\""},
 	} {
 		_, stderr, err := runAxon(t, bin, home(t), nil, tc.args...)
