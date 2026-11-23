@@ -532,6 +532,7 @@ log out with `axon logout`. Every other command runs; see the
 
 ```text
 axon: could not log out of SkyPilot: <reason>
+axon: could not remove the saved SkyPilot login: <reason>
 axon: could not stop the Teleport tunnel: <reason>
 axon: could not log out of Teleport: <reason>
 axon: could not log out of Teleport: the Teleport session is still valid after tsh logout. Run `tsh logout --proxy=<proxy> --user=<user>` for each user tsh lists
@@ -542,3 +543,6 @@ axon: logout did not finish. Run `axon logout` again.
 One step of `axon logout` failed, and the others ran. `axon` keeps its record of the
 connection, so running `axon logout` again retries the step. The reason is the step's
 own error, such as the output of `sky api logout` or `tsh logout`.
+When `axon` could not remove the saved SkyPilot login, the reason names SkyPilot's
+cookie file, `~/.sky/cookies.txt` or the file `SKYPILOT_API_COOKIE_FILE` names;
+check that you can write to its directory.
