@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/enigma-brain/axon/internal/axondir"
 )
 
 // withRevision returns data with a top-level revision n after its id.
@@ -278,5 +280,42 @@ func TestSameServerKeepsThePathsCase(t *testing.T) {
 	c := Pathway{Kind: KindDirect, Sky: Sky{Endpoint: "https://sky.example.org/team"}}
 	if !SameServer(a, b) || SameServer(a, c) {
 		t.Errorf("SameServer: host case and trailing slash ignored = %v, path case ignored = %v", SameServer(a, b), SameServer(a, c))
+	}
+}
+
+// A restore that fails does not stop the others.
+func TestRollbackContinuesAfterARestoreFails(t *testing.T) {
+	s, home := newStore(t)
+	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
+	added := directOrg("b", "two", "Campus", "https://b.example.org")
+	c, err := s.Inspect([]byte(added), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The removal of the old record fails, and so does restoring the old
+	// file's record; the old file itself is still restored.
+	record := filepath.Join(home, ".axon", "state", "orgs", "a.toml")
+	removeFile = func(path string) error {
+		if path == record {
+			return errors.New("injected removal failure")
+		}
+		return os.Remove(path)
+	}
+	replaceFile = func(path string, data []byte) error {
+		if path == record {
+			return errors.New("injected restore failure")
+		}
+		return axondir.ReplaceFile(path, data)
+	}
+	t.Cleanup(func() { removeFile, replaceFile = os.Remove, axondir.ReplaceFile })
+	_, err = s.Put([]byte(added), PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{c.Clashes[0].Stored}})
+	if err == nil || !strings.Contains(err.Error(), record+" could not be restored: injected restore failure") {
+		t.Fatalf("Put = %v, want the record named as not restored", err)
+	}
+	if data, err := os.ReadFile(s.Path("a")); err != nil || !strings.Contains(string(data), `id = "a"`) {
+		t.Errorf("the old file was not restored: %v", err)
+	}
+	if _, err := os.Stat(s.Path("b")); !os.IsNotExist(err) {
+		t.Errorf("the new file stayed: %v", err)
 	}
 }

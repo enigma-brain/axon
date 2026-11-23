@@ -396,10 +396,16 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 		saved = append(saved, sf)
 	}
 	fail := func(err error) (File, bool, error) {
+		// Every saved file is restored, even after one fails, and each
+		// failure is reported.
+		var unrestored []string
 		for i := len(saved) - 1; i >= 0; i-- {
 			if undo := saved[i].restore(); undo != nil {
-				return File{}, false, fmt.Errorf("%w; and %s could not be restored: %v", err, saved[i].path, undo)
+				unrestored = append(unrestored, fmt.Sprintf("%s could not be restored: %v", saved[i].path, undo))
 			}
+		}
+		if len(unrestored) > 0 {
+			return File{}, false, fmt.Errorf("%w; and %s", err, strings.Join(unrestored, "; "))
 		}
 		return File{}, false, err
 	}
@@ -443,16 +449,20 @@ func saveFile(path string) (savedFile, error) {
 // restore puts the file back as it was saved.
 func (f savedFile) restore() error {
 	if f.existed {
-		return axondir.ReplaceFile(f.path, f.data)
+		return replaceFile(f.path, f.data)
 	}
-	if err := os.Remove(f.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := removeFile(f.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	return nil
 }
 
-// removeFile removes a file. Tests replace it to make a removal fail.
-var removeFile = os.Remove
+// removeFile removes a file, and replaceFile replaces one. Tests replace
+// them to make a step fail.
+var (
+	removeFile  = os.Remove
+	replaceFile = axondir.ReplaceFile
+)
 
 // remove deletes the stored file id and its record.
 func (s Store) remove(id string) error {
