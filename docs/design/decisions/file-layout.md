@@ -2,12 +2,12 @@
 
 ## Context
 
-`axon` keeps four kinds of file on the laptop: organisation files, the
+`axon` keeps four kinds of file on the laptop: config files, the
 user's own configuration, the tools it installs for its
 own use, and a record of running state such as the tunnel's process ID and
 log. The tools take several hundred megabytes; the rest is small.
 
-An organisation file comes from an organisation and is replaced when the
+A config file comes from an organisation and is replaced when the
 organisation changes it. A laptop holds one or several. The user's configuration is the
 user's choice of pathway, which no update from the organisation may
 overwrite.
@@ -22,7 +22,7 @@ folder: `~/.sky` for SkyPilot and `~/.tsh` for Teleport.
 
 ## Rationale
 
-Everything `axon` owns is under `~/.axon`. The organisation files are in
+Everything `axon` owns is under `~/.axon`. The config files are in
 `orgs/`, one each, and the user's configuration is `config.toml` at the
 top, with one subdirectory each for installed tools and for state.
 
@@ -30,7 +30,7 @@ top, with one subdirectory each for installed tools and for state.
 - Resetting `axon` is removing one directory and logging in again with the
   organisation's source.
 - Uninstalling is removing that directory and the binary.
-- An organisation's file is replaced whole on an update, exactly as its
+- A config file is replaced whole on an update, exactly as its
   source gave it, with no merge, and the user's choice in its own file is
   untouched.
 - It is the same convention as `~/.sky` and `~/.tsh`, which the same user

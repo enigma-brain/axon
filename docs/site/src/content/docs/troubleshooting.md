@@ -83,86 +83,97 @@ terminal:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-## The organisation file
+## The config file
 
-### No organisation file is stored
+### No config file is stored
 
 ```text
-axon: no organisation configuration. Run `axon login --org <source>` with the address or file your organisation gives you.
+axon: no config file. Run `axon login --config <source>` with the address or file your organization gives you.
 ```
 
-No organisation file that passes the checks is stored on this laptop. When
+No config file that passes the checks is stored on this laptop. When
 one was in use, `axon login` has already disconnected its pathway, stopping
-the Teleport tunnel and forgetting the logged-in email. Run `axon login --org`
+the Teleport tunnel and forgetting the logged-in email. Run `axon login --config`
 with the address or file your organisation gave you.
 
-### A refused organisation file
+### A refused config file
 
 A file that fails a check is refused whole and nothing changes. The message names the
-field and the check, and begins `axon: add the organisation file:`. The checks are
-on [Writing an organisation file](/axon/organisation-file/#what-axon-checks). Tell
+field and the check, and begins `axon: add the config file:`. The checks are
+on [Writing a config file](/axon/config-file/#what-axon-checks). Tell
 your organisation which field it names. Messages seen most:
 
 | Message | What it means |
 |---|---|
-| `format: must be 1` | The file's `format` is missing or is another number. |
+| `format: must be 2` | The file's `format` is missing or is a number `axon` does not know. |
 | `id: must be lowercase letters, digits and hyphens, start with a letter, and be at most 32 characters` | The file's `id` is not of the allowed form. |
 | `pathway: the file must have at least one [[pathway]]` | The file holds no pathway. |
 | `pathway "<id>": name: is required and must be text` | The pathway has no `name` (or no `description`, which gives the same message for that field). |
 | `pathway "<id>": kind: must be "direct" or "teleport"` | The pathway's `kind` is missing or unknown. |
-| `pathway "<id>": devenv.endpoint: must be an https address` | A direct pathway's address is missing or does not start with `https://`. |
+| `pathway "<id>": sky.endpoint: must be an https address` | A direct pathway's address is missing or does not start with `https://`. |
 | `pathway "<id>": teleport.proxy: must be a hostname, optionally with a port` | A Teleport pathway's proxy is missing or is not a host. |
-| `<field>: not a field of an organisation file` | The file holds a field that the format does not have, such as a misspelling. |
+| `<field>: not a field of a config file` | The file holds a field that the format does not have, such as a misspelling. |
 | `pathway "<id>": id: already used by the stored file <path>` | Another stored file has a pathway with the same identifier. |
 | `not valid TOML: <reason> (line <n>)` | The file is not valid TOML. |
+
+### A config file in an older format
+
+```text
+axon: add the config file: the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.
+axon: left out <path>: the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.
+```
+
+The file is of format `1`, which an earlier `axon` used. `axon` does not convert it.
+Run `axon login --config` with the address or file your organization gives you now; the
+second form is a stored file, which the new file replaces when its `id` is the same.
 
 ### The address does not start with https
 
 ```text
-axon: add the organisation file: <address>: an address must start with https://
+axon: add the config file: <address>: an address must start with https://
 ```
 
-`--org` takes an `https` address. Use the address your organisation gave you, which
+`--config` takes an `https` address. Use the address your organisation gave you, which
 starts with `https://`.
 
 ### The address carries a user name or password
 
 ```text
-axon: add the organisation file: <address>: an address must not carry a user name or password
+axon: add the config file: <address>: an address must not carry a user name or password
 ```
 
 An address is fetched without credentials. Remove them from the address. When your
-organisation protects the file, ask for it as a file and use `--org <path>`.
+organisation protects the file, ask for it as a file and use `--config <path>`.
 
-### The organisation file's path does not exist
+### The config file's path does not exist
 
 ```text
-axon: add the organisation file: read <path>: no such file or directory
+axon: add the config file: read <path>: no such file or directory
 ```
 
 The path is wrong. Check it, and quote it when it holds a space.
 
-### The organisation file could not be fetched
+### The config file could not be fetched
 
 ```text
-axon: add the organisation file: fetch <address>: <reason>
-axon: add the organisation file: fetch <address>: the server answered <status>
+axon: add the config file: fetch <address>: <reason>
+axon: add the config file: fetch <address>: the server answered <status>
 ```
 
 The address could not be fetched. Check your network and the address. A server that
 answers with an error is your organisation's to fix.
 
-### A stored organisation file is left out
+### A stored config file is left out
 
 ```text
 axon: left out <path>: <reason>
 ```
 
-A stored organisation file fails the checks, so `axon` leaves it out of this login.
+A stored config file fails the checks, so `axon` leaves it out of this login.
 The reason is one of the refusals above. Ask your organisation for a new file and add
-it with `axon login --org <source>`, or delete the stored file from `~/.axon/orgs/`.
+it with `axon login --config <source>`, or delete the stored file from `~/.axon/orgs/`.
 
-### The organisation file could not be updated
+### The config file could not be updated
 
 ```text
 axon: could not update <path> from <address>: <reason>. Using the stored file.
@@ -180,7 +191,7 @@ tell your organisation.
 ### The named pathway is not stored
 
 ```text
-axon: determine the pathway: no stored organisation file has the pathway "<id>". The stored pathways are <list>.
+axon: determine the pathway: no stored config file has the pathway "<id>". The stored pathways are <list>.
 ```
 
 `--pathway` names an identifier that no stored file has. Use one from the list.
@@ -198,20 +209,20 @@ of the list.
 ### Your pathway left its file and another is used
 
 ```text
-The pathway "<id>" is no longer in its organisation file. Using the pathway "<id>".
+The pathway "<id>" is no longer in its config file. Using the pathway "<id>".
 ```
 
 Your organisation changed its file, and the pathway you used is not in it. One pathway
 is stored, so `axon` uses it and says which. With several stored, the message ends after
 the first sentence and `axon` asks which you are on.
 
-### The named pathway left its organisation file
+### The named pathway left its config file
 
 ```text
-axon: determine the pathway: the pathway "<id>" is no longer in its organisation file. The stored pathways are <list>.
+axon: determine the pathway: the pathway "<id>" is no longer in its config file. The stored pathways are <list>.
 ```
 
-You passed `--pathway` with a pathway that your organisation's file no longer has. Use
+You passed `--pathway` with a pathway that your organization's config file no longer has. Use
 one from the list.
 
 ### The previous pathway could not be disconnected
@@ -430,7 +441,7 @@ when the check fails. Each message states the action for that failure.
 axon: Run `axon login` first.
 ```
 
-No organisation file is stored, no login has run on this laptop, it did not finish, or
+No config file is stored, no login has run on this laptop, it did not finish, or
 the file of your pathway changed since you logged in. Run `axon login`.
 
 ### The SkyPilot session expired

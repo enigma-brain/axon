@@ -10,14 +10,14 @@ the platform it reaches, and the tool behind it can change without users
 learning a new way in.
 
 The organisation decides how a laptop reaches its platform. Each way in is a
-pathway, and the organisation describes its pathways in an organisation file
+pathway, and the organisation describes its pathways in a config file
 that it gives its users. `axon` logs in by whichever pathway the user is on,
 and names no organisation itself.
 
 The design is in [docs/design/DESIGN.md](docs/design/DESIGN.md).
 
 The documentation site, at <https://enigma-brain.github.io/axon/>, covers
-installing, logging in, dev environments, writing an organisation file and
+installing, logging in, dev environments, writing a config file and
 troubleshooting. This readme gives the short form of each; see the site for
 anything it does not cover.
 
@@ -86,10 +86,10 @@ be downloaded or verified, when the installation fails.
 ## Organisations
 
 `axon` takes everything about the organisation it serves from an
-organisation file, which the organisation gives its members: the
+config file, which the organisation gives its members: the
 pathways, the addresses of its servers, and the text `axon` shows about
 them. `axon` itself names no organisation. The file's format is in
-[docs/design/DESIGN.md](docs/design/DESIGN.md#organisation-files).
+[docs/design/DESIGN.md](docs/design/DESIGN.md#config-files).
 
 A pathway is a way to reach the organisation's API server. It is of one of
 two kinds: a direct pathway reaches the server at its own address, and a
@@ -98,12 +98,12 @@ several, and a laptop holds any number of files.
 
 ### Adding a file
 
-The first login adds your organisation's file with `--org`, from one of
+The first login adds your organization's config file with `--config`, from one of
 three sources:
 
-    axon login --org https://example.org/axon.toml
-    axon login --org ~/Downloads/axon.toml
-    <command that prints the file> | axon login --org -
+    axon login --config https://example.org/axon.toml
+    axon login --config ~/Downloads/axon.toml
+    <command that prints the file> | axon login --config -
 
 The file is checked and stored as `~/.axon/orgs/<id>.toml`, named by the
 `id` it holds, and its source is recorded in `~/.axon/state/orgs/`. A file
@@ -112,7 +112,7 @@ changes. Adding a file whose `id` is stored already replaces that file;
 the other files stay as they are. Two files may not hold the same pathway
 identifier.
 
-With `--org -`, standard input is the file, so `axon login` asks its
+With `--config -`, standard input is the file, so `axon login` asks its
 questions on the terminal. Without a terminal, a question with a flag,
 such as which pathway, stops and names the flag; any other question is
 answered no.
@@ -125,11 +125,11 @@ How a change reaches your laptop depends on where the file came from:
   the pathway it uses again, before it connects, and stores the new one
   when it passes the checks and keeps its `id`. You do nothing; the change
   arrives at your next login. Only that one file is fetched, and a file
-  that `--org` added in the same login is not fetched twice. When the
+  that `--config` added in the same login is not fetched twice. When the
   fetch fails or the new file is refused, `axon` says so in one line and
   logs in with the file it has.
 - **A file path or standard input:** the file is read once. Run
-  `axon login --org` again with the new file.
+  `axon login --config` again with the new file.
 
 `axon sky` never fetches a file; it uses the stored ones.
 
@@ -148,15 +148,15 @@ the active pathway, the next `axon login` chooses another from the stored
 files and, once one is chosen, disconnects the pathway you left. When it
 was the last file, `axon login` disconnects the pathway you left, stopping
 its Teleport tunnel and forgetting the logged-in email, then stops and asks
-for `--org`. At each login a stored file that fails the checks is left out,
+for `--config`. At each login a stored file that fails the checks is left out,
 with one line naming it.
 
 ## Logging in
 
     axon login
 
-With no organisation file stored, `axon login` disconnects the pathway it
-had connected, if any, then stops and asks for `--org`.
+With no config file stored, `axon login` disconnects the pathway it
+had connected, if any, then stops and asks for `--config`.
 Otherwise it chooses the pathway, logs you in, and connects `axon sky`.
 
 ### Choosing the pathway
@@ -178,7 +178,7 @@ One pathway is active at a time, stored by its identifier in
 - **`--pathway <id>`** chooses without asking and makes that pathway the
   active one. It is how you switch. An identifier no stored file has is
   refused, with the list of those they have.
-- **`--org`** makes a pathway of the file it adds the active one, unless
+- **`--config`** makes a pathway of the file it adds the active one, unless
   the active pathway is already in that file. With several pathways in the
   file, it asks which of them.
 
@@ -284,7 +284,7 @@ carry on.
 - **`axon login` replaces it**, when the tunnel is down or the server does not
   know you through it. This interrupts sessions through it.
 - **You switch pathways** with `axon login --pathway <id>`, or with
-  `axon login --org` and another file.
+  `axon login --config` and another file.
 
 **To restore it,** run `axon login`. `axon sky` also restarts a stopped
 tunnel by itself while the certificate is still valid.
@@ -315,7 +315,7 @@ it stops and says what to do:
 
 | Message | What to do |
 |---|---|
-| `` Run `axon login` first. `` | No organisation file is stored, no login has run on this laptop, it did not finish, or the pathway's file changed since it connected. |
+| `` Run `axon login` first. `` | No config file is stored, no login has run on this laptop, it did not finish, or the pathway's file changed since it connected. |
 | `` SkyPilot session expired. Run `axon login`. `` | Log in again. |
 | `` Teleport session expired. Run `axon login`. `` | Log in again; the Teleport certificate has run out. |
 | `` Run `axon login` to update the SkyPilot client. `` | The server runs another SkyPilot version; the login moves the client to it. |
@@ -387,8 +387,8 @@ workflow, and the Mac suite runs it on macOS on Apple silicon and on Intel.
 ### The smoke test
 
 `smoke_test.go` runs the built `axon` as a user would, in an empty home
-directory with an empty `PATH`: `axon login --org` adds a made-up
-organisation file, installs the SkyPilot client for real, and stops at the
+directory with an empty `PATH`: `axon login --config` adds a made-up
+config file, installs the SkyPilot client for real, and stops at the
 endpoint's reachability check, before the browser login. The endpoint is on
 the loopback address, so the test reaches no server. It downloads the client,
 so it runs only with:
@@ -470,7 +470,7 @@ and is part of `go test ./...`.
 | `.goreleaser.yaml` | How a release is built. |
 | `internal/cli` | The command tree: `login` and `sky`. |
 | `internal/fail` | Prints failures to standard error, prefixed `axon:`, and exits non-zero. |
-| `internal/orgfile` | Organisation files: reading them from a source, checking them, and storing them in `~/.axon/orgs/`. |
+| `internal/orgfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/orgs/`. |
 | `internal/axondir` | `~/.axon`: the configuration file, `tools/` and `state/`. |
 | `internal/connected` | The record of the connected pathway and its settings, in `~/.axon/state/pathway.toml`. |
 | `internal/login` | `axon login`: adding a file, choosing the pathway, disconnecting the one left, the stages, the sky group's connect steps, and each kind's login in `direct.go` and `teleport.go`. `browser.go` holds the length of the browser wait. |

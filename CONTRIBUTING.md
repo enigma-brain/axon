@@ -202,8 +202,8 @@ A job that does not run is reported as skipped, which a required check
 accepts.
 
 The smoke test, `TestSmokeLogin` in `smoke_test.go`, runs `axon` as a user
-would, in an empty home directory with an empty `PATH`: `axon login --org`
-adds a made-up organisation file, installs the SkyPilot client for real, and
+would, in an empty home directory with an empty `PATH`: `axon login --config`
+adds a made-up config file, installs the SkyPilot client for real, and
 stops at the endpoint's reachability check, the step before the browser
 login. The endpoint is on the loopback address where nothing listens, so the
 test reaches no server. It runs only with `AXON_REAL_INSTALL=1`, as the real

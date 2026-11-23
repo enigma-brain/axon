@@ -30,7 +30,7 @@ jobs and volumes.
 laptop. It has no server component.
 
 One `axon` serves any organisation whose pathways are of the kinds below.
-What makes it serve an organisation is an organisation file that the
+What makes it serve an organisation is a config file that the
 organisation supplies.
 
 ## Organisations
@@ -54,7 +54,7 @@ The repository holds none of them. No file in it names one: not the code,
 the tests, the design documents or the readme, and no commit message. An
 example that needs a detail uses a made-up one under `example.org`.
 
-`axon` takes every organisation detail from an organisation file, and has no
+`axon` takes every organisation detail from a config file, and has no
 default for any of them. The name of the GitHub organisation that hosts
 `axon`'s own repository is not an organisation detail in this sense: it
 names where `axon` comes from, not whom it serves.
@@ -72,12 +72,12 @@ one of two kinds [{D!}](decisions/pathway-kinds.md).
 The rest of this document describes each pathway by its kind. An
 organisation names its own pathways, any number of them of either kind.
 
-### Organisation files
+### Config files
 
-An organisation's configuration is a TOML file, an organisation file. A
+An organisation's configuration is a TOML file, its config file. A
 laptop holds any number of them, from one organisation or several, and the
 user moves between the pathways they hold
-[{D!}](decisions/organisation-files.md). An organisation that gives each
+[{D!}](decisions/config-files.md). An organisation that gives each
 pathway its own file lets most of its members hold one file and never meet
 a prompt, while a member on several pathways holds several files.
 
@@ -85,7 +85,7 @@ These are two complete files, one pathway each:
 
 ```toml
 # campus.toml
-format = 1
+format = 2
 id = "example-campus"
 
 [[pathway]]
@@ -95,13 +95,13 @@ name = "Campus"
 description = "Single sign-on in a browser. Needs the campus network or VPN."
 unreachable_hint = "Connect to the campus VPN and retry."
 
-[pathway.devenv]
+[pathway.sky]
 endpoint = "https://sky.example.org"
 ```
 
 ```toml
 # remote.toml
-format = 1
+format = 2
 id = "example-remote"
 
 [[pathway]]
@@ -113,18 +113,18 @@ description = "Teleport. Works from anywhere."
 [pathway.teleport]
 proxy = "teleport.example.org"
 
-[pathway.devenv]
+[pathway.sky]
 app = "skypilot"
 ```
 
 A file holds one or more pathways, each a `[[pathway]]` entry. In TOML a
-table such as `[pathway.devenv]` belongs to the `[[pathway]]` above it, so
+table such as `[pathway.sky]` belongs to the `[[pathway]]` above it, so
 each pathway's tables follow its own `[[pathway]]` line and come before the
 next one.
 
 | Field | Type | Holds |
 |---|---|---|
-| `format` | `1` | The file's format. |
+| `format` | `2` | The file's format. |
 | `id` | Lowercase letters, digits and hyphens, starting with a letter, at most 32 characters | The file's identifier, which names the stored file. |
 
 Every other field belongs to a pathway. Every pathway has the same three
@@ -147,46 +147,51 @@ parts, whatever its kind [{D!}](decisions/pathway-contract.md):
 | `description` | Text | Free text, required | The prompt's line about the pathway, which is where the organisation names its login system and where the pathway works. |
 | `unreachable_hint` | Text | Free text, optional | A sentence `axon` prints after "Can't reach `<host>`." when a host the pathway names does not answer. |
 | `teleport.proxy` | Kind table, `teleport` | Hostname, optionally with a port | The Teleport proxy. |
-| `devenv.endpoint` | `devenv` table, `direct` | `https` address | The SkyPilot API server. |
-| `devenv.app` | `devenv` table, `teleport` | Teleport application name | The Teleport application that serves the SkyPilot API server. |
+| `sky.endpoint` | `sky` table, `direct` | `https` address | The SkyPilot API server. |
+| `sky.app` | `sky` table, `teleport` | Teleport application name | The Teleport application that serves the SkyPilot API server. |
 
 `axon` accepts a file only when:
 
-- `format` is `1`;
+- `format` is `2`;
 - it has an `id` of the allowed form;
 - it has at least one pathway;
 - every pathway has an `id` of the allowed characters, a `kind` of `direct`
   or `teleport`, a `name` and a `description`;
-- every `direct` pathway has `devenv.endpoint`, and it is an `https`
+- every `direct` pathway has `sky.endpoint`, and it is an `https`
   address;
 - every `teleport` pathway has `teleport.proxy`, a hostname, optionally
-  with a port, and `devenv.app`;
+  with a port, and `sky.app`;
 - it has no field or table that this section does not list for the file or
   for the pathway's kind;
 - no pathway identifier appears twice in it, or in any other stored file
   apart from the one it replaces.
+
+A file of format `1`, the format of an earlier `axon`, is refused, whether it
+is given with `--config` or already stored, with: "the file is in an older
+format. Run `axon login --config <source>` again with your organization's
+current config file." `axon` does not convert it.
 
 A file that fails a check is refused whole, with a message that names the
 field and the check. A file refused because a pathway identifier is taken
 names the identifier and the stored file that has it. A refused file
 changes nothing: every stored file stays as it was.
 
-The organisation files are trusted input: they decide which servers the
+The config files are trusted input: they decide which servers the
 user's logins and requests go to. Apart from the hosts the active pathway
 names and the address its file is fetched from, `axon` contacts only the
 download sources of the tools it installs for its own use.
 
-### Adding an organisation file
+### Adding a config file
 
-`axon login --org <source>` takes a file from a source, checks it, stores
-it, and then logs in [{D!}](decisions/organisation-config-source.md). The
+`axon login --config <source>` takes a file from a source, checks it, stores
+it, and then logs in [{D!}](decisions/config-source.md). The
 source is one of three:
 
 | Source | Example |
 |---|---|
-| An `https` address | `axon login --org https://example.org/axon.toml` |
-| A file path | `axon login --org ~/Downloads/axon.toml` |
-| `-`, standard input | `<command that prints the file> \| axon login --org -` |
+| An `https` address | `axon login --config https://example.org/axon.toml` |
+| A file path | `axon login --config ~/Downloads/axon.toml` |
+| `-`, standard input | `<command that prints the file> \| axon login --config -` |
 
 An address is fetched without credentials, so it suits an organisation that
 publishes its file. A file path or standard input suits one that hands the
@@ -194,7 +199,7 @@ file out by other means; with standard input, an organisation's setup is
 one line that fetches the file with a tool its members are already signed
 in to. An address with a scheme other than `https` is refused.
 
-With `--org -`, standard input is the file, so `axon login` asks its
+With `--config -`, standard input is the file, so `axon login` asks its
 questions on the terminal. When there is no terminal, a question that has a
 flag, such as the pathway, is answered by the flag, and `axon` stops and
 names the flag when it is missing. A question with no flag is answered
@@ -208,26 +213,26 @@ replaces that one file and its source.
 Removing a file is deleting it from `~/.axon/orgs/`. There is no command
 for it.
 
-### Updating an organisation file
+### Updating a config file
 
 At each `axon login`, once the pathway is determined and before its session
 is established, the file that holds it is fetched again, when its source is
-an address and `--org` did not add it in the same login. The fetched file
+an address and `--config` did not add it in the same login. The fetched file
 replaces the stored one when it passes the checks and its `id` is the stored
-file's [{D!}](decisions/organisation-config-updates.md). When the fetch
+file's [{D!}](decisions/config-updates.md). When the fetch
 fails or the file is refused, `axon` says so in one line and continues with
 the stored file. No other stored file is fetched.
 
 When the fetched file no longer has the pathway, the pathway is left. If
 `--pathway` named it, `axon login` stops, says that the pathway is no
-longer in its organisation file, and lists the identifiers the stored files
+longer in its config file, and lists the identifiers the stored files
 have. Otherwise `axon login` determines a pathway again from the stored
 files, with no further fetch in that login, and uses the stored copy of the
 newly chosen pathway's file. When it chooses without asking, because one
 pathway remains, it says in one line which pathway it now uses.
 
-A file from a file path or standard input is read once, when `--org` is
-given. Updating it is running `axon login --org` again with the new file.
+A file from a file path or standard input is read once, when `--config` is
+given. Updating it is running `axon login --config` again with the new file.
 
 `axon sky` never fetches a file. It uses the stored ones.
 
@@ -235,13 +240,13 @@ At each `axon login`, `axon` reads every stored file and applies the checks
 above. A stored file that fails them is left out, with one line that names
 it.
 
-### No organisation file
+### No config file
 
-`axon --version` and `axon --help` work without an organisation file.
+`axon --version` and `axon --help` work without a config file.
 
-When no file is stored and `--org` is not given, `axon login` stops with:
-"axon: no organisation configuration. Run `axon login --org <source>` with
-the address or file your organisation gives you."
+When no file is stored and `--config` is not given, `axon login` stops with:
+"axon: no config file. Run `axon login --config <source>` with the address or
+file your organization gives you."
 
 `axon sky` with no file stops with: "Run `axon login` first."
 
@@ -249,7 +254,7 @@ the address or file your organisation gives you."
 
 | Command | Behaviour |
 |---|---|
-| `axon login [--org <source>] [--pathway <id>]` | Adds an organisation file when `--org` is given, determines the pathway, establishes its session, and connects every command group. |
+| `axon login [--config <source>] [--pathway <id>]` | Adds a config file when `--config` is given, determines the pathway, establishes its session, and connects every command group. |
 | `axon sky [args]` | Checks the connection, then runs `axon`'s own SkyPilot client with the same arguments. |
 | `axon --version` | Prints the version of `axon`. |
 | `axon --help` | Lists the commands. |
@@ -263,17 +268,17 @@ These are all of `axon`'s commands.
 
 | Path | Holds |
 |---|---|
-| `~/.axon/orgs/` | The organisation files, one per file added, each `<id>.toml` as its source gave it. |
+| `~/.axon/orgs/` | The config files, one per file added, each `<id>.toml` as its source gave it. |
 | `~/.axon/config.toml` | The active pathway, by its identifier. |
 | `~/.axon/tools/` | What `axon` installs for its own use. |
-| `~/.axon/state/` | What `axon` records about running state, such as each organisation file's source, the settings the pathway had when it was connected, the tunnel's process, and the logged-in email. |
+| `~/.axon/state/` | What `axon` records about running state, such as each config file's source, the settings the pathway had when it was connected, the tunnel's process, and the logged-in email. |
 
 `axon` writes a file in `~/.axon/orgs/` only by replacing it whole, and
 never writes the active pathway into it.
 
 Removing `~/.axon` removes everything `axon` installed for its own use and
-everything it recorded, the organisation files included. The next `axon login`
-needs `--org`. Two things are outside the directory and remain: Teleport's
+everything it recorded, the config files included. The next `axon login`
+needs `--config`. Two things are outside the directory and remain: Teleport's
 own profile and certificates in `~/.tsh`, which `tsh` writes, and a tunnel
 that is running. The next login adopts that tunnel only when its command
 line is exactly the active pathway's tunnel command, its proxy and
@@ -287,9 +292,9 @@ The `axon` binary is not in this directory; it is in `~/.local/bin`.
 `axon login` is the one login command. It runs these stages in order and
 stops at the first that fails:
 
-1. Add the organisation file that `--org` gives, when it is given.
+1. Add the config file that `--config` gives, when it is given.
 2. Determine the pathway.
-3. Refresh the pathway's file, as "Updating an organisation file" sets out.
+3. Refresh the pathway's file, as "Updating a config file" sets out.
 4. Establish the pathway's session.
 5. Connect each command group, by that group's own steps
    [{Q?}](questions/command-group-login.md).
@@ -300,7 +305,7 @@ nothing and reports each connection as good.
 ### Determining the pathway
 
 One pathway is active at a time, chosen from the pathways of every stored
-organisation file. `axon` stores the active pathway's identifier in
+config file. `axon` stores the active pathway's identifier in
 `~/.axon/config.toml` [{D!}](decisions/pathway-selection.md), and later
 logins use it without asking.
 
@@ -316,7 +321,7 @@ It works the same with a single pathway: its identifier is accepted, and
 any other identifier is refused with a message that lists the identifiers
 the stored files have.
 
-`--org` without `--pathway` makes a pathway of the added file the active
+`--config` without `--pathway` makes a pathway of the added file the active
 one, unless the active pathway is already in that file: with one pathway in
 the file, that pathway, and with several, the prompt offers the file's
 pathways. A user who adds a file means to use it.
@@ -324,7 +329,7 @@ pathways. A user who adds a file means to use it.
 A user also leaves the active pathway when the stored files change under
 it:
 
-- its file is replaced, by `--org` or by a fetch from an address, and the
+- its file is replaced, by `--config` or by a fetch from an address, and the
   new file does not have the pathway or has different settings for
   machines for it;
 - its file has been deleted from `~/.axon/orgs/`, or fails the checks when
@@ -341,7 +346,7 @@ above.
 Leaving a pathway, by `--pathway` or by a change to the stored files,
 disconnects each command group from the pathway that is left.
 Disconnecting uses only what `axon` recorded when it connected, never an
-organisation file, so it works when the file that named the pathway is
+config file, so it works when the file that named the pathway is
 gone.
 
 ### The pathway's session
@@ -391,8 +396,8 @@ login` and before a command runs, begins `sky:`.
 
 | Pathway kind | Endpoint the SkyPilot client uses |
 |---|---|
-| `direct` | The pathway's `devenv.endpoint` |
-| `teleport` | `http://localhost:46581`, a Teleport tunnel to the pathway's `devenv.app` |
+| `direct` | The pathway's `sky.endpoint` |
+| `teleport` | `http://localhost:46581`, a Teleport tunnel to the pathway's `sky.app` |
 
 The tunnel's port, 46581, is `axon`'s and is the same for every
 organisation.
@@ -422,7 +427,7 @@ version.
    `unreachable_hint` when it has one, and stops without opening a
    browser.
 2. When the existing session is good, the remaining steps are skipped.
-3. `axon` runs `sky api login -e <devenv.endpoint>`, which opens the
+3. `axon` runs `sky api login -e <sky.endpoint>`, which opens the
    server's login page in a browser and waits for it to complete.
 4. When the login ends with the status `needs_auth`, `axon` removes
    `~/.sky/cookies.txt` and runs the login once more. The file holds only
@@ -439,7 +444,7 @@ was not completed in the browser and to run `axon login` again.
 1. When the tunnel is up and the server reports the user's identity through
    it, the tunnel is left running and steps 2 to 5 are skipped. A repeated
    login does not interrupt `ssh` or VS Code sessions.
-2. `axon` runs `tsh --proxy=<teleport.proxy> apps login <devenv.app>`,
+2. `axon` runs `tsh --proxy=<teleport.proxy> apps login <sky.app>`,
    which issues a fresh application certificate.
 3. `axon` stops its tunnel, if one is running.
 4. `axon` confirms that port 46581 is free. When a process that is not its
@@ -463,7 +468,7 @@ a local server when nothing answers.
 ### The Teleport tunnel
 
 The tunnel is the process
-`tsh --proxy=<teleport.proxy> proxy app <devenv.app> --port 46581`. `axon`
+`tsh --proxy=<teleport.proxy> proxy app <sky.app> --port 46581`. `axon`
 starts it detached from the terminal, records its process ID and its command
 line, and sends its output to a log file
 [{D!}](decisions/tunnel-lifecycle.md). The record and the log are kept in
@@ -475,7 +480,7 @@ exists and does not serve is down.
 
 `axon` treats a process as its tunnel when the process belongs to the user
 and its command line is exactly the tunnel's command, the pathway's
-`teleport.proxy` and `devenv.app` included, so a tunnel to another proxy is
+`teleport.proxy` and `sky.app` included, so a tunnel to another proxy is
 never taken for this pathway's, even when the application names match.
 Before it stops the process whose ID it recorded, `axon` confirms that the
 process's command line is the one it recorded; when it does not match, the
@@ -613,7 +618,7 @@ Every failure names the step that failed and the next action for the user.
 `axon` stops before running a command, it exits with a non-zero code.
 
 A message names an organisation detail only by printing a host or a
-text field from an organisation file as it is written.
+text field from a config file as it is written.
 
 A message names a product only when it comes from the part of `axon` that
 uses that product [{D!}](decisions/product-names-in-messages.md).
@@ -669,9 +674,9 @@ Installing requires `curl` and `sha256sum` or `shasum`.
 Updating `axon` is running the same line again.
 
 An organisation's setup for its members is the install line followed by
-`axon login --org <source>`. The page that tells an organisation's members
-how to get started, with its source for `--org`, is the organisation's own
-and is kept with its organisation files, not in this repository.
+`axon login --config <source>`. The page that tells an organisation's members
+how to get started, with its source for `--config`, is the organisation's own
+and is kept with its config files, not in this repository.
 
 ## Documentation site
 

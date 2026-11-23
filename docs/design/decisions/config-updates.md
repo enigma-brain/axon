@@ -16,13 +16,13 @@ server before each command.
 When the file that holds the pathway a login uses came from an address, that
 `axon login` fetches it again, once the pathway is determined and before it
 connects, and replaces the stored copy when the new one passes the checks
-and keeps its `id`. Other stored files are not fetched. A file that `--org`
+and keeps its `id`. Other stored files are not fetched. A file that `--config`
 added in the same login is not fetched again, and when the fetched file
 drops the pathway, the pathway chosen in its place is used from its stored
 copy, so a login refreshes at most one stored file, apart from adding the
-one `--org` gives. When the fetch fails or the file is refused, `axon` says
+one `--config` gives. When the fetch fails or the file is refused, `axon` says
 so in one line and logs in with the stored file. A file or standard input is
-read once; the user runs `axon login --org` again when the organisation
+read once; the user runs `axon login --config` again when the organisation
 hands out a new file.
 
 - A change the organisation publishes to a file reaches each laptop at
@@ -39,7 +39,7 @@ hands out a new file.
 
 ## Alternatives considered
 
-- **Fetch only when the user gives `--org` again.** Every change needs a
+- **Fetch only when the user gives `--config` again.** Every change needs a
   message to every member, and laptops that miss it keep stale hosts.
 - **Fetch in `axon sky` too, when the stored copy is old.** A command in
   a script gains a second network request and a failure mode that has

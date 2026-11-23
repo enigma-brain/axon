@@ -165,7 +165,7 @@ jobs:
       - name: Install the SkyPilot client into an empty home and run sky --version
         if: needs.changes.outputs.skyclient == 'true'
         run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
-      - name: Run axon login with an example organisation file in an empty home
+      - name: Run axon login with an example config file in an empty home
         run: go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
       - name: Install tsh into an empty home and run tsh version
         if: needs.changes.outputs.tsh == 'true'

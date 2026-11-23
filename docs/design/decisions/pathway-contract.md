@@ -27,7 +27,7 @@ Reasons:
 
 - A pathway is a fact about the user that every command group uses. The
   API server's address and the Teleport application are facts about where
-  `devenv`'s service is, not about the pathway, so they sit in `devenv`'s
+  `sky`'s service is, not about the pathway, so they sit in `sky`'s
   table. A second command group adds its own table and changes nothing
   else.
 - `axon` never builds a sentence out of a configuration value, so no

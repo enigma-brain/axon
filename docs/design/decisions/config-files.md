@@ -1,4 +1,4 @@
-# A laptop holds several organisation files and switches between their pathways
+# A laptop holds several config files and switches between their pathways
 
 ## Context
 
@@ -13,7 +13,7 @@ pathway is active at a time.
 
 ## Rationale
 
-`axon` stores every organisation file it is given in `~/.axon/orgs/`, one
+`axon` stores every config file it is given in `~/.axon/orgs/`, one
 file each, named by an `id` that the file carries. Adding a file leaves the
 others in place; adding one with a stored `id` replaces that one. The
 pathways of all stored files form one set to choose from, so pathway
@@ -25,13 +25,13 @@ is refused without changing anything. Removing a file is deleting it.
 - An organisation can give each pathway its own file, so most members hold
   one file with one pathway and never see a prompt.
 - A file's own `id` decides which stored file it replaces, so running
-  `--org` again with a newer copy updates it in place, whatever its source.
+  `--config` again with a newer copy updates it in place, whatever its source.
 - Unique pathway identifiers keep `--pathway` a single, unambiguous name.
 - Deleting a file needs no command, because the directory is the list.
 
 ## Alternatives considered
 
-- **One stored file, replaced by each `--org`.** A person on two pathways
+- **One stored file, replaced by each `--config`.** A person on two pathways
   in different files sets up again at every switch.
 - **Several files named by their source.** The same file from a new
   address, or from a download, would be stored twice.

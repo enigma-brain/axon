@@ -1,4 +1,4 @@
-# axon login takes an organisation file from an address, a file or standard input
+# axon login takes a config file from an address, a file or standard input
 
 ## Context
 
@@ -17,13 +17,13 @@ repository.
 
 ## Rationale
 
-`axon login --org <source>` takes an organisation file from an `https`
+`axon login --config <source>` takes a config file from an `https`
 address, a file path, or standard input (`-`), checks it, adds it to the
 stored files, and logs in.
 
 - One flag on the existing login command serves every organisation. A user
   learns no other command, and the setup an organisation documents is two
-  lines: the install line and the login with `--org`.
+  lines: the install line and the login with `--config`.
 - A URL serves an organisation that publishes its file, with no tool beyond
   `axon`.
 - A file path and standard input serve an organisation that keeps its file

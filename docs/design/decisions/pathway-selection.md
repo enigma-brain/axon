@@ -3,7 +3,7 @@
 ## Context
 
 A user reaches an organisation's SkyPilot API server by one of the pathways
-named in the organisation files stored on the laptop. A pathway works only
+named in the config files stored on the laptop. A pathway works only
 from where its kind allows: a direct pathway from the network the
 organisation's server answers on, a teleport pathway from anywhere. Most
 users have an account on one pathway, and it rarely changes. `axon login`
@@ -26,7 +26,7 @@ skips the prompt and makes that pathway the active one. One mechanism
 serves scripted setup, a wrong first answer, and a user who moves from one
 pathway to another.
 
-`axon login --org` without `--pathway` makes a pathway of the added file
+`axon login --config` without `--pathway` makes a pathway of the added file
 active, unless the active pathway is already in that file. A new user sets
 up with one command, and `--pathway` is left for moving between pathways
 already stored.
