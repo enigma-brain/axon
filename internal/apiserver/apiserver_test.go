@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -277,5 +278,145 @@ func TestLiveServerBody(t *testing.T) {
 	}
 	if h != (Health{User: "ada@example.org", ServerVersion: "0.13.0"}) {
 		t.Errorf("Health = %+v", h)
+	}
+}
+
+// cookieLines is a cookie file with a header, a cookie for the server at
+// https://sky.example.org, an HttpOnly one for it, a session cookie for it
+// that has expired, and cookies for other servers.
+var cookieLines = []string{
+	"# Netscape HTTP Cookie File",
+	"# This is a generated file! Do not edit.",
+	"",
+	"sky.example.org\tFALSE\t/\tTRUE\t0\t_oauth2_proxy\tsession",
+	"#HttpOnly_sky.example.org\tFALSE\t/api\tTRUE\t4102444800\tcsrf\tx",
+	"sky.example.org\tFALSE\t/\tFALSE\t1\told\texpired",
+	"other.example.org\tFALSE\t/\tTRUE\t0\t_oauth2_proxy\tkeep",
+	"#HttpOnly_.example.com\tTRUE\t/\tFALSE\t0\tsid\tkeep",
+	"not a cookie line",
+}
+
+func writeCookies(t *testing.T, lines ...string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "cookies.txt")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestRemoveCookies(t *testing.T) {
+	path := writeCookies(t, cookieLines...)
+	n, err := RemoveCookies(path, "https://sky.example.org")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 3 {
+		t.Errorf("removed %d cookies, want 3", n)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		cookieLines[0], cookieLines[1], cookieLines[2],
+		cookieLines[6], cookieLines[7], cookieLines[8],
+	}, "\n") + "\n"
+	if string(data) != want {
+		t.Errorf("file:\n%s\nwant:\n%s", data, want)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("mode = %v, want 0600", info.Mode().Perm())
+	}
+	entries, _ := os.ReadDir(filepath.Dir(path))
+	if len(entries) != 1 {
+		t.Errorf("directory holds %d files, want only the cookie file", len(entries))
+	}
+}
+
+func TestRemoveCookiesKeepsTheFileWhenTheLastCookieGoes(t *testing.T) {
+	path := writeCookies(t, cookieLines[0], cookieLines[3])
+	if n, err := RemoveCookies(path, "https://sky.example.org/"); err != nil || n != 1 {
+		t.Fatalf("RemoveCookies = %d, %v", n, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != cookieLines[0]+"\n" {
+		t.Errorf("file = %q, want the header alone", data)
+	}
+}
+
+func TestRemoveCookiesWithNoCookieForTheServer(t *testing.T) {
+	path := writeCookies(t, cookieLines[0], cookieLines[6])
+	before, _ := os.Stat(path)
+	if n, err := RemoveCookies(path, "https://sky.example.org"); err != nil || n != 0 {
+		t.Fatalf("RemoveCookies = %d, %v", n, err)
+	}
+	after, _ := os.Stat(path)
+	if !os.SameFile(before, after) {
+		t.Error("the file was replaced with nothing to remove")
+	}
+}
+
+func TestRemoveCookiesWithNoFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "none.txt")
+	if n, err := RemoveCookies(path, "https://sky.example.org"); err != nil || n != 0 {
+		t.Fatalf("RemoveCookies = %d, %v", n, err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the file was created: %v", err)
+	}
+}
+
+func TestRemoveCookiesWhenTheFileCannotBeRewritten(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes to a read-only directory")
+	}
+	path := writeCookies(t, cookieLines...)
+	dir := filepath.Dir(path)
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	_, err := RemoveCookies(path, "https://sky.example.org")
+	if err == nil || !strings.Contains(err.Error(), "rewrite the SkyPilot cookie file "+path) {
+		t.Fatalf("err = %v", err)
+	}
+	data, _ := os.ReadFile(path)
+	if string(data) != strings.Join(cookieLines, "\n")+"\n" {
+		t.Error("the file changed after a failed rewrite")
+	}
+}
+
+func TestRemoveCookiesRefusesAnEndpointWithNoHost(t *testing.T) {
+	if _, err := RemoveCookies(writeCookies(t, cookieLines...), "not a url"); err == nil {
+		t.Fatal("no error")
+	}
+}
+
+func TestRemoveCookiesFollowsASymbolicLink(t *testing.T) {
+	target := writeCookies(t, cookieLines[0], cookieLines[3], cookieLines[6])
+	link := filepath.Join(t.TempDir(), "cookies.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := RemoveCookies(link, "https://sky.example.org"); err != nil || n != 1 {
+		t.Fatalf("RemoveCookies = %d, %v", n, err)
+	}
+	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("the link was replaced: %v", err)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := cookieLines[0] + "\n" + cookieLines[6] + "\n"; string(data) != want {
+		t.Errorf("target:\n%s\nwant:\n%s", data, want)
 	}
 }

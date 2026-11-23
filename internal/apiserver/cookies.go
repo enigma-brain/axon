@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -45,36 +46,128 @@ func readCookieFile(path string) ([]cookie, error) {
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 64*1024), 1<<20)
 	for sc.Scan() {
-		line := strings.TrimRight(sc.Text(), "\r")
-		line = strings.TrimPrefix(line, httpOnlyPrefix)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
+		if c, ok := parseCookieLine(sc.Text()); ok {
+			cookies = append(cookies, c)
 		}
-		fields := strings.Split(line, "\t")
-		if len(fields) != 7 {
-			continue
-		}
-		expires, err := strconv.ParseInt(fields[4], 10, 64)
-		if fields[4] == "" {
-			expires, err = 0, nil
-		}
-		if err != nil {
-			continue
-		}
-		cookies = append(cookies, cookie{
-			domain:     strings.ToLower(fields[0]),
-			subdomains: strings.EqualFold(fields[1], "TRUE"),
-			path:       fields[2],
-			secure:     strings.EqualFold(fields[3], "TRUE"),
-			expires:    expires,
-			name:       fields[5],
-			value:      fields[6],
-		})
 	}
 	if err := sc.Err(); err != nil {
 		return nil, fmt.Errorf("read the SkyPilot cookie file: %w", err)
 	}
 	return cookies, nil
+}
+
+// parseCookieLine reads one line of a Netscape-format cookie file. It reports
+// false for a blank line, a comment or a malformed line.
+func parseCookieLine(line string) (cookie, bool) {
+	line = strings.TrimRight(line, "\r\n")
+	line = strings.TrimPrefix(line, httpOnlyPrefix)
+	if line == "" || strings.HasPrefix(line, "#") {
+		return cookie{}, false
+	}
+	fields := strings.Split(line, "\t")
+	if len(fields) != 7 {
+		return cookie{}, false
+	}
+	expires, err := strconv.ParseInt(fields[4], 10, 64)
+	if fields[4] == "" {
+		expires, err = 0, nil
+	}
+	if err != nil {
+		return cookie{}, false
+	}
+	return cookie{
+		domain:     strings.ToLower(fields[0]),
+		subdomains: strings.EqualFold(fields[1], "TRUE"),
+		path:       fields[2],
+		secure:     strings.EqualFold(fields[3], "TRUE"),
+		expires:    expires,
+		name:       fields[5],
+		value:      fields[6],
+	}, true
+}
+
+// RemoveCookies removes from the Netscape-format cookie file at path every
+// cookie for the server at endpoint: each cookie whose domain matches the
+// endpoint's host and whose path covers the endpoint's path or lies below
+// it, whatever its expiry and Secure flag. Every other line is kept as it
+// was. It returns how many cookies it removed. A missing file, or one with
+// no cookie for the server, is left as it is and is not an error.
+//
+// The file is replaced through a temporary file in the same directory, with
+// the original file's permissions, so that a failure leaves it whole.
+func RemoveCookies(path, endpoint string) (int, error) {
+	target, err := url.Parse(endpoint)
+	if err != nil || target.Hostname() == "" {
+		return 0, fmt.Errorf("read the API server's address %q: not a URL with a host", endpoint)
+	}
+	host := strings.ToLower(target.Hostname())
+	base := target.Path
+	if base == "" {
+		base = "/"
+	}
+
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("read the SkyPilot cookie file: %w", err)
+	}
+
+	var kept bytes.Buffer
+	removed := 0
+	for _, line := range bytes.SplitAfter(data, []byte("\n")) {
+		c, ok := parseCookieLine(string(line))
+		if ok && domainMatches(c, host) && (pathMatches(c.path, base) || pathMatches(base, c.path)) {
+			removed++
+			continue
+		}
+		kept.Write(line)
+	}
+	if removed == 0 {
+		return 0, nil
+	}
+	if err := replaceFile(path, kept.Bytes()); err != nil {
+		return 0, fmt.Errorf("rewrite the SkyPilot cookie file %s: %w", path, err)
+	}
+	return removed, nil
+}
+
+// replaceFile replaces the file at path with data, keeping its permissions.
+// It writes a temporary file beside it, syncs it, and renames that over it.
+// A path that is a symbolic link is followed, so the link stays and the
+// file it points to is replaced.
+func replaceFile(path string, data []byte) error {
+	path, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name) // A no-op once the rename succeeds.
+	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, path)
 }
 
 // matchCookies returns the cookies a browser would send to target at now: the

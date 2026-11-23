@@ -161,11 +161,23 @@ To remove everything `axon` keeps, delete `~/.axon`, as
 axon logout
 ```
 
-It logs the SkyPilot client out, stops the Teleport tunnel when one runs,
-ends your Teleport session on a Teleport pathway, and removes `axon`'s
-record of the connection and of your email. It keeps your config files and
-your pathway, so `axon login` with no flags logs you in again. It prints one
-line for each step, for example on a Teleport pathway:
+It logs the SkyPilot client out, removes the API server's saved login from
+SkyPilot's cookie file on a direct pathway, stops the Teleport tunnel when
+one runs, ends your Teleport session on a Teleport pathway, and removes
+`axon`'s record of the connection and of your email. Other servers' cookies
+in the file are kept. It keeps your config files and your pathway, so
+`axon login` with no flags logs you in again. It
+prints one line for each step, for example on a direct pathway:
+
+```text
+sky: logged out of the SkyPilot API server
+sky: removed the saved login for <endpoint>
+Removed the record of the connected pathway and the logged-in email
+Kept the config files in <home>/.axon/orgs; run `axon login` to log in again
+```
+
+When SkyPilot's cookie file holds no login for the server, the line about
+the saved login is left out. On a Teleport pathway:
 
 ```text
 sky: logged out of the SkyPilot API server

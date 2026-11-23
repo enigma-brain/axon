@@ -294,11 +294,12 @@ tunnel by itself while the certificate is still valid.
     axon logout
 
 `axon logout` undoes what `axon login` did, by `axon`'s own records: it runs
-`sky api logout` with `axon`'s client, stops the Teleport tunnel, ends the
-Teleport session for the connected pathway's proxy with `tsh logout`, and
-removes the record of the connected pathway and the logged-in email. It
-keeps the config files and the active pathway, so `axon login` logs in
-again. It prints one line per step, and says why it skipped a step that does
+`sky api logout` with `axon`'s client, removes the connected API server's
+cookies from SkyPilot's cookie file, which `sky api logout` leaves, stops
+the Teleport tunnel, ends the Teleport session for the connected pathway's
+proxy with `tsh logout`, and removes the record of the connected pathway
+and the logged-in email. It keeps the config files and the active pathway,
+so `axon login` logs in again. It prints one line per step, and says why it skipped a step that does
 not apply, such as `tsh` not on `PATH`. A failed step is reported and the
 others still run; the records are then kept, and running `axon logout` again
 retries. To clear a shared machine completely, run `axon logout`, then
