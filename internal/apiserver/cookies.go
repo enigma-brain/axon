@@ -134,8 +134,14 @@ func RemoveCookies(path, endpoint string) (int, error) {
 }
 
 // replaceFile replaces the file at path with data, keeping its permissions.
-// It writes a temporary file beside it and renames that over it.
+// It writes a temporary file beside it, syncs it, and renames that over it.
+// A path that is a symbolic link is followed, so the link stays and the
+// file it points to is replaced.
 func replaceFile(path string, data []byte) error {
+	path, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return err
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		return err
@@ -151,6 +157,10 @@ func replaceFile(path string, data []byte) error {
 		return err
 	}
 	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
 		tmp.Close()
 		return err
 	}

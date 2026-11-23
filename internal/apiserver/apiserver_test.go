@@ -399,3 +399,24 @@ func TestRemoveCookiesRefusesAnEndpointWithNoHost(t *testing.T) {
 		t.Fatal("no error")
 	}
 }
+
+func TestRemoveCookiesFollowsASymbolicLink(t *testing.T) {
+	target := writeCookies(t, cookieLines[0], cookieLines[3], cookieLines[6])
+	link := filepath.Join(t.TempDir(), "cookies.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := RemoveCookies(link, "https://sky.example.org"); err != nil || n != 1 {
+		t.Fatalf("RemoveCookies = %d, %v", n, err)
+	}
+	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("the link was replaced: %v", err)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := cookieLines[0] + "\n" + cookieLines[6] + "\n"; string(data) != want {
+		t.Errorf("target:\n%s\nwant:\n%s", data, want)
+	}
+}
