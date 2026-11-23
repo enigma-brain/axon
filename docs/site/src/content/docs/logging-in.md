@@ -152,3 +152,52 @@ checks is left out, with one line that names it.
 
 To remove everything `axon` keeps, delete `~/.axon`, as
 [Files on your laptop](/axon/files/#removing-everything) describes.
+
+## Logging out
+
+`axon logout` undoes what `axon login` did:
+
+```sh
+axon logout
+```
+
+It logs the SkyPilot client out, stops the Teleport tunnel when one runs,
+ends your Teleport session on a Teleport pathway, and removes `axon`'s
+record of the connection and of your email. It keeps your config files and
+your pathway, so `axon login` with no flags logs you in again. It prints one
+line for each step, for example on a Teleport pathway:
+
+```text
+sky: logged out of the SkyPilot API server
+sky: stopping the Teleport tunnel on port 46581
+teleport: logged out of <proxy>
+Removed the record of the connected pathway and the logged-in email
+Kept the config files in <home>/.axon/orgs
+```
+
+A step that does not apply says why it was skipped:
+
+```text
+sky: skipped logging out of SkyPilot: the SkyPilot client is not installed
+sky: skipped logging out of SkyPilot: the SkyPilot client is not logged in
+teleport: skipped logging out of <proxy>: tsh is not on PATH
+teleport: skipped logging out of Teleport: the record of the connected pathway is from an earlier axon. Run `tsh logout` to end a Teleport session.
+```
+
+With nothing logged in, it says so:
+
+```text
+Nothing is logged in.
+```
+
+When a step fails, `axon logout` says which one and carries on with the
+others, then stops with an error. Run it again to retry:
+
+```text
+axon: could not log out of SkyPilot: <reason>
+axon: logout did not finish. Run `axon logout` again.
+```
+
+To clear a shared machine completely, run `axon logout`, then delete
+`~/.axon` and `~/.sky`. `~/.axon` holds your config files and the tools
+`axon` installed; `~/.sky` holds SkyPilot's settings.

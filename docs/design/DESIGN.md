@@ -255,6 +255,7 @@ file your organization gives you."
 | Command | Behaviour |
 |---|---|
 | `axon login [--config <source>] [--pathway <id>]` | Adds a config file when `--config` is given, determines the pathway, establishes its session, and connects every command group. |
+| `axon logout` | Logs out of every command group and the pathway's session, and removes the records of the connection. |
 | `axon sky [args]` | Checks the connection, then runs `axon`'s own SkyPilot client with the same arguments. |
 | `axon --version` | Prints the version of `axon`. |
 | `axon --help` | Lists the commands. |
@@ -344,7 +345,8 @@ stored file, there is no active pathway, and `axon login` chooses one as
 above.
 
 Leaving a pathway, by `--pathway` or by a change to the stored files,
-disconnects each command group from the pathway that is left.
+disconnects each command group from the pathway that is left: it stops the
+tunnel and removes the logged-in email.
 Disconnecting uses only what `axon` recorded when it connected, never an
 config file, so it works when the file that named the pathway is
 gone.
@@ -376,6 +378,40 @@ neither used nor removed.
 Teleport supports a client whose major version is the proxy's or one behind
 it. When the `tsh` on `PATH` is outside that range, `axon` stops, names the
 installed version and the proxy's, and says to update `tsh`.
+
+## axon logout
+
+`axon logout` undoes what `axon login` did, by `axon`'s own records alone,
+never by a config file, so it works when the file that named the pathway is
+gone. It runs these steps in order:
+
+1. Log the SkyPilot client out, by running `sky api logout` with `axon`'s
+   own client and with `SKYPILOT_API_SERVER_ENDPOINT` unset. When the client
+   is not installed, or stores no endpoint, the step is skipped; `axon
+   logout` never installs the client.
+2. Stop the recorded Teleport tunnel, when it runs.
+3. When the recorded pathway is a `teleport` pathway, end the Teleport
+   session for its proxy with `tsh logout`
+   [{D!}](decisions/logout.md). When no `tsh` is on `PATH`, the step is
+   skipped.
+4. Remove the record of the connected pathway and the logged-in email.
+
+It keeps the config files and the active pathway, so `axon login` with no
+flags logs in again. It prints one line for each step it took or skipped,
+and one line saying that the config files were kept. With nothing logged in
+it says so and exits with success.
+
+A step that fails is reported, and the later steps still run. The records
+of the connection are then kept, so that running `axon logout` again
+retries, and `axon logout` exits with an error.
+
+A record of the connected pathway that an earlier `axon` wrote is a
+connection to log out of: its tunnel is stopped by the tunnel's own record,
+the Teleport step is skipped with a line that names `tsh logout`, and the
+record is removed.
+
+Clearing a shared machine completely is deleting `~/.axon` and `~/.sky`
+after `axon logout`.
 
 ## sky
 

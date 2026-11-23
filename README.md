@@ -288,6 +288,21 @@ tunnel by itself while the certificate is still valid.
   server, or Teleport's connection to it, is not answering. Your Teleport
   login is fine, so retry later.
 
+## Logging out
+
+    axon logout
+
+`axon logout` undoes what `axon login` did, by `axon`'s own records: it runs
+`sky api logout` with `axon`'s client, stops the Teleport tunnel, ends the
+Teleport session for the connected pathway's proxy with `tsh logout`, and
+removes the record of the connected pathway and the logged-in email. It
+keeps the config files and the active pathway, so `axon login` logs in
+again. It prints one line per step, and says why it skipped a step that does
+not apply, such as `tsh` not on `PATH`. A failed step is reported and the
+others still run; the records are then kept, and running `axon logout` again
+retries. To clear a shared machine completely, run `axon logout`, then
+delete `~/.axon` and `~/.sky`.
+
 ## Running commands
 
     axon sky status
@@ -432,12 +447,12 @@ and is part of `go test ./...`.
 | `main.go` | The entry point. Sends every failure through `internal/fail`. |
 | `install.sh` | The install script that the install line runs. |
 | `.goreleaser.yaml` | How a release is built. |
-| `internal/cli` | The command tree: `login` and `sky`. |
+| `internal/cli` | The command tree: `login`, `logout` and `sky`. |
 | `internal/fail` | Prints failures to standard error, prefixed `axon:`, and exits non-zero. |
 | `internal/orgfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/orgs/`. |
 | `internal/axondir` | `~/.axon`: the configuration file, `tools/` and `state/`. |
 | `internal/connected` | The record of the connected pathway and its settings, in `~/.axon/state/pathway.toml`. |
-| `internal/login` | `axon login`: adding a file, choosing the pathway, disconnecting the one left, the stages, the sky group's connect steps, and each kind's login in `direct.go` and `teleport.go`. `browser.go` holds the length of the browser wait. |
+| `internal/login` | `axon login` and `axon logout` (`logout.go`): adding a file, choosing the pathway, disconnecting the one left, the stages, the sky group's connect steps, and each kind's login in `direct.go` and `teleport.go`. `browser.go` holds the length of the browser wait. |
 | `internal/sky` | The `axon sky` command group: its refusals, its connection check, and each pathway kind's endpoint. |
 | `internal/apiserver` | The SkyPilot API server's health request, with SkyPilot's cookies and the client's version headers. |
 | `internal/skyclient` | `axon`'s own SkyPilot client. |
