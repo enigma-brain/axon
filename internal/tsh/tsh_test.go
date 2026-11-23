@@ -464,3 +464,21 @@ func TestFindRefusesARelativePathEntry(t *testing.T) {
 		t.Errorf("Find = %q, %v; want an error that is not ErrNotFound", path, err)
 	}
 }
+
+func TestPing(t *testing.T) {
+	f := newFixture(t)
+	// No tsh on PATH: the ping does not need one.
+	if err := Ping(context.Background(), testProxy); err != nil {
+		t.Errorf("Ping = %v", err)
+	}
+	if len(f.pinged) != 1 || f.pinged[0] != testProxy {
+		t.Errorf("pinged %v", f.pinged)
+	}
+	pingURL = fixedURL("http://127.0.0.1:1/webapi/ping")
+	if err := Ping(context.Background(), testProxy); err == nil {
+		t.Error("Ping of a proxy that does not answer succeeded")
+	}
+	if err := Ping(context.Background(), "bad host"); err == nil {
+		t.Error("Ping of a bad address succeeded")
+	}
+}
