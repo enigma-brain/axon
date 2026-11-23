@@ -36,6 +36,10 @@ const (
 type File struct {
 	// ID is the file's identifier, which names the stored file.
 	ID string
+	// Revision is the file's revision, when HasRevision is true. An
+	// organization raises it each time it changes the file.
+	Revision    int64
+	HasRevision bool
 	// Pathways are the file's pathways, in the file's order.
 	Pathways []Pathway
 }
@@ -93,9 +97,10 @@ var (
 // rawFile and its parts receive the decoded TOML. Values are decoded as
 // any so that a value of the wrong type is reported by its field.
 type rawFile struct {
-	Format  any          `toml:"format"`
-	ID      any          `toml:"id"`
-	Pathway []rawPathway `toml:"pathway"`
+	Format   any          `toml:"format"`
+	ID       any          `toml:"id"`
+	Revision any          `toml:"revision"`
+	Pathway  []rawPathway `toml:"pathway"`
 }
 
 type rawPathway struct {
@@ -182,6 +187,13 @@ func Parse(data []byte) (File, error) {
 	}
 
 	f := File{ID: id}
+	if raw.Revision != nil {
+		n, ok := raw.Revision.(int64)
+		if !ok || n < 0 {
+			return File{}, refuse("revision", "must be a whole number, 0 or more")
+		}
+		f.Revision, f.HasRevision = n, true
+	}
 	seen := map[string]bool{}
 	for i, rp := range raw.Pathway {
 		p, err := checkPathway(i, rp)
@@ -225,7 +237,7 @@ func checkTables(generic map[string]any) error {
 // matches struct fields regardless of case, so a key such as ID beside id
 // would otherwise both decode into the same field.
 var (
-	fileKeys     = keySet("format", "id", "pathway")
+	fileKeys     = keySet("format", "id", "revision", "pathway")
 	pathwayKeys  = keySet("id", "kind", "name", "description", "unreachable_hint", "teleport", "sky")
 	teleportKeys = keySet("proxy")
 	skyKeys      = keySet("endpoint", "app")

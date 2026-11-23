@@ -42,7 +42,7 @@ func (l *login) refresh(ctx context.Context, p orgfile.Pathway, added *orgfile.F
 		changed bool
 	)
 	if err == nil {
-		f, changed, err = store.Refresh(p.File, data, src)
+		f, changed, err = store.Refresh(p.File, data, src, false)
 	}
 	if err != nil {
 		fmt.Fprintf(opts.Err, "axon: could not update %s from %s: %v. Using the stored file.\n", path, src, err)
