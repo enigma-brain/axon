@@ -2,6 +2,7 @@ package login
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -370,5 +371,38 @@ func TestAskYesNo(t *testing.T) {
 	var out strings.Builder
 	if _, err := askYesNo(strings.NewReader("maybe\n"), &out, "? "); err != errNoAnswer || !strings.Contains(out.String(), "Answer y or n.") {
 		t.Errorf("err = %v, out %q", err, out.String())
+	}
+}
+
+// With --config -, standard input is the piped file and the questions go to
+// the terminal: a clash is asked about there, not treated as no terminal.
+func TestPipedConfigAsksTheClashOnTheTerminal(t *testing.T) {
+	h := newHarness(t)
+	tty := &closer{Reader: strings.NewReader("y\n")}
+	h.l.openTerminal = func() (io.ReadCloser, error) { return tty, nil }
+	h.logIn()
+	if err := h.login(Options{Config: "-", In: strings.NewReader(otherCampus)}); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	if !strings.Contains(h.out.String(), "Replace it? [y/N, Enter for no]: ") || !tty.closed {
+		t.Errorf("no question on the terminal, or it was left open:\n%s", h.out.String())
+	}
+	if got := h.storedIDs(); len(got) != 1 || got[0] != "other" {
+		t.Errorf("stored %v, want the piped file in place of the stored one", got)
+	}
+}
+
+// The same for a lower revision.
+func TestPipedConfigAsksTheLowerRevisionOnTheTerminal(t *testing.T) {
+	h := newHarness(t)
+	h.store(revised("7"))
+	tty := &closer{Reader: strings.NewReader("y\n")}
+	h.l.openTerminal = func() (io.ReadCloser, error) { return tty, nil }
+	h.logIn()
+	if err := h.login(Options{Config: "-", Pathway: "campus", In: strings.NewReader(revised("5"))}); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	if !strings.Contains(h.stored("example"), "revision = 5\n") || h.errOut.Len() != 0 {
+		t.Errorf("the answer on the terminal was not used; stderr %q", h.errOut.String())
 	}
 }
