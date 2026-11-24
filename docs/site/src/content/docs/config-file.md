@@ -167,7 +167,7 @@ Then one `[[pathway]]` entry for each pathway. Every pathway has these:
 | `kind` | Yes | `direct` or `teleport`. |
 | `name` | Yes | The pathway's name, as the prompt shows it. |
 | `description` | Yes | The prompt's line about the pathway. Say how members sign in and where the pathway works. |
-| `unreachable_hint` | No | A sentence `axon` prints after `Can't reach <host>.` when a host the pathway names does not answer. |
+| `unreachable_hint` | No | A sentence `axon` prints when a host the pathway names does not answer: after `Can't reach <host>.` for the endpoint, and in place of the next step in the message for the Teleport proxy. |
 
 `name`, `description` and `unreachable_hint` are text for people. `axon` prints
 them as written, and never builds a sentence out of any other field. They hold

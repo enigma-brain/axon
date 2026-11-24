@@ -151,7 +151,7 @@ parts, whatever its kind [{D!}](decisions/pathway-contract.md):
 | `kind` | Identity | `direct` or `teleport` | The pathway's kind. |
 | `name` | Text | Free text, required | The pathway's name, as the prompt shows it. |
 | `description` | Text | Free text, required | The prompt's line about the pathway, which is where the organization names its login system and where the pathway works. |
-| `unreachable_hint` | Text | Free text, optional | A sentence `axon` prints after "Can't reach `<host>`." when a host the pathway names does not answer. |
+| `unreachable_hint` | Text | Free text, optional | A sentence `axon` prints when a host the pathway names does not answer: after "Can't reach `<host>`." for the endpoint, and in place of the next step in the message for the Teleport proxy. |
 | `teleport.proxy` | Kind table, `teleport` | Hostname, optionally with a port | The Teleport proxy. |
 | `sky.endpoint` | `sky` table, `direct` | `https` address | The SkyPilot API server. |
 | `sky.app` | `sky` table, `teleport` | Teleport application name | The Teleport application that serves the SkyPilot API server. |
