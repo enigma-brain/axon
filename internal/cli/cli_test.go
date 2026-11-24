@@ -79,7 +79,7 @@ func TestHelpListsTheCommands(t *testing.T) {
 			names = append(names, f[0])
 		}
 	}
-	if got, want := strings.Join(names, " "), "login logout sky update"; got != want {
+	if got, want := strings.Join(names, " "), "config login logout sky update"; got != want {
 		t.Errorf("help lists %q, want %q", got, want)
 	}
 }
@@ -195,5 +195,50 @@ func TestDevenvIsGone(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	if _, err := run(t, "devenv", "status"); err == nil || !strings.Contains(err.Error(), "unknown command") {
 		t.Errorf("axon devenv: err = %v, want unknown command", err)
+	}
+}
+
+func TestConfigHelp(t *testing.T) {
+	for args, want := range map[string][]string{
+		"config":             {"See the config files and pathways stored on this laptop", "list"},
+		"config --help":      {"See the config files and pathways stored on this laptop", "list"},
+		"config list --help": {"List the stored config files", "--pathway", "change"},
+	} {
+		out, err := run(t, strings.Fields(args)...)
+		if err != nil {
+			t.Fatalf("axon %s: %v", args, err)
+		}
+		for _, w := range want {
+			if !strings.Contains(out, w) {
+				t.Errorf("axon %s lacks %q:\n%s", args, w, out)
+			}
+		}
+	}
+}
+
+func TestConfigListIsWired(t *testing.T) {
+	home := storeOrg(t)
+	if err := axondir.New(home).SetPathway("lab"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := run(t, "config", "list")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"The pathway in use is Lab (lab), from example.", "  * Lab  --pathway lab\n", "source not recorded"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("config list lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestConfigListWithNothingStored(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	out, err := run(t, "config", "list")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Run `axon login` to add a pathway.") {
+		t.Errorf("config list:\n%s", out)
 	}
 }
