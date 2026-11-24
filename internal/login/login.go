@@ -69,8 +69,8 @@ type login struct {
 	loginWait time.Duration
 	// environ is the environment the commands login runs start from.
 	environ func() []string
-	// readOrg reads a config file from its source.
-	readOrg func(ctx context.Context, src configfile.Source, stdin io.Reader) ([]byte, error)
+	// readConfig reads a config file from its source.
+	readConfig func(ctx context.Context, src configfile.Source, stdin io.Reader) ([]byte, error)
 	// openTerminal opens the terminal, where questions are asked when
 	// standard input is the config file.
 	openTerminal func() (io.ReadCloser, error)
@@ -106,7 +106,7 @@ func newLogin(home string, getenv func(string) string) *login {
 		endpoint:     skygroup.Endpoint,
 		loginWait:    loginWait,
 		environ:      os.Environ,
-		readOrg:      configfile.Read,
+		readConfig:   configfile.Read,
 		openTerminal: func() (io.ReadCloser, error) { return os.Open("/dev/tty") },
 		teleport: teleport{
 			ensure:    tsh.Ensure,
@@ -150,7 +150,7 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	answers := opts.In
 	var added *configfile.File
 	if opts.Config != "" {
-		f, in, closeIn, err := l.addOrg(ctx, opts)
+		f, in, closeIn, err := l.addConfig(ctx, opts)
 		if err != nil {
 			return fmt.Errorf("add the config file: %w", err)
 		}
@@ -188,7 +188,7 @@ func (l *login) run(ctx context.Context, opts Options) error {
 		}
 	}
 	if len(files) == 0 {
-		return l.noOrg(opts)
+		return l.noConfig(opts)
 	}
 	p, err := l.determinePathway(files, added, opts)
 	if err != nil {
@@ -198,8 +198,8 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	// 3. Refresh the pathway's file. When the fetched file no longer has
 	// the pathway, the pathway is left and one is determined again.
 	p, err = l.refresh(ctx, p, added, opts)
-	if errors.Is(err, errNoOrg) {
-		return l.noOrg(opts)
+	if errors.Is(err, errNoConfig) {
+		return l.noConfig(opts)
 	}
 	if err != nil {
 		return fmt.Errorf("determine the pathway: %w", err)
@@ -249,9 +249,9 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	return nil
 }
 
-// errNoOrg reports that no config file is stored, and none was given or
+// errNoConfig reports that no config file is stored, and none was given or
 // made.
-var errNoOrg = errors.New(msgNoPathwayNoTerminal)
+var errNoConfig = errors.New(msgNoPathwayNoTerminal)
 
 // isTerminal reports whether in is a terminal: a file whose terminal
 // settings can be read. /dev/null is a character device but not a
@@ -265,18 +265,18 @@ func isTerminal(in io.Reader) bool {
 	return err == nil
 }
 
-// noOrg ends a login that finds no stored config file to use and cannot
+// noConfig ends a login that finds no stored config file to use and cannot
 // ask for a pathway. The active pathway's file is gone, or fails the checks,
 // and no other is stored: the pathway is left, which disconnects it, before
 // login says how to make one.
-func (l *login) noOrg(opts Options) error {
+func (l *login) noConfig(opts Options) error {
 	if err := l.disconnectAll(opts); err != nil {
 		return fmt.Errorf("disconnect the previous pathway: %w. Run `axon login` again.", err)
 	}
-	return errNoOrg
+	return errNoConfig
 }
 
-// addOrg reads the file --config names, checks it and stores it, asking
+// addConfig reads the file --config names, checks it and stores it, asking
 // first about each stored pathway it clashes with and about a lower
 // revision. It returns the file the login goes on with, the stored copy
 // when a lower revision was declined, and where answers to questions are
@@ -284,12 +284,12 @@ func (l *login) noOrg(opts Options) error {
 // no terminal, answers come from an empty input, so that a question with a
 // flag stops and names the flag, and one without is answered no. closeIn
 // releases the terminal.
-func (l *login) addOrg(ctx context.Context, opts Options) (f configfile.File, in io.Reader, closeIn func(), err error) {
+func (l *login) addConfig(ctx context.Context, opts Options) (f configfile.File, in io.Reader, closeIn func(), err error) {
 	src, err := configfile.ParseSource(opts.Config)
 	if err != nil {
 		return configfile.File{}, nil, nil, err
 	}
-	data, err := l.readOrg(ctx, src, opts.In)
+	data, err := l.readConfig(ctx, src, opts.In)
 	if err != nil {
 		return configfile.File{}, nil, nil, err
 	}

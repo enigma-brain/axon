@@ -13,18 +13,18 @@ import (
 	"github.com/enigma-brain/axon/internal/connected"
 )
 
-// writeOrg writes data to a file in a temporary directory and returns its
+// writeConfig writes data to a file in a temporary directory and returns its
 // path, for --config.
-func writeOrg(t *testing.T, data string) string {
+func writeConfig(t *testing.T, data string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "org.toml")
+	path := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return path
 }
 
-// otherCampus has a pathway named Campus, like exampleOrg's, under another
+// otherCampus has a pathway named Campus, like exampleConfig's, under another
 // identifier and server.
 const otherCampus = `format = 2
 id = "other"
@@ -39,7 +39,7 @@ description = "Another campus."
 endpoint = "https://main.example.org"
 `
 
-// sameServer reaches exampleOrg's campus server under another name.
+// sameServer reaches exampleConfig's campus server under another name.
 const sameServer = `format = 2
 id = "other"
 
@@ -69,7 +69,7 @@ func (h *harness) storedIDs() []string {
 func TestConfigNameClashYes(t *testing.T) {
 	h := newHarness(t)
 	h.logIn()
-	if err := h.login(Options{Config: writeOrg(t, otherCampus), In: strings.NewReader("y\n")}); err != nil {
+	if err := h.login(Options{Config: writeConfig(t, otherCampus), In: strings.NewReader("y\n")}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	out := h.out.String()
@@ -93,7 +93,7 @@ func TestConfigNameClashYes(t *testing.T) {
 func TestConfigNameClashNo(t *testing.T) {
 	h := newHarness(t)
 	before := snapshot(t, filepath.Join(h.home, ".axon"))
-	err := h.login(Options{Config: writeOrg(t, otherCampus), In: strings.NewReader("\n")})
+	err := h.login(Options{Config: writeConfig(t, otherCampus), In: strings.NewReader("\n")})
 	want := `add the config file: not added, since its pathway "campus" has the same name as a stored pathway in ` +
 		filepath.Join(h.home, ".axon", "configs", "example.toml") + ". Run the command again with --replace to replace that file."
 	if err == nil || err.Error() != want {
@@ -106,7 +106,7 @@ func TestConfigNameClashNo(t *testing.T) {
 
 func TestConfigClashWithoutATerminal(t *testing.T) {
 	h := newHarness(t)
-	err := h.login(Options{Config: writeOrg(t, otherCampus)})
+	err := h.login(Options{Config: writeConfig(t, otherCampus)})
 	want := `add the config file: its pathway "campus" clashes with the stored pathway "Campus" in ` +
 		filepath.Join(h.home, ".axon", "configs", "example.toml") +
 		", and there is no terminal to ask whether to replace it. Run the command again with --replace to replace it."
@@ -118,7 +118,7 @@ func TestConfigClashWithoutATerminal(t *testing.T) {
 func TestConfigClashWithReplace(t *testing.T) {
 	h := newHarness(t)
 	h.logIn()
-	if err := h.login(Options{Config: writeOrg(t, otherCampus), Replace: true}); err != nil {
+	if err := h.login(Options{Config: writeConfig(t, otherCampus), Replace: true}); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(h.out.String(), "Replace it?") {
@@ -132,7 +132,7 @@ func TestConfigClashWithReplace(t *testing.T) {
 func TestServerClashNoKeepsBoth(t *testing.T) {
 	h := newHarness(t)
 	h.logIn()
-	if err := h.login(Options{Config: writeOrg(t, sameServer), In: strings.NewReader("n\n")}); err != nil {
+	if err := h.login(Options{Config: writeConfig(t, sameServer), In: strings.NewReader("n\n")}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	out := h.out.String()
@@ -232,9 +232,9 @@ func TestReplacingTheActivePathwayLeavesIt(t *testing.T) {
 	}
 }
 
-// revised returns exampleOrg with a revision.
+// revised returns exampleConfig with a revision.
 func revised(n string) string {
-	return strings.Replace(exampleOrg, "id = \"example\"\n", "id = \"example\"\nrevision = "+n+"\n", 1)
+	return strings.Replace(exampleConfig, "id = \"example\"\n", "id = \"example\"\nrevision = "+n+"\n", 1)
 }
 
 func TestLowerRevisionAsks(t *testing.T) {
@@ -256,7 +256,7 @@ func TestLowerRevisionAsks(t *testing.T) {
 			h := newHarness(t)
 			h.store(revised("7"))
 			h.logIn()
-			if err := h.login(Options{Config: writeOrg(t, revised("5")), Pathway: "campus", Replace: tc.replace, In: strings.NewReader(tc.answer)}); err != nil {
+			if err := h.login(Options{Config: writeConfig(t, revised("5")), Pathway: "campus", Replace: tc.replace, In: strings.NewReader(tc.answer)}); err != nil {
 				t.Fatalf("login: %v\n%s", err, h.out.String())
 			}
 			path := filepath.Join(h.home, ".axon", "configs", "example.toml")
@@ -277,7 +277,7 @@ func TestLowerRevisionWithoutATerminalKeepsTheStoredCopy(t *testing.T) {
 	h := newHarness(t)
 	h.store(revised("7"))
 	h.logIn()
-	path := writeOrg(t, revised("5"))
+	path := writeConfig(t, revised("5"))
 	if err := h.login(Options{Config: path, Pathway: "campus"}); err != nil {
 		t.Fatal(err)
 	}
@@ -295,14 +295,14 @@ func TestStoredAndUpdatedLinesNameTheRevision(t *testing.T) {
 	h.noFiles()
 	h.logIn()
 	path := filepath.Join(h.home, ".axon", "configs", "example.toml")
-	if err := h.login(Options{Config: writeOrg(t, revised("3")), Pathway: "campus"}); err != nil {
+	if err := h.login(Options{Config: writeConfig(t, revised("3")), Pathway: "campus"}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(h.out.String(), "Stored the config file "+path+" (revision 3)\n") {
 		t.Errorf("output:\n%s", h.out.String())
 	}
 	h.out.Reset()
-	if err := h.login(Options{Config: writeOrg(t, exampleOrg), Pathway: "campus"}); err != nil {
+	if err := h.login(Options{Config: writeConfig(t, exampleConfig), Pathway: "campus"}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(h.out.String(), "Updated the config file "+path+" from revision 3 to no revision\n") {
@@ -316,16 +316,16 @@ func TestRefreshOfALowerRevision(t *testing.T) {
 		wantStored   string
 		wantErr      string
 	}{
-		{"no terminal", "", "7", "axon: the config file at https://example.org/org.toml is revision 5, older than the stored revision 7. Using the stored file.\n"},
+		{"no terminal", "", "7", "axon: the config file at https://example.org/config.toml is revision 5, older than the stored revision 7. Using the stored file.\n"},
 		{"no", "n\n", "7", ""},
 		{"yes", "y\n", "5", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t)
 			h.noFiles()
-			srv := h.serveOrgs()
-			h.storeFrom("/org.toml", revised("7"))
-			srv.publish("/org.toml", revised("5"))
+			srv := h.serveConfigs()
+			h.storeFrom("/config.toml", revised("7"))
+			srv.publish("/config.toml", revised("5"))
 			h.logIn()
 			if err := h.l.run(context.Background(), Options{Pathway: "campus", In: strings.NewReader(tc.answer), Out: &h.out, Err: &h.errOut}); err != nil {
 				t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -343,10 +343,10 @@ func TestRefreshOfALowerRevision(t *testing.T) {
 func TestRefreshThatNewlyClashesIsLeftOut(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
-	srv := h.serveOrgs()
-	h.storeFrom("/org.toml", exampleOrg)
-	h.store(otherOrg)
-	srv.publish("/org.toml", strings.Replace(exampleOrg, `name = "Remote"`, `name = "Lab"`, 1))
+	srv := h.serveConfigs()
+	h.storeFrom("/config.toml", exampleConfig)
+	h.store(otherConfig)
+	srv.publish("/config.toml", strings.Replace(exampleConfig, `name = "Remote"`, `name = "Lab"`, 1))
 	h.logIn()
 	if err := h.l.run(context.Background(), Options{Pathway: "campus", In: strings.NewReader(""), Out: &h.out, Err: &h.errOut}); err != nil {
 		t.Fatal(err)
@@ -411,7 +411,7 @@ func TestReplacingWithAnUnreadableActivePathwayStops(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := h.storedIDs()
-	if err := h.login(Options{Config: writeOrg(t, otherCampus), Replace: true}); err == nil {
+	if err := h.login(Options{Config: writeConfig(t, otherCampus), Replace: true}); err == nil {
 		t.Fatal("login succeeded with an unreadable active pathway")
 	}
 	if got := h.storedIDs(); len(got) != len(before) || got[0] != before[0] {

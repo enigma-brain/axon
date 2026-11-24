@@ -540,7 +540,7 @@ func TestConfigProxyCantBeReached(t *testing.T) {
 	}
 
 	// The pathway's unreachable_hint, when it has one, is the next step.
-	h.store(strings.Replace(exampleOrg, `description = "Works from anywhere."`,
+	h.store(strings.Replace(exampleConfig, `description = "Works from anywhere."`,
 		"description = \"Works from anywhere.\"\nunreachable_hint = \"Connect to the VPN and retry.\"", 1))
 	err = h.run("remote")
 	want = "establish the Teleport session: can't reach the Teleport proxy at " + testProxy + ": no such host. Connect to the VPN and retry."

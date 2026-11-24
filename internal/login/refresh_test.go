@@ -18,9 +18,9 @@ import (
 	"github.com/enigma-brain/axon/internal/connected"
 )
 
-// orgServer is a local TLS server that publishes config files, one
+// configServer is a local TLS server that publishes config files, one
 // per path, and counts the requests for each.
-type orgServer struct {
+type configServer struct {
 	srv      *httptest.Server
 	mu       sync.Mutex
 	files    map[string]string
@@ -28,12 +28,12 @@ type orgServer struct {
 	requests map[string]int
 }
 
-// serveOrgs starts an orgServer and points the harness's reads of an
+// serveConfigs starts an configServer and points the harness's reads of an
 // https address at it: https://example.org/<path> is the server's <path>.
 // Every other source is read as axon reads it.
-func (h *harness) serveOrgs() *orgServer {
+func (h *harness) serveConfigs() *configServer {
 	h.t.Helper()
-	s := &orgServer{files: map[string]string{}, status: map[string]int{}, requests: map[string]int{}}
+	s := &configServer{files: map[string]string{}, status: map[string]int{}, requests: map[string]int{}}
 	s.srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -51,7 +51,7 @@ func (h *harness) serveOrgs() *orgServer {
 	}))
 	h.t.Cleanup(s.srv.Close)
 
-	h.l.readOrg = func(ctx context.Context, src configfile.Source, stdin io.Reader) ([]byte, error) {
+	h.l.readConfig = func(ctx context.Context, src configfile.Source, stdin io.Reader) ([]byte, error) {
 		if !src.IsAddress() {
 			return configfile.Read(ctx, src, stdin)
 		}
@@ -78,7 +78,7 @@ func (h *harness) serveOrgs() *orgServer {
 }
 
 // publish makes the server answer path with data.
-func (s *orgServer) publish(path, data string) {
+func (s *configServer) publish(path, data string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.files[path] = data
@@ -86,21 +86,21 @@ func (s *orgServer) publish(path, data string) {
 }
 
 // fail makes the server answer path with code.
-func (s *orgServer) fail(path string, code int) {
+func (s *configServer) fail(path string, code int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.status[path] = code
 }
 
 // count returns how many times path was requested.
-func (s *orgServer) count(path string) int {
+func (s *configServer) count(path string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.requests[path]
 }
 
 // total returns how many requests the server had.
-func (s *orgServer) total() int {
+func (s *configServer) total() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	n := 0
@@ -182,16 +182,16 @@ endpoint = "https://sky.example.org"
 
 func TestRefreshReplacesTheFileWithoutDisconnectingOnText(t *testing.T) {
 	h := newHarness(t)
-	orgs := h.serveOrgs()
-	h.storeFrom("/example.toml", exampleOrg)
-	orgs.publish("/example.toml", exampleOrg)
+	server := h.serveConfigs()
+	h.storeFrom("/example.toml", exampleConfig)
+	server.publish("/example.toml", exampleConfig)
 	h.connectedTo("campus")
 	before := h.record()
 	email := h.emailFile()
 
-	renamed := strings.Replace(exampleOrg, `name = "Campus"`, `name = "Campus SSO"`, 1)
+	renamed := strings.Replace(exampleConfig, `name = "Campus"`, `name = "Campus SSO"`, 1)
 	renamed = strings.Replace(renamed, "Connect to the campus VPN and retry.", "Use the VPN.", 1)
-	orgs.publish("/example.toml", renamed)
+	server.publish("/example.toml", renamed)
 	if err := h.run(""); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
@@ -211,16 +211,16 @@ func TestRefreshReplacesTheFileWithoutDisconnectingOnText(t *testing.T) {
 	if h.skyRuns() != 0 {
 		t.Error("sky ran after a change of text alone")
 	}
-	if orgs.count("/example.toml") != 2 {
-		t.Errorf("fetched %d times in two logins, want 2", orgs.count("/example.toml"))
+	if server.count("/example.toml") != 2 {
+		t.Errorf("fetched %d times in two logins, want 2", server.count("/example.toml"))
 	}
 }
 
 func TestRefreshOfTheSameFileSaysNothing(t *testing.T) {
 	h := newHarness(t)
-	orgs := h.serveOrgs()
-	h.storeFrom("/example.toml", exampleOrg)
-	orgs.publish("/example.toml", exampleOrg)
+	server := h.serveConfigs()
+	h.storeFrom("/example.toml", exampleConfig)
+	server.publish("/example.toml", exampleConfig)
 	h.connectedTo("campus")
 
 	if err := h.run(""); err != nil {
@@ -238,21 +238,21 @@ func TestRefreshFailureUsesTheStoredFile(t *testing.T) {
 	path := func(h *harness) string { return filepath.Join(h.home, ".axon", "configs", "example.toml") }
 	for _, tc := range []struct {
 		name   string
-		serve  func(*orgServer)
+		serve  func(*configServer)
 		reason string
 	}{
-		{"unreachable", func(s *orgServer) { s.fail("/example.toml", http.StatusInternalServerError) }, "the server answered 500 Internal Server Error"},
-		{"refused", func(s *orgServer) { s.publish("/example.toml", "format = 3\n") }, "format"},
-		{"another id", func(s *orgServer) {
-			s.publish("/example.toml", strings.Replace(exampleOrg, `id = "example"`, `id = "elsewhere"`, 1))
+		{"unreachable", func(s *configServer) { s.fail("/example.toml", http.StatusInternalServerError) }, "the server answered 500 Internal Server Error"},
+		{"refused", func(s *configServer) { s.publish("/example.toml", "format = 3\n") }, "format"},
+		{"another id", func(s *configServer) {
+			s.publish("/example.toml", strings.Replace(exampleConfig, `id = "example"`, `id = "elsewhere"`, 1))
 		}, `id: is "elsewhere", not "example"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t)
-			orgs := h.serveOrgs()
-			h.storeFrom("/example.toml", exampleOrg)
+			server := h.serveConfigs()
+			h.storeFrom("/example.toml", exampleConfig)
 			h.connectedTo("campus")
-			tc.serve(orgs)
+			tc.serve(server)
 
 			if err := h.run(""); err != nil {
 				t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -263,7 +263,7 @@ func TestRefreshFailureUsesTheStoredFile(t *testing.T) {
 				!strings.Contains(lines[0], tc.reason) || !strings.HasSuffix(lines[0], ". Using the stored file.") {
 				t.Errorf("warnings = %q, want one line beginning %q and naming %q", h.errOut.String(), prefix, tc.reason)
 			}
-			if h.stored("example") != exampleOrg {
+			if h.stored("example") != exampleConfig {
 				t.Error("the stored file changed")
 			}
 			if h.active() != "campus" || h.email() != h.user {
@@ -275,28 +275,28 @@ func TestRefreshFailureUsesTheStoredFile(t *testing.T) {
 
 func TestRefreshFetchesOnlyThePathwaysFile(t *testing.T) {
 	h := newHarness(t)
-	orgs := h.serveOrgs()
-	h.storeFrom("/example.toml", exampleOrg)
-	h.storeFrom("/other.toml", otherOrg)
-	orgs.publish("/example.toml", exampleOrg)
-	orgs.publish("/other.toml", otherOrg)
+	server := h.serveConfigs()
+	h.storeFrom("/example.toml", exampleConfig)
+	h.storeFrom("/other.toml", otherConfig)
+	server.publish("/example.toml", exampleConfig)
+	server.publish("/other.toml", otherConfig)
 	h.connectedTo("lab")
 
-	if got := orgs.count("/other.toml"); got != 1 {
+	if got := server.count("/other.toml"); got != 1 {
 		t.Errorf("the pathway's file was fetched %d times, want 1", got)
 	}
-	if got := orgs.count("/example.toml"); got != 0 {
+	if got := server.count("/example.toml"); got != 0 {
 		t.Errorf("a file the login does not use was fetched %d times", got)
 	}
 }
 
 func TestRefreshSkipsFilesNotFromAnAddress(t *testing.T) {
 	h := newHarness(t)
-	orgs := h.serveOrgs()
-	// The harness stored exampleOrg from standard input. A file from a
+	server := h.serveConfigs()
+	// The harness stored exampleConfig from standard input. A file from a
 	// path, and a file with no recorded source, are not fetched either.
 	file := filepath.Join(t.TempDir(), "other.toml")
-	if err := os.WriteFile(file, []byte(otherOrg), 0o644); err != nil {
+	if err := os.WriteFile(file, []byte(otherConfig), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	h.connectedTo("campus")
@@ -311,23 +311,23 @@ func TestRefreshSkipsFilesNotFromAnAddress(t *testing.T) {
 			t.Fatalf("login on %q: %v", id, err)
 		}
 	}
-	if orgs.total() != 0 {
-		t.Errorf("%d fetches", orgs.total())
+	if server.total() != 0 {
+		t.Errorf("%d fetches", server.total())
 	}
 	if h.errOut.Len() != 0 {
 		t.Errorf("warnings = %q", h.errOut.String())
 	}
 }
 
-func TestOrgAddedIsNotFetchedAgain(t *testing.T) {
+func TestConfigAddedIsNotFetchedAgain(t *testing.T) {
 	h := newHarness(t)
-	orgs := h.serveOrgs()
-	orgs.publish("/other.toml", otherOrg)
+	server := h.serveConfigs()
+	server.publish("/other.toml", otherConfig)
 	h.logIn()
 	if err := h.login(Options{Config: "https://example.org/other.toml"}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
-	if got := orgs.count("/other.toml"); got != 1 {
+	if got := server.count("/other.toml"); got != 1 {
 		t.Errorf("fetched %d times, want once, by --config", got)
 	}
 	if h.active() != "lab" {
@@ -335,17 +335,17 @@ func TestOrgAddedIsNotFetchedAgain(t *testing.T) {
 	}
 }
 
-// dropCampus is exampleOrg without the pathway campus.
-var dropCampus = strings.Replace(exampleOrg, exampleOrg[strings.Index(exampleOrg, "[[pathway]]\nid = \"campus\""):strings.Index(exampleOrg, "[[pathway]]\nid = \"remote\"")], "", 1)
+// dropCampus is exampleConfig without the pathway campus.
+var dropCampus = strings.Replace(exampleConfig, exampleConfig[strings.Index(exampleConfig, "[[pathway]]\nid = \"campus\""):strings.Index(exampleConfig, "[[pathway]]\nid = \"remote\"")], "", 1)
 
 func TestDroppedPathwayNamedByFlagStops(t *testing.T) {
 	h := newHarness(t)
-	orgs := h.serveOrgs()
-	h.storeFrom("/example.toml", exampleOrg)
-	h.store(otherOrg)
+	server := h.serveConfigs()
+	h.storeFrom("/example.toml", exampleConfig)
+	h.store(otherConfig)
 	h.connectedTo("campus")
 	before := h.record()
-	orgs.publish("/example.toml", dropCampus)
+	server.publish("/example.toml", dropCampus)
 
 	err := h.run("campus")
 	want := `determine the pathway: the pathway "campus" is no longer in its config file. The stored pathways are remote and lab.`
@@ -363,10 +363,10 @@ func TestDroppedPathwayNamedByFlagStops(t *testing.T) {
 func TestDroppedPathwayWithOneLeftIsReplacedWithoutAsking(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
-	orgs := h.serveOrgs()
+	server := h.serveConfigs()
 	h.storeFrom("/example.toml", oneCampus)
 	h.connectedTo("campus")
-	orgs.publish("/example.toml", strings.Replace(oneCampus, `id = "campus"`, `id = "campus-sso"`, 1))
+	server.publish("/example.toml", strings.Replace(oneCampus, `id = "campus"`, `id = "campus-sso"`, 1))
 
 	if err := h.run(""); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -380,19 +380,19 @@ func TestDroppedPathwayWithOneLeftIsReplacedWithoutAsking(t *testing.T) {
 	if h.active() != "campus-sso" || h.record().ID != "campus-sso" {
 		t.Errorf("active = %q, record = %+v; want campus-sso", h.active(), h.record())
 	}
-	if orgs.count("/example.toml") != 2 {
-		t.Errorf("fetched %d times in two logins; choosing again fetches nothing", orgs.count("/example.toml"))
+	if server.count("/example.toml") != 2 {
+		t.Errorf("fetched %d times in two logins; choosing again fetches nothing", server.count("/example.toml"))
 	}
 }
 
 func TestDroppedPathwayWithSeveralLeftAsks(t *testing.T) {
 	h := newHarness(t)
-	orgs := h.serveOrgs()
-	h.storeFrom("/example.toml", exampleOrg)
-	h.storeFrom("/other.toml", otherOrg)
-	orgs.publish("/other.toml", otherOrg)
+	server := h.serveConfigs()
+	h.storeFrom("/example.toml", exampleConfig)
+	h.storeFrom("/other.toml", otherConfig)
+	server.publish("/other.toml", otherConfig)
 	h.connectedTo("campus")
-	orgs.publish("/example.toml", dropCampus)
+	server.publish("/example.toml", dropCampus)
 
 	if err := h.login(Options{In: strings.NewReader("lab\n")}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -406,19 +406,19 @@ func TestDroppedPathwayWithSeveralLeftAsks(t *testing.T) {
 	if h.active() != "lab" || h.record().ID != "lab" {
 		t.Errorf("active = %q, record = %+v; want lab", h.active(), h.record())
 	}
-	if got := orgs.count("/other.toml"); got != 0 {
+	if got := server.count("/other.toml"); got != 0 {
 		t.Errorf("the newly chosen pathway's file was fetched %d times", got)
 	}
 }
 
 func TestDroppedPathwayWithoutAnAnswerChangesNothing(t *testing.T) {
 	h := newHarness(t)
-	orgs := h.serveOrgs()
-	h.storeFrom("/example.toml", exampleOrg)
-	h.store(otherOrg)
+	server := h.serveConfigs()
+	h.storeFrom("/example.toml", exampleConfig)
+	h.store(otherConfig)
 	h.connectedTo("campus")
 	before := h.record()
-	orgs.publish("/example.toml", dropCampus)
+	server.publish("/example.toml", dropCampus)
 
 	err := h.run("")
 	want := "determine the pathway: no pathway chosen. Run `axon login --pathway <id>` with one of remote and lab."
@@ -432,11 +432,11 @@ func TestDroppedPathwayWithoutAnAnswerChangesNothing(t *testing.T) {
 
 func TestRefreshedSettingsReconnectDirectPathway(t *testing.T) {
 	h := newHarness(t)
-	orgs := h.serveOrgs()
-	h.storeFrom("/example.toml", exampleOrg)
+	server := h.serveConfigs()
+	h.storeFrom("/example.toml", exampleConfig)
 	h.connectedTo("campus")
 	before := h.emailFile()
-	orgs.publish("/example.toml", strings.Replace(exampleOrg, "https://sky.example.org", "https://sky2.example.org", 1))
+	server.publish("/example.toml", strings.Replace(exampleConfig, "https://sky.example.org", "https://sky2.example.org", 1))
 
 	if err := h.run(""); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -454,7 +454,7 @@ func TestRefreshedSettingsReconnectDirectPathway(t *testing.T) {
 
 func TestActiveFileThatFailsIsLeft(t *testing.T) {
 	h := newHarness(t)
-	h.store(otherOrg)
+	h.store(otherConfig)
 	h.connectedTo("campus")
 	before := h.emailFile()
 	path := filepath.Join(h.home, ".axon", "configs", "example.toml")
@@ -478,10 +478,10 @@ func TestActiveFileThatFailsIsLeft(t *testing.T) {
 
 func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 	h := newMetaHarness(t)
-	orgs := h.serveOrgs()
+	server := h.serveConfigs()
 	h.noFiles()
-	h.storeFrom("/example.toml", exampleOrg)
-	orgs.publish("/example.toml", exampleOrg)
+	h.storeFrom("/example.toml", exampleConfig)
+	server.publish("/example.toml", exampleConfig)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("teleport login: %v\n%s", err, h.out.String())
 	}
@@ -491,7 +491,7 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 	}
 	h.tshCalls()
 
-	orgs.publish("/example.toml", strings.Replace(exampleOrg, `app = "skypilot"`, `app = "skypilot2"`, 1))
+	server.publish("/example.toml", strings.Replace(exampleConfig, `app = "skypilot"`, `app = "skypilot2"`, 1))
 	stateDir, err := axondir.New(h.home).StateDir()
 	if err != nil {
 		t.Fatal(err)
@@ -525,10 +525,10 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 // stored file.
 func TestRefreshOfAnEmptyFileNamesTheAddress(t *testing.T) {
 	h := newHarness(t)
-	orgs := h.serveOrgs()
-	h.storeFrom("/example.toml?token=s3cret", exampleOrg)
+	server := h.serveConfigs()
+	h.storeFrom("/example.toml?token=s3cret", exampleConfig)
 	h.connectedTo("campus")
-	orgs.publish("/example.toml", "# nothing but a comment\n")
+	server.publish("/example.toml", "# nothing but a comment\n")
 
 	if err := h.run(""); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -538,7 +538,7 @@ func TestRefreshOfAnEmptyFileNamesTheAddress(t *testing.T) {
 	if got := h.errOut.String(); got != want {
 		t.Errorf("warnings = %q, want %q", got, want)
 	}
-	if h.stored("example") != exampleOrg {
+	if h.stored("example") != exampleConfig {
 		t.Error("the stored file changed")
 	}
 }
@@ -546,10 +546,10 @@ func TestRefreshOfAnEmptyFileNamesTheAddress(t *testing.T) {
 // A failed fetch names the address without its query string.
 func TestRefreshFailureHidesTheToken(t *testing.T) {
 	h := newHarness(t)
-	orgs := h.serveOrgs()
-	h.storeFrom("/example.toml?token=s3cret", exampleOrg)
+	server := h.serveConfigs()
+	h.storeFrom("/example.toml?token=s3cret", exampleConfig)
 	h.connectedTo("campus")
-	orgs.fail("/example.toml", http.StatusInternalServerError)
+	server.fail("/example.toml", http.StatusInternalServerError)
 
 	if err := h.run(""); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())

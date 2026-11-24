@@ -46,7 +46,7 @@ func (l *login) refresh(ctx context.Context, p configfile.Pathway, added *config
 		}
 	}
 
-	data, err := l.readOrg(ctx, src, nil)
+	data, err := l.readConfig(ctx, src, nil)
 	var (
 		f       configfile.File
 		changed bool
@@ -104,7 +104,7 @@ func (l *login) refresh(ctx context.Context, p configfile.Pathway, added *config
 	}
 	if len(all) == 0 {
 		// The stored files were removed while this login ran.
-		return configfile.Pathway{}, errNoOrg
+		return configfile.Pathway{}, errNoConfig
 	}
 	if opts.Pathway != "" {
 		return configfile.Pathway{}, fmt.Errorf("the pathway %q is no longer in its config file. The stored pathways are %s.", p.ID, idList(all))

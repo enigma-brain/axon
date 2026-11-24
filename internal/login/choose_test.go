@@ -15,8 +15,8 @@ import (
 	"github.com/enigma-brain/axon/internal/connected"
 )
 
-// otherOrg is a second config file, with one direct pathway, lab.
-const otherOrg = `format = 2
+// otherConfig is a second config file, with one direct pathway, lab.
+const otherConfig = `format = 2
 id = "other"
 
 [[pathway]]
@@ -51,7 +51,7 @@ func (h *harness) active() string {
 	return id
 }
 
-func TestNoOrganizationFileStops(t *testing.T) {
+func TestNoConfigFileStops(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
 	err := h.run("")
@@ -85,8 +85,8 @@ func TestLastFileDeletedWithoutTunnelDisconnects(t *testing.T) {
 	}
 	h.noFiles()
 	h.out.Reset()
-	if err := h.run(""); !errors.Is(err, errNoOrg) {
-		t.Fatalf("err = %v, want errNoOrg", err)
+	if err := h.run(""); !errors.Is(err, errNoConfig) {
+		t.Fatalf("err = %v, want errNoConfig", err)
 	}
 	if e := h.email(); e != "" {
 		t.Errorf("email %q stayed after the pathway was left", e)
@@ -110,15 +110,15 @@ func TestOldPathwayWithoutFileStops(t *testing.T) {
 	if err := axondir.New(h.home).SetPathway("old-name"); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.run(""); !errors.Is(err, errNoOrg) {
-		t.Fatalf("err = %v, want errNoOrg", err)
+	if err := h.run(""); !errors.Is(err, errNoConfig) {
+		t.Fatalf("err = %v, want errNoConfig", err)
 	}
 }
 
 func TestOnePathwayIsUsedWithoutAsking(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
-	h.store(otherOrg)
+	h.store(otherConfig)
 	h.logIn()
 	if err := h.run(""); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -151,7 +151,7 @@ func TestTwoPathwaysInOneFileAsk(t *testing.T) {
 
 func TestTwoFilesAreOfferedInTheirOrder(t *testing.T) {
 	h := newHarness(t)
-	h.store(otherOrg)
+	h.store(otherConfig)
 	h.logIn()
 	if err := h.login(Options{In: strings.NewReader("lab\n")}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -197,7 +197,7 @@ func TestActivePathwayNoFileHasIsChosenAgain(t *testing.T) {
 
 func TestPathwayFlagSwitches(t *testing.T) {
 	h := newHarness(t)
-	h.store(otherOrg)
+	h.store(otherConfig)
 	h.logIn()
 	if err := h.run("campus"); err != nil {
 		t.Fatal(err)
@@ -216,7 +216,7 @@ func TestPathwayFlagSwitches(t *testing.T) {
 
 func TestUnknownPathwayIsRefused(t *testing.T) {
 	h := newHarness(t)
-	h.store(otherOrg)
+	h.store(otherConfig)
 	err := h.run("nope")
 	want := `determine the pathway: no stored config file has the pathway "nope". The stored pathways are campus, remote and lab.`
 	if err == nil || err.Error() != want {
@@ -245,11 +245,11 @@ func TestStoredFileThatFailsIsLeftOutWithOneLine(t *testing.T) {
 	}
 }
 
-func TestOrgFromPath(t *testing.T) {
+func TestConfigFromPath(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
 	path := filepath.Join(t.TempDir(), "axon.toml")
-	if err := os.WriteFile(path, []byte(otherOrg), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(otherConfig), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h.logIn()
@@ -257,7 +257,7 @@ func TestOrgFromPath(t *testing.T) {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	stored := filepath.Join(h.home, ".axon", "configs", "other.toml")
-	if data, _ := os.ReadFile(stored); string(data) != otherOrg {
+	if data, _ := os.ReadFile(stored); string(data) != otherConfig {
 		t.Errorf("stored file = %q", data)
 	}
 	if !strings.HasPrefix(h.out.String(), "Stored the config file "+stored+"\n") {
@@ -268,15 +268,15 @@ func TestOrgFromPath(t *testing.T) {
 	}
 }
 
-func TestOrgFromAddress(t *testing.T) {
+func TestConfigFromAddress(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
 	const address = "https://example.org/axon.toml"
-	h.l.readOrg = func(_ context.Context, src configfile.Source, _ io.Reader) ([]byte, error) {
+	h.l.readConfig = func(_ context.Context, src configfile.Source, _ io.Reader) ([]byte, error) {
 		if src.String() != address || !src.IsAddress() {
 			t.Errorf("read %q", src)
 		}
-		return []byte(otherOrg), nil
+		return []byte(otherConfig), nil
 	}
 	h.logIn()
 	if err := h.login(Options{Config: address}); err != nil {
@@ -291,13 +291,13 @@ func TestOrgFromAddress(t *testing.T) {
 	}
 }
 
-func TestOrgFromStdinWithTwoPathwaysAsksOnTheTerminal(t *testing.T) {
+func TestConfigFromStdinWithTwoPathwaysAsksOnTheTerminal(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
 	tty := &closer{Reader: strings.NewReader("1\n")}
 	h.l.openTerminal = func() (io.ReadCloser, error) { return tty, nil }
 	h.logIn()
-	if err := h.login(Options{Config: "-", In: strings.NewReader(exampleOrg)}); err != nil {
+	if err := h.login(Options{Config: "-", In: strings.NewReader(exampleConfig)}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	if h.active() != "campus" {
@@ -308,10 +308,10 @@ func TestOrgFromStdinWithTwoPathwaysAsksOnTheTerminal(t *testing.T) {
 	}
 }
 
-func TestOrgFromStdinWithoutTerminalNamesTheFlag(t *testing.T) {
+func TestConfigFromStdinWithoutTerminalNamesTheFlag(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
-	err := h.login(Options{Config: "-", In: strings.NewReader(exampleOrg)})
+	err := h.login(Options{Config: "-", In: strings.NewReader(exampleConfig)})
 	want := "determine the pathway: no pathway chosen. Run `axon login --pathway <id>` with one of campus and remote."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
@@ -319,7 +319,7 @@ func TestOrgFromStdinWithoutTerminalNamesTheFlag(t *testing.T) {
 	// The file was added; the flag answers the question.
 	h.logIn()
 	h.out.Reset()
-	if err := h.login(Options{Config: "-", Pathway: "campus", In: strings.NewReader(exampleOrg)}); err != nil {
+	if err := h.login(Options{Config: "-", Pathway: "campus", In: strings.NewReader(exampleConfig)}); err != nil {
 		t.Fatalf("login with --pathway: %v", err)
 	}
 	if h.active() != "campus" {
@@ -327,13 +327,13 @@ func TestOrgFromStdinWithoutTerminalNamesTheFlag(t *testing.T) {
 	}
 }
 
-func TestOrgKeepsActivePathwayInTheAddedFile(t *testing.T) {
+func TestConfigKeepsActivePathwayInTheAddedFile(t *testing.T) {
 	h := newHarness(t)
-	h.store(otherOrg)
+	h.store(otherConfig)
 	if err := axondir.New(h.home).SetPathway("remote"); err != nil {
 		t.Fatal(err)
 	}
-	h.l.readOrg = func(context.Context, configfile.Source, io.Reader) ([]byte, error) { return []byte(otherOrg), nil }
+	h.l.readConfig = func(context.Context, configfile.Source, io.Reader) ([]byte, error) { return []byte(otherConfig), nil }
 	h.logIn()
 	// The active pathway is not in the added file, which has one pathway.
 	if err := h.login(Options{Config: "https://example.org/other.toml"}); err != nil {
@@ -355,7 +355,7 @@ func TestOrgKeepsActivePathwayInTheAddedFile(t *testing.T) {
 	if err := axondir.New(h.home).SetPathway("campus"); err != nil {
 		t.Fatal(err)
 	}
-	h.l.readOrg = func(context.Context, configfile.Source, io.Reader) ([]byte, error) { return []byte(exampleOrg), nil }
+	h.l.readConfig = func(context.Context, configfile.Source, io.Reader) ([]byte, error) { return []byte(exampleConfig), nil }
 	h.out.Reset()
 	if err := h.login(Options{Config: "https://example.org/example.toml"}); err != nil {
 		t.Fatal(err)
@@ -365,14 +365,14 @@ func TestOrgKeepsActivePathwayInTheAddedFile(t *testing.T) {
 	}
 }
 
-func TestOrgOffersOnlyTheAddedFilesPathways(t *testing.T) {
+func TestConfigOffersOnlyTheAddedFilesPathways(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
-	h.store(otherOrg)
+	h.store(otherConfig)
 	if err := axondir.New(h.home).SetPathway("lab"); err != nil {
 		t.Fatal(err)
 	}
-	h.l.readOrg = func(context.Context, configfile.Source, io.Reader) ([]byte, error) { return []byte(exampleOrg), nil }
+	h.l.readConfig = func(context.Context, configfile.Source, io.Reader) ([]byte, error) { return []byte(exampleConfig), nil }
 	err := h.login(Options{Config: "https://example.org/example.toml"})
 	if err == nil || !strings.HasSuffix(err.Error(), "with one of campus and remote.") {
 		t.Fatalf("err = %v", err)
@@ -382,13 +382,13 @@ func TestOrgOffersOnlyTheAddedFilesPathways(t *testing.T) {
 	}
 }
 
-func TestRefusedOrgChangesNothing(t *testing.T) {
+func TestRefusedConfigChangesNothing(t *testing.T) {
 	h := newHarness(t)
 	if err := axondir.New(h.home).SetPathway("campus"); err != nil {
 		t.Fatal(err)
 	}
 	before := snapshot(t, filepath.Join(h.home, ".axon"))
-	clash := strings.Replace(otherOrg, `id = "lab"`, `id = "campus"`, 1)
+	clash := strings.Replace(otherConfig, `id = "lab"`, `id = "campus"`, 1)
 	path := filepath.Join(t.TempDir(), "clash.toml")
 	if err := os.WriteFile(path, []byte(clash), 0o600); err != nil {
 		t.Fatal(err)
@@ -578,7 +578,7 @@ func TestConfigEmpty(t *testing.T) {
 			h := newHarness(t)
 			h.noFiles()
 			// An address is answered by a fake; nothing is fetched.
-			h.l.readOrg = func(ctx context.Context, src configfile.Source, stdin io.Reader) ([]byte, error) {
+			h.l.readConfig = func(ctx context.Context, src configfile.Source, stdin io.Reader) ([]byte, error) {
 				if src.IsAddress() {
 					return nil, nil
 				}

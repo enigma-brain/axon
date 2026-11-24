@@ -36,17 +36,17 @@ description = "In the lab."
 endpoint = "https://lab.example.org"
 `
 
-// storeOrg sets HOME to a new directory holding twoPathways as a stored
+// storeConfig sets HOME to a new directory holding twoPathways as a stored
 // config file. The login tests below stop before any network request.
-func storeOrg(t *testing.T) string {
+func storeConfig(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	orgs := filepath.Join(home, ".axon", "configs")
-	if err := os.MkdirAll(orgs, 0o700); err != nil {
+	configs := filepath.Join(home, ".axon", "configs")
+	if err := os.MkdirAll(configs, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(orgs, "example.toml"), []byte(twoPathways), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(configs, "example.toml"), []byte(twoPathways), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return home
@@ -156,7 +156,7 @@ func TestLoginWithoutAFileStops(t *testing.T) {
 }
 
 func TestLoginUnknownPathwayIsRefused(t *testing.T) {
-	home := storeOrg(t)
+	home := storeConfig(t)
 	_, err := run(t, "login", "--pathway", "nope")
 	if err == nil || !strings.Contains(err.Error(), "The stored pathways are campus and lab.") {
 		t.Errorf("login --pathway nope: err = %v", err)
@@ -167,7 +167,7 @@ func TestLoginUnknownPathwayIsRefused(t *testing.T) {
 }
 
 func TestLoginWithoutTerminalAsksForFlag(t *testing.T) {
-	storeOrg(t)
+	storeConfig(t)
 	root := NewRoot("1.2.3")
 	var out bytes.Buffer
 	root.SetIn(strings.NewReader(""))
@@ -217,7 +217,7 @@ func TestConfigHelp(t *testing.T) {
 }
 
 func TestConfigListIsWired(t *testing.T) {
-	home := storeOrg(t)
+	home := storeConfig(t)
 	if err := axondir.New(home).SetPathway("lab"); err != nil {
 		t.Fatal(err)
 	}

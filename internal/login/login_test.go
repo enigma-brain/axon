@@ -90,9 +90,9 @@ func (c *fakeClient) Path() (string, error) {
 	return c.sky, nil
 }
 
-// exampleOrg is the config file the harness stores: a direct
+// exampleConfig is the config file the harness stores: a direct
 // pathway, campus, and a teleport pathway, remote. Every detail is made up.
-const exampleOrg = `format = 2
+const exampleConfig = `format = 2
 id = "example"
 
 [[pathway]]
@@ -176,7 +176,7 @@ func newHarness(t *testing.T) *harness {
 				"BROWSER=chromium",
 			}
 		},
-		readOrg: configfile.Read,
+		readConfig: configfile.Read,
 		// The tests never reach the real terminal.
 		openTerminal: func() (io.ReadCloser, error) { return nil, errors.New("no terminal in tests") },
 		teleport: teleport{
@@ -186,7 +186,7 @@ func newHarness(t *testing.T) *harness {
 			skyConfig: filepath.Join(h.home, ".sky", "config.yaml"),
 		},
 	}
-	h.store(exampleOrg)
+	h.store(exampleConfig)
 	return h
 }
 
@@ -565,7 +565,7 @@ func TestLoginPutsBackAnInterruptedUpdate(t *testing.T) {
 	if want := fmt.Sprintf(msgPutBack, path); !strings.Contains(h.out.String(), want) {
 		t.Errorf("output does not say the file was put back:\n%s", h.out.String())
 	}
-	if got, _ := os.ReadFile(path); string(got) != exampleOrg {
+	if got, _ := os.ReadFile(path); string(got) != exampleConfig {
 		t.Errorf("stored file = %q, want the previous copy", got)
 	}
 	if _, err := os.Stat(path + ".previous"); !os.IsNotExist(err) {

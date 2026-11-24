@@ -506,7 +506,7 @@ func mustRead(t *testing.T, name string) string {
 func TestStopExitsNonZeroWithTheMessage(t *testing.T) {
 	sky := writeFakeSky(t)
 	home := t.TempDir()
-	storeOrg(t, home)
+	storeConfig(t, home)
 	dir := axondir.New(home)
 	if err := dir.SetPathway("campus"); err != nil {
 		t.Fatal(err)

@@ -268,13 +268,13 @@ func TestAddRefusesToReplaceANonRegularFile(t *testing.T) {
 
 func TestAddIgnoresBadStoredFiles(t *testing.T) {
 	s, home := newStore(t)
-	orgs := filepath.Join(home, ".axon", "configs")
-	if err := os.MkdirAll(orgs, 0o700); err != nil {
+	configs := filepath.Join(home, ".axon", "configs")
+	if err := os.MkdirAll(configs, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	// A stored file that fails the checks does not hold its identifiers.
 	broken := strings.Replace(oneDirect("broken", "campus"), "format = 2", "format = 9", 1)
-	if err := os.WriteFile(filepath.Join(orgs, "broken.toml"), []byte(broken), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(configs, "broken.toml"), []byte(broken), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	add(t, s, oneDirect("example", "campus"), "-")
@@ -285,13 +285,13 @@ func TestListOrderAndProblems(t *testing.T) {
 	if files, problems, err := s.List(); files != nil || problems != nil || err != nil {
 		t.Fatalf("List with no directory = %v, %v, %v", files, problems, err)
 	}
-	orgs := filepath.Join(home, ".axon", "configs")
-	if err := os.MkdirAll(filepath.Join(orgs, "adir.toml"), 0o700); err != nil {
+	configs := filepath.Join(home, ".axon", "configs")
+	if err := os.MkdirAll(filepath.Join(configs, "adir.toml"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	write := func(name, content string) {
 		t.Helper()
-		if err := os.WriteFile(filepath.Join(orgs, name), []byte(content), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(configs, name), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -319,7 +319,7 @@ func TestListOrderAndProblems(t *testing.T) {
 	}
 	want := map[string]string{
 		"adir.toml": "regular file",
-		"c.toml":    filepath.Join(orgs, "a.toml"),
+		"c.toml":    filepath.Join(configs, "a.toml"),
 		"d.toml":    "id: must be",
 		"e.toml":    "file name",
 	}
@@ -355,7 +355,7 @@ func TestConcurrentAddsClaimingOnePathway(t *testing.T) {
 	for i := range n {
 		go func() {
 			<-start
-			_, err := s.Add([]byte(oneDirect(fmt.Sprintf("org-%d", i), "shared")), mustSource(t, "-"))
+			_, err := s.Add([]byte(oneDirect(fmt.Sprintf("example-%d", i), "shared")), mustSource(t, "-"))
 			errs <- err
 		}()
 	}
@@ -383,14 +383,14 @@ func TestConcurrentAddsClaimingOnePathway(t *testing.T) {
 
 func TestAddReleasesTheLock(t *testing.T) {
 	s, home := newStore(t)
-	add(t, s, oneDirect("org-a", "a"), "-")
+	add(t, s, oneDirect("example-a", "a"), "-")
 	// Refused after the lock is taken: another file claims pathway a.
-	_, err := s.Add([]byte(oneDirect("org-c", "a")), mustSource(t, "-"))
+	_, err := s.Add([]byte(oneDirect("example-c", "a")), mustSource(t, "-"))
 	var clash *ClashError
 	if !errors.As(err, &clash) {
 		t.Fatalf("Add of a file claiming a stored pathway: err = %v", err)
 	}
-	add(t, s, oneDirect("org-b", "b"), "-")
+	add(t, s, oneDirect("example-b", "b"), "-")
 	if _, err := os.Stat(axondir.New(home).LockPath()); err != nil {
 		t.Errorf("lock file: %v", err)
 	}
@@ -400,19 +400,19 @@ const refreshAddress = "https://example.org/a.toml"
 
 func TestRefreshReplacesTheFile(t *testing.T) {
 	s, _ := newStore(t)
-	add(t, s, oneDirect("org", "a"), refreshAddress)
-	f, changed, err := s.Refresh("org", []byte(oneDirect("org", "a", "b")), mustSource(t, refreshAddress), false)
+	add(t, s, oneDirect("example", "a"), refreshAddress)
+	f, changed, err := s.Refresh("example", []byte(oneDirect("example", "a", "b")), mustSource(t, refreshAddress), false)
 	if err != nil || !changed {
 		t.Fatalf("Refresh = %v, %v", changed, err)
 	}
-	if got := pathwayIDs([]File{f}); !reflect.DeepEqual(got, []string{"org/a", "org/b"}) {
+	if got := pathwayIDs([]File{f}); !reflect.DeepEqual(got, []string{"example/a", "example/b"}) {
 		t.Errorf("returned pathways %v", got)
 	}
-	data, err := os.ReadFile(s.Path("org"))
-	if err != nil || string(data) != oneDirect("org", "a", "b") {
+	data, err := os.ReadFile(s.Path("example"))
+	if err != nil || string(data) != oneDirect("example", "a", "b") {
 		t.Errorf("stored file = %q, %v", data, err)
 	}
-	src, ok, err := s.Source("org")
+	src, ok, err := s.Source("example")
 	if err != nil || !ok || src.String() != refreshAddress {
 		t.Errorf("source = %q, %v, %v", src, ok, err)
 	}
@@ -420,14 +420,14 @@ func TestRefreshReplacesTheFile(t *testing.T) {
 
 func TestRefreshOfTheSameBytesWritesNothing(t *testing.T) {
 	s, home := newStore(t)
-	add(t, s, oneDirect("org", "a"), refreshAddress)
-	path := s.Path("org")
+	add(t, s, oneDirect("example", "a"), refreshAddress)
+	path := s.Path("example")
 	old := time.Unix(1_000_000, 0)
 	if err := os.Chtimes(path, old, old); err != nil {
 		t.Fatal(err)
 	}
 	before := snapshot(t, filepath.Join(home, ".axon"))
-	_, changed, err := s.Refresh("org", []byte(oneDirect("org", "a")), mustSource(t, refreshAddress), false)
+	_, changed, err := s.Refresh("example", []byte(oneDirect("example", "a")), mustSource(t, refreshAddress), false)
 	if err != nil || changed {
 		t.Fatalf("Refresh = %v, %v, want no change", changed, err)
 	}
@@ -443,17 +443,17 @@ func TestRefreshRefusals(t *testing.T) {
 	for _, tc := range []struct {
 		name, data, want string
 	}{
-		{"another id", oneDirect("elsewhere", "a"), `id: is "elsewhere", not "org", the id of the stored file`},
-		{"a taken pathway", oneDirect("org", "a", "lab"), `already used by the stored file`},
+		{"another id", oneDirect("elsewhere", "a"), `id: is "elsewhere", not "example", the id of the stored file`},
+		{"a taken pathway", oneDirect("example", "a", "lab"), `already used by the stored file`},
 		{"a failed check", "format = 3\n", "format"},
 		{"an older format", "format = 1\n", "older format"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, home := newStore(t)
-			add(t, s, oneDirect("org", "a"), refreshAddress)
+			add(t, s, oneDirect("example", "a"), refreshAddress)
 			add(t, s, oneDirect("other", "lab"), "-")
 			before := snapshot(t, filepath.Join(home, ".axon"))
-			_, changed, err := s.Refresh("org", []byte(tc.data), mustSource(t, refreshAddress), false)
+			_, changed, err := s.Refresh("example", []byte(tc.data), mustSource(t, refreshAddress), false)
 			if err == nil || changed || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("Refresh = %v, %v, want a refusal containing %q", changed, err, tc.want)
 			}
@@ -466,14 +466,14 @@ func TestRefreshRefusals(t *testing.T) {
 
 func TestRefreshOfADeletedFileStoresNothing(t *testing.T) {
 	s, _ := newStore(t)
-	add(t, s, oneDirect("org", "a"), refreshAddress)
-	if err := os.Remove(s.Path("org")); err != nil {
+	add(t, s, oneDirect("example", "a"), refreshAddress)
+	if err := os.Remove(s.Path("example")); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Refresh("org", []byte(oneDirect("org", "a")), mustSource(t, refreshAddress), false); err == nil {
+	if _, _, err := s.Refresh("example", []byte(oneDirect("example", "a")), mustSource(t, refreshAddress), false); err == nil {
 		t.Fatal("Refresh stored a file that was deleted")
 	}
-	if _, err := os.Stat(s.Path("org")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(s.Path("example")); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the file is back: %v", err)
 	}
 }

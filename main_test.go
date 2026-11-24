@@ -134,11 +134,11 @@ const stopped = "axon: connect sky: check the SkyPilot client: "
 // stores writes data as the stored config file id under home.
 func stores(t *testing.T, home, id, data string) {
 	t.Helper()
-	orgs := filepath.Join(home, ".axon", "configs")
-	if err := os.MkdirAll(orgs, 0o700); err != nil {
+	configs := filepath.Join(home, ".axon", "configs")
+	if err := os.MkdirAll(configs, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(orgs, id+".toml"), []byte(data), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(configs, id+".toml"), []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -327,7 +327,7 @@ func TestBinary(t *testing.T) {
 		}
 	})
 
-	t.Run("org from a path", func(t *testing.T) {
+	t.Run("config from a path", func(t *testing.T) {
 		h := home(t)
 		path := filepath.Join(t.TempDir(), "axon.toml")
 		if err := os.WriteFile(path, []byte(campusFile), 0o600); err != nil {
@@ -347,7 +347,7 @@ func TestBinary(t *testing.T) {
 		}
 	})
 
-	t.Run("org from standard input", func(t *testing.T) {
+	t.Run("config from standard input", func(t *testing.T) {
 		h := home(t)
 		_, stderr, err := runAxon(t, bin, h, strings.NewReader(campusFile), "login", "--config", "-")
 		wantFailure(t, "login", err)
@@ -359,7 +359,7 @@ func TestBinary(t *testing.T) {
 		}
 	})
 
-	t.Run("org from standard input without a terminal", func(t *testing.T) {
+	t.Run("config from standard input without a terminal", func(t *testing.T) {
 		h := home(t)
 		_, stderr, err := runAxon(t, bin, h, strings.NewReader(twoFile), "login", "--config", "-")
 		wantFailure(t, "login", err)
@@ -377,7 +377,7 @@ func TestBinary(t *testing.T) {
 		}
 	})
 
-	t.Run("org from an address goes through the fence", func(t *testing.T) {
+	t.Run("config from an address goes through the fence", func(t *testing.T) {
 		h := home(t)
 		_, stderr, err := runAxon(t, bin, h, nil, "login", "--config", "https://example.org/axon.toml")
 		wantFailure(t, "login", err)

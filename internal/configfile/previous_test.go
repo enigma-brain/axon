@@ -17,7 +17,7 @@ func updated(t *testing.T) (Store, string, []byte) {
 	t.Helper()
 	s, home := newStore(t)
 	revision := func(n string) string {
-		return strings.Replace(directOrg("a", "one", "Campus", "https://a.example.org"), "format = 2\n", "format = 2\nrevision = "+n+"\n", 1)
+		return strings.Replace(directConfig("a", "one", "Campus", "https://a.example.org"), "format = 2\n", "format = 2\nrevision = "+n+"\n", 1)
 	}
 	add(t, s, revision("1"), "-")
 	newer := revision("2")
@@ -280,7 +280,7 @@ func TestRecoverStopsWhenTheCopyCannotBeDeleted(t *testing.T) {
 	if _, err := s.Recover(); err == nil || !strings.Contains(err.Error(), "injected failure") {
 		t.Fatalf("Recover = %v, want the injected failure", err)
 	}
-	if _, err := s.Add([]byte(directOrg("b", "two", "B", "https://b.example.org")), mustSource(t, "-")); err == nil {
+	if _, err := s.Add([]byte(directConfig("b", "two", "B", "https://b.example.org")), mustSource(t, "-")); err == nil {
 		t.Fatal("Add succeeded with a copy that cannot be deleted")
 	}
 }

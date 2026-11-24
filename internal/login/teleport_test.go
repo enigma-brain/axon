@@ -442,7 +442,7 @@ func TestSwitchStopsRecordedTunnelByItsRecord(t *testing.T) {
 	if err := os.Remove(filepath.Join(h.home, ".axon", "configs", "example.toml")); err != nil {
 		t.Fatal(err)
 	}
-	h.store(otherOrg)
+	h.store(otherConfig)
 	if err := h.run("lab"); err != nil {
 		t.Fatalf("direct login: %v\n%s", err, h.out.String())
 	}
@@ -571,7 +571,7 @@ func TestTeleportSyncsClientBeforeSkyLogin(t *testing.T) {
 	}
 }
 
-// lastFileGone runs a teleport login, then has orgs change as gone, and
+// lastFileGone runs a teleport login, then has gone make the stored config file disappear, and
 // checks that the next login disconnects by the records, stopping the
 // tunnel, before it asks for --config.
 func lastFileGone(t *testing.T, gone func(h *metaHarness)) {
@@ -589,8 +589,8 @@ func lastFileGone(t *testing.T, gone func(h *metaHarness)) {
 	gone(h)
 	h.out.Reset()
 
-	if err := h.run(""); !errors.Is(err, errNoOrg) {
-		t.Fatalf("err = %v, want errNoOrg", err)
+	if err := h.run(""); !errors.Is(err, errNoConfig) {
+		t.Fatalf("err = %v, want errNoConfig", err)
 	}
 	if !strings.Contains(h.out.String(), "sky: stopping the Teleport tunnel") {
 		t.Errorf("output %q does not say the tunnel stopped", h.out.String())
@@ -605,8 +605,8 @@ func lastFileGone(t *testing.T, gone func(h *metaHarness)) {
 
 	// A second login has nothing left to disconnect.
 	h.out.Reset()
-	if err := h.run(""); !errors.Is(err, errNoOrg) {
-		t.Fatalf("second login: err = %v, want errNoOrg", err)
+	if err := h.run(""); !errors.Is(err, errNoConfig) {
+		t.Fatalf("second login: err = %v, want errNoConfig", err)
 	}
 	if h.out.Len() != 0 {
 		t.Errorf("second login wrote %q", h.out.String())
