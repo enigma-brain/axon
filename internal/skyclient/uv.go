@@ -4,12 +4,9 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -100,50 +97,6 @@ func ensureUV(ctx context.Context, tools string, progress io.Writer) (string, er
 	}
 	removeOthers(uvRoot, uvVersion)
 	return uvPath, nil
-}
-
-// download writes the body at url to w, reporting progress by quarters when
-// the size is known, and returns the body's SHA-256 in hex.
-func download(ctx context.Context, url string, w io.Writer, progress io.Writer) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GET %s: %s", url, resp.Status)
-	}
-
-	h := sha256.New()
-	dst := io.MultiWriter(w, h)
-	if resp.ContentLength > 0 {
-		dst = io.MultiWriter(dst, &quarterReporter{total: resp.ContentLength, out: progress})
-	}
-	if _, err := io.Copy(dst, resp.Body); err != nil {
-		return "", fmt.Errorf("GET %s: %w", url, err)
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// quarterReporter writes the percentage done, on the current line, each time
-// the bytes written to it pass a further quarter of total.
-type quarterReporter struct {
-	total, done int64
-	reported    int
-	out         io.Writer
-}
-
-func (q *quarterReporter) Write(p []byte) (int, error) {
-	q.done += int64(len(p))
-	for q.reported < 4 && q.done*4 >= q.total*int64(q.reported+1) {
-		q.reported++
-		fmt.Fprintf(q.out, " %d%%", q.reported*25)
-	}
-	return len(p), nil
 }
 
 // extractUV writes the uv executable from the release archive r to path.
