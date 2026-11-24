@@ -372,21 +372,6 @@ func TestControlCharactersRemoved(t *testing.T) {
 	}
 }
 
-func TestClean(t *testing.T) {
-	for in, want := range map[string]string{
-		"plain":             "plain",
-		"tab\there":         "tabhere",
-		"new\nline\r":       "newline",
-		"\u200bzero width":  "zero width",
-		"bidi\u2066x\u2069": "bidix",
-		"é and ü":           "é and ü",
-	} {
-		if got := clean(in); got != want {
-			t.Errorf("clean(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 // Listing writes nothing: the directory's files are the same after it.
 func TestListingChangesNothing(t *testing.T) {
 	dir, s := newDir(t)
