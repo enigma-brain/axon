@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/interrupt"
+	"github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -84,8 +84,8 @@ func Logout(ctx context.Context, dir axondir.Dir, opts LogoutOptions) error {
 	lo := &logout{
 		dir:        dir,
 		client:     skyClient{dir: dir},
-		skyConfig:  skyConfigPath(home, os.Getenv),
-		cookieFile: apiserver.CookieFile(home, os.Getenv),
+		skyConfig:  sky.SettingsFile(home, os.Getenv),
+		cookieFile: sky.CookieFile(home, os.Getenv),
 		environ:    os.Environ,
 		findTsh:    tsh.Find,
 		tshLogout:  tsh.Logout,
@@ -307,17 +307,4 @@ func stopTunnels(w io.Writer, stateDir string, tn *tunnel.Tunnel) error {
 		}
 	}
 	return tunnel.StopRecorded(stateDir)
-}
-
-// skyConfigPath returns SkyPilot's user configuration file as the client
-// resolves it: the file SKYPILOT_GLOBAL_CONFIG names, when it is set, and
-// ~/.sky/config.yaml otherwise.
-func skyConfigPath(home string, getenv func(string) string) string {
-	if path := getenv("SKYPILOT_GLOBAL_CONFIG"); path != "" {
-		if path == "~" || strings.HasPrefix(path, "~/") {
-			return filepath.Join(home, strings.TrimPrefix(path, "~"))
-		}
-		return path
-	}
-	return filepath.Join(home, ".sky", "config.yaml")
 }

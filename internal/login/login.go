@@ -99,7 +99,7 @@ func newLogin(home string, getenv func(string) string) *login {
 		dir:          dir,
 		client:       skyClient{dir: dir},
 		health:       apiserver.Fetch,
-		cookieFile:   apiserver.CookieFile(home, getenv),
+		cookieFile:   sky.CookieFile(home, getenv),
 		endpoint:     sky.Endpoint,
 		loginWait:    loginWait,
 		environ:      os.Environ,
@@ -108,7 +108,7 @@ func newLogin(home string, getenv func(string) string) *login {
 		teleport: teleport{
 			ensure:    tsh.Ensure,
 			newTunnel: tunnel.New,
-			skyConfig: skyConfigPath(home, getenv),
+			skyConfig: sky.SettingsFile(home, getenv),
 		},
 		isTerminal: isTerminal,
 		probeSky:   probeSky,

@@ -521,26 +521,6 @@ func TestLogoutContinuesWhenTheEmailCannotBeRead(t *testing.T) {
 	}
 }
 
-func TestSkyConfigPath(t *testing.T) {
-	env := func(v string) func(string) string {
-		return func(k string) string {
-			if k == "SKYPILOT_GLOBAL_CONFIG" {
-				return v
-			}
-			return ""
-		}
-	}
-	for v, want := range map[string]string{
-		"":                "/home/ada/.sky/config.yaml",
-		"/etc/sky.yaml":   "/etc/sky.yaml",
-		"~/conf/sky.yaml": "/home/ada/conf/sky.yaml",
-	} {
-		if got := skyConfigPath("/home/ada", env(v)); got != want {
-			t.Errorf("SKYPILOT_GLOBAL_CONFIG=%q: %q, want %q", v, got, want)
-		}
-	}
-}
-
 func TestLogoutStopsTunnelWithNoRecord(t *testing.T) {
 	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {

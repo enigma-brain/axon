@@ -66,7 +66,7 @@ var realProbes = probes{
 	endpoint: Endpoint,
 	health:   apiserver.Fetch,
 	cookieFile: func(home string) string {
-		return apiserver.CookieFile(home, os.Getenv)
+		return CookieFile(home, os.Getenv)
 	},
 	clientVersion: skyclient.Version,
 	findTsh:       tsh.Find,
