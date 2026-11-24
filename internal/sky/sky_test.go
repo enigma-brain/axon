@@ -132,14 +132,15 @@ func login(t *testing.T, id string, email string) axondir.Dir {
 func capture(t *testing.T) *[]call {
 	t.Helper()
 	var calls []call
-	oldPath, oldExec, oldCheck := skyPath, execSky, check
+	oldPath, oldPathFor, oldExec, oldCheck := skyPath, skyPathFor, execSky, check
 	check = connectedProbes()
 	skyPath = func(axondir.Dir) (string, error) { return fakeSky, nil }
+	skyPathFor = func(axondir.Dir, string) string { return fakeSky }
 	execSky = func(path string, argv, env []string) error {
 		calls = append(calls, call{path, slices.Clone(argv), slices.Clone(env)})
 		return nil
 	}
-	t.Cleanup(func() { skyPath, execSky, check = oldPath, oldExec, oldCheck })
+	t.Cleanup(func() { skyPath, skyPathFor, execSky, check = oldPath, oldPathFor, oldExec, oldCheck })
 	return &calls
 }
 
@@ -181,6 +182,33 @@ func TestForwardsEveryCommand(t *testing.T) {
 		if got.path != fakeSky || !slices.Equal(got.argv, want) {
 			t.Errorf("%v: ran %s %q, want %q", args, got.path, got.argv, want)
 		}
+	}
+}
+
+// A forwarded command reads the client's version once, in the check, and
+// runs the sky of that version.
+func TestForwardReadsTheClientVersionOnce(t *testing.T) {
+	login(t, "campus", "ada@example.org")
+	calls := capture(t)
+	reads := 0
+	check.clientVersion = func(axondir.Dir) (string, bool, error) {
+		reads++
+		return clientVersion, true, nil
+	}
+	skyPath = func(axondir.Dir) (string, error) {
+		t.Error("the client's path was looked up again")
+		return fakeSky, nil
+	}
+	var gotVersion string
+	skyPathFor = func(_ axondir.Dir, version string) string {
+		gotVersion = version
+		return fakeSky
+	}
+	if _, _, err := runSky("status"); err != nil {
+		t.Fatal(err)
+	}
+	if reads != 1 || gotVersion != clientVersion || len(*calls) != 1 {
+		t.Errorf("read the version %d times, ran the sky of %q %d times; want once, %q, once", reads, gotVersion, len(*calls), clientVersion)
 	}
 }
 
@@ -443,6 +471,7 @@ func TestHelperProcess(t *testing.T) {
 	}
 	args := os.Args[slices.Index(os.Args, "--")+1:]
 	skyPath = func(axondir.Dir) (string, error) { return os.Getenv("AXON_TEST_FAKE_SKY"), nil }
+	skyPathFor = func(axondir.Dir, string) string { return os.Getenv("AXON_TEST_FAKE_SKY") }
 	check = helperProbes(os.Getenv(apiServerVar))
 	cmd := Command()
 	cmd.SetArgs(args)

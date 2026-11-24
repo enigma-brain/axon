@@ -201,7 +201,8 @@ func Version(dir axondir.Dir) (version string, installed bool, err error) {
 // ErrNotInstalled reports that axon has not installed its SkyPilot client.
 var ErrNotInstalled = errors.New("the SkyPilot client is not installed. Run `axon login`")
 
-// Path returns the absolute path of the client's sky executable.
+// Path returns the absolute path of the client's sky executable. It
+// creates no directory.
 func Path(dir axondir.Dir) (string, error) {
 	version, installed, err := Version(dir)
 	if err != nil {
@@ -210,11 +211,13 @@ func Path(dir axondir.Dir) (string, error) {
 	if !installed {
 		return "", ErrNotInstalled
 	}
-	tools, err := dir.ToolsDir()
-	if err != nil {
-		return "", err
-	}
-	return skyPath(tools, version), nil
+	return PathFor(dir, version), nil
+}
+
+// PathFor returns the absolute path of the sky executable of the client at
+// version, as Version reported it.
+func PathFor(dir axondir.Dir, version string) string {
+	return skyPath(dir.ToolsPath(), version)
 }
 
 func skyPath(tools, version string) string {

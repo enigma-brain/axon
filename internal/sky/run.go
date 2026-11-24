@@ -18,9 +18,13 @@ const (
 	userVar     = "SKYPILOT_USER"
 )
 
-// skyPath returns the absolute path of axon's own sky executable. Tests
-// replace it with a fake.
-var skyPath = skyclient.Path
+// skyPath returns the absolute path of axon's own sky executable, and
+// skyPathFor that of the client at a version already read. Tests replace
+// them with a fake.
+var (
+	skyPath    = skyclient.Path
+	skyPathFor = skyclient.PathFor
+)
 
 // execSky replaces the axon process with the program at path. Tests replace
 // it to capture the call.
@@ -29,15 +33,11 @@ var execSky = syscall.Exec
 // forward checks the connection, writing what the check repairs to w, then
 // replaces the axon process with sky and args.
 func forward(ctx context.Context, w io.Writer, dir axondir.Dir, args []string) error {
-	p, email, err := checkConnection(ctx, dir, w)
+	p, email, version, err := checkConnection(ctx, dir, w)
 	if err != nil {
 		return err
 	}
-	path, err := skyPath(dir)
-	if err != nil {
-		return fmt.Errorf("find the SkyPilot client: %w", err)
-	}
-	return run(path, args, environ(os.Environ(), Endpoint(p), email))
+	return run(skyPathFor(dir, version), args, environ(os.Environ(), Endpoint(p), email))
 }
 
 // run replaces the axon process with the sky at path, given args and env,
