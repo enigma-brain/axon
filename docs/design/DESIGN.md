@@ -548,6 +548,10 @@ Teleport supports a client whose major version is the proxy's or one behind
 it. When the `tsh` on `PATH` is outside that range, `axon` stops, names the
 installed version and the proxy's, and says to update `tsh`.
 
+`tsh`'s logins read from the terminal, as `axon`'s own questions do, also
+when `axon login --config -` takes the config file from standard input;
+with no terminal, they read an empty input.
+
 ## axon logout
 
 `axon logout` undoes what `axon login` did, by `axon`'s own records alone,
@@ -805,11 +809,28 @@ decided by its arguments.
 
 ### Help
 
-`axon sky` with no arguments, and any `axon sky` command with `--help` or
-`-h` before a `--`, prints SkyPilot's own help. `axon` runs the client for
-it without the connection check, so help needs the installed client and no
-login. SkyPilot's help and hints name `sky` commands; the user types each
-as `axon sky`.
+`axon sky` with no arguments prints SkyPilot's own help, and so does an
+`axon sky` command with `--help` or `-h` before a `--`, where the flag is
+the first argument or follows an argument that is not an option or that
+holds its own value, as `--name=value` does. `axon sky launch -h` and
+`axon sky api info --help` are help. `axon` does not know which of
+SkyPilot's options take a value, so a help flag after a bare option, as in
+`axon sky launch --dryrun -c -h`, where SkyPilot reads `-h` as the
+cluster's name, is not taken for help: the command goes through the
+connection check like any other. When that check stops for want of a login,
+the message adds that a command's help is `axon sky <command> --help`.
+
+`axon` runs the client for help without the connection check, so help needs
+the installed client and no login. The client runs with
+`SKYPILOT_API_SERVER_ENDPOINT` set to `axon-no-server://help`, replacing any
+value the shell exports, whether or not a login is recorded. SkyPilot
+prints help without a request to the server. Should the client run a
+command instead, it reaches no server: the client's HTTP library sends only
+`http` and `https` and refuses that address before it opens a connection.
+It starts no server either, since that is not SkyPilot's reserved local
+address.
+SkyPilot's help and hints name `sky` commands; the user types each as
+`axon sky`.
 
 ### Running a command
 
