@@ -187,6 +187,17 @@ files import and that is never part of the `axon` binary:
   tests write into temporary directories. A test's own servers listen on
   the loopback address.
 
+A test reaches what a package depends on, such as a clock, a timeout, an
+address or a file operation, through an unexported struct of the package,
+`deps`, which an unexported `defaults()` fills and the exported functions
+use; where the package has a type of its own, the struct is a field of it.
+A test builds its own `deps` and calls the package through it. No
+package-level variable exists for a test to swap, so a test that sets no
+environment variable, changes no directory and shares no port or home
+directory calls `t.Parallel()`. The release build sets
+`internal/update.repoURL` and `main.version` at link time, and they stay
+package-level strings for that.
+
 A test that deliberately does something real, such as a download, is
 switched on by an environment variable and is off by default:
 `AXON_REAL_INSTALL=1` for the smoke test and `TestRealInstall`,
