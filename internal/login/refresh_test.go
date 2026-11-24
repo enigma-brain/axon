@@ -17,6 +17,7 @@ import (
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/testkit"
+	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
 // configServer is a local TLS server that publishes config files, one
@@ -515,7 +516,7 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	moved := h.l.teleport.newTunnel(stateDir, fakeTsh, testProxy, "skypilot2")
+	moved := tunnel.New(stateDir, fakeTsh, testProxy, "skypilot2", testPort)
 	t.Cleanup(func() { moved.Stop() })
 	h.terminal()
 

@@ -13,7 +13,6 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-	"time"
 
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/connected"
@@ -59,7 +58,7 @@ func runTests(m *testing.M) int {
 
 	code := m.Run()
 	// Stop any fake tunnel a failed test left behind.
-	tunnel.NewOnPort(f.Dir, fakeTsh, testProxy, testApp, testPort).Stop()
+	tunnel.New(f.Dir, fakeTsh, testProxy, testApp, testPort).Stop()
 	return code
 }
 
@@ -109,7 +108,7 @@ func (h *teleportHarness) tunnel() *tunnel.Tunnel {
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	return h.l.teleport.newTunnel(stateDir, fakeTsh, testProxy, testApp)
+	return tunnel.New(stateDir, fakeTsh, testProxy, testApp, testPort)
 }
 
 // tunnelStatus returns the tunnel's status.
@@ -554,13 +553,11 @@ func TestTeleportTunnelExitsPrintsLog(t *testing.T) {
 
 func TestTeleportTunnelRunsWithoutAnswerReportsServer(t *testing.T) {
 	h := newTeleportHarness(t)
-	newTunnel := h.l.teleport.newTunnel
-	h.l.teleport.newTunnel = func(stateDir, tshPath, proxy, app string) *tunnel.Tunnel {
-		tn := newTunnel(stateDir, tshPath, proxy, app)
-		tn.SetStartTimeout(500 * time.Millisecond)
-		return tn
+	// A tunnel whose process runs and never serves: the tunnel's own tests
+	// show that a refusing tsh gives this error once the wait runs out.
+	h.l.teleport.newTunnel = func(stateDir, tshPath, proxy, app string) teleportTunnel {
+		return &stubTunnel{start: &tunnel.StartError{Exited: false, Log: "Proxying connections to skypilot"}}
 	}
-	h.writeTsh("proxy-mode", "refuse")
 	err := h.run("remote")
 	if !errors.Is(err, errNotAnswering) {
 		t.Fatalf("err = %v, want errNotAnswering", err)
@@ -744,3 +741,11 @@ func TestTeleportStoredEndpointFollowsSkyPilotGlobalConfig(t *testing.T) {
 		})
 	}
 }
+
+// stubTunnel is a tunnel that is down and whose Start returns start.
+type stubTunnel struct{ start error }
+
+func (s *stubTunnel) Start(context.Context) error                  { return s.start }
+func (s *stubTunnel) Check(context.Context) (tunnel.Status, error) { return tunnel.Status{}, nil }
+func (s *stubTunnel) Running() (bool, error)                       { return false, nil }
+func (s *stubTunnel) Stop() error                                  { return nil }

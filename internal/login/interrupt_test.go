@@ -20,7 +20,6 @@ import (
 	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/testkit"
-	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
 // cancelOn is an output that cancels a login, after a short delay, once
@@ -253,7 +252,7 @@ func (h *teleportHarness) runCancellable(ctx context.Context) error {
 // cancelAtTunnel makes the login cancel ctx when it reaches the tunnel.
 func (h *teleportHarness) cancelAtTunnel(cancel func()) {
 	newTunnel := h.l.teleport.newTunnel
-	h.l.teleport.newTunnel = func(stateDir, tshPath, proxy, app string) *tunnel.Tunnel {
+	h.l.teleport.newTunnel = func(stateDir, tshPath, proxy, app string) teleportTunnel {
 		cancel()
 		return newTunnel(stateDir, tshPath, proxy, app)
 	}

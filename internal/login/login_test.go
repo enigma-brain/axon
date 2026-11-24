@@ -168,8 +168,8 @@ func newHarness(t *testing.T) *harness {
 		// The tests never reach the real terminal.
 		openTerminal: func() (io.ReadCloser, error) { return nil, errors.New("no terminal in tests") },
 		teleport: teleport{
-			newTunnel: func(stateDir, tshPath, proxy, app string) *tunnel.Tunnel {
-				return tunnel.NewOnPort(stateDir, tshPath, proxy, app, testPort)
+			newTunnel: func(stateDir, tshPath, proxy, app string) teleportTunnel {
+				return tunnel.New(stateDir, tshPath, proxy, app, testPort)
 			},
 		},
 	}

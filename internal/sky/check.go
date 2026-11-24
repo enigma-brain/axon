@@ -73,11 +73,11 @@ var realProbes = probes{
 	sessionValid:  tsh.SessionValid,
 	checkTunnel: func(ctx context.Context, stateDir, proxy, app string) error {
 		// Checking needs no tsh: only a start runs it.
-		_, err := tunnel.New(stateDir, "", proxy, app).Check(ctx)
+		_, err := tunnel.New(stateDir, "", proxy, app, tunnel.Port).Check(ctx)
 		return err
 	},
 	startTunnel: func(ctx context.Context, stateDir, tshPath, proxy, app string) error {
-		return tunnel.New(stateDir, tshPath, proxy, app).Start(ctx)
+		return tunnel.New(stateDir, tshPath, proxy, app, tunnel.Port).Start(ctx)
 	},
 }
 

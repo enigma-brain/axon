@@ -24,9 +24,25 @@ type teleport struct {
 	ensure func(ctx context.Context, proxy string) (string, error)
 	// newTunnel returns the tunnel to the Teleport application app through
 	// the Teleport proxy proxy, run with tshPath and recorded in stateDir.
-	newTunnel func(stateDir, tshPath, proxy, app string) *tunnel.Tunnel
+	newTunnel func(stateDir, tshPath, proxy, app string) teleportTunnel
 	// path is the tsh the session stage found, used by the steps after it.
 	path string
+}
+
+// teleportTunnel is what login and logout do with the tunnel to a Teleport
+// application. A *tunnel.Tunnel is one.
+type teleportTunnel interface {
+	Start(ctx context.Context) error
+	Check(ctx context.Context) (tunnel.Status, error)
+	Running() (bool, error)
+	Stop() error
+}
+
+// newTunnel returns the tunnel on tunnel.Port to the Teleport application
+// app through the Teleport proxy proxy, run with tshPath and recorded in
+// stateDir.
+func newTunnel(stateDir, tshPath, proxy, app string) teleportTunnel {
+	return tunnel.New(stateDir, tshPath, proxy, app, tunnel.Port)
 }
 
 // establishTeleportSession logs in to Teleport, with the tsh that run
@@ -112,7 +128,7 @@ func (l *login) connectTeleport(ctx context.Context, p configfile.Pathway, opts 
 // user's identity through it, with the server's health when it does. A
 // tunnel that serves is recorded, so that logout and a switch of pathway
 // stop it. When another process holds the tunnel's port, login stops.
-func (l *login) tunnelUp(ctx context.Context, tn *tunnel.Tunnel, endpoint string, opts apiserver.Options) (apiserver.Health, bool, error) {
+func (l *login) tunnelUp(ctx context.Context, tn teleportTunnel, endpoint string, opts apiserver.Options) (apiserver.Health, bool, error) {
 	st, err := tn.Check(ctx)
 	var busy *tunnel.PortBusyError
 	switch {

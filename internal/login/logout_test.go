@@ -13,7 +13,6 @@ import (
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/tsh"
-	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
 // v010Record is a record of the connected pathway as axon v0.1.0 wrote it.
@@ -45,7 +44,7 @@ func newLogout(h *harness, tshPath string) *logout {
 			return tshPath, nil
 		},
 		tshLogout: tsh.Logout,
-		newTunnel: func(stateDir, proxy, app string) *tunnel.Tunnel {
+		newTunnel: func(stateDir, proxy, app string) teleportTunnel {
 			return h.l.teleport.newTunnel(stateDir, "", proxy, app)
 		},
 	}

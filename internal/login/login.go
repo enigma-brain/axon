@@ -19,7 +19,6 @@ import (
 	"github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/termtext"
 	"github.com/enigma-brain/axon/internal/tsh"
-	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
 // Options are the inputs of one login.
@@ -92,7 +91,7 @@ func newLogin(home string, getenv func(string) string) *login {
 		openTerminal: func() (io.ReadCloser, error) { return os.Open("/dev/tty") },
 		teleport: teleport{
 			ensure:    tsh.Ensure,
-			newTunnel: tunnel.New,
+			newTunnel: newTunnel,
 		},
 		isTerminal: isTerminal,
 		probeSky:   probeSky,

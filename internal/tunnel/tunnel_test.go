@@ -41,7 +41,7 @@ const (
 func TestMain(m *testing.M) {
 	if dir := os.Getenv(helperStateDir); dir != "" {
 		port, _ := strconv.Atoi(os.Getenv(helperPort))
-		tn := NewOnPort(dir, os.Getenv(helperTsh), testProxy, testApp, port)
+		tn := New(dir, os.Getenv(helperTsh), testProxy, testApp, port)
 		if err := tn.Start(context.Background()); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -69,7 +69,7 @@ func run(m *testing.M) int {
 
 	code := m.Run()
 	// Stop any fake tunnel a failed test left behind.
-	NewOnPort(f.Dir, fakeTsh, testProxy, testApp, testPort).Stop()
+	New(f.Dir, fakeTsh, testProxy, testApp, testPort).Stop()
 	return code
 }
 
@@ -77,7 +77,7 @@ func run(m *testing.M) int {
 // stopped at the end of the test.
 func newTestTunnel(t *testing.T) *Tunnel {
 	t.Helper()
-	tn := NewOnPort(filepath.Join(t.TempDir(), "state"), fakeTsh, testProxy, testApp, testPort)
+	tn := New(filepath.Join(t.TempDir(), "state"), fakeTsh, testProxy, testApp, testPort)
 	t.Cleanup(func() {
 		if err := tn.Stop(); err != nil {
 			t.Errorf("Stop at cleanup: %v", err)
@@ -170,12 +170,12 @@ func TestNew(t *testing.T) {
 		"teleport.example.org":      "--proxy=teleport.example.org proxy app skypilot --port 46581",
 		"teleport.example.org:3080": "--proxy=teleport.example.org:3080 proxy app skypilot --port 46581",
 	} {
-		tn := New("/state", "/bin/tsh", proxy, "skypilot")
+		tn := New("/state", "/bin/tsh", proxy, "skypilot", Port)
 		if got := strings.Join(tn.args(), " "); got != want {
 			t.Errorf("args = %q, want %q", got, want)
 		}
 	}
-	tn := New("/state", "/bin/tsh", testProxy, testApp)
+	tn := New("/state", "/bin/tsh", testProxy, testApp, Port)
 	if got, want := tn.healthURL(), "http://127.0.0.1:46581/api/health"; got != want {
 		t.Errorf("healthURL = %q, want %q", got, want)
 	}
@@ -276,7 +276,7 @@ func TestStartFailsWhenTunnelExits(t *testing.T) {
 
 func TestStartFailsWhenTunnelDoesNotServe(t *testing.T) {
 	tn := newTestTunnel(t)
-	tn.SetStartTimeout(500 * time.Millisecond)
+	tn.d.startTimeout = 500 * time.Millisecond
 	t.Setenv("FAKETSH_MODE", "refuse")
 	err := tn.Start(context.Background())
 	if err == nil {
@@ -307,7 +307,7 @@ func TestStartErrorSaysWhetherTheTunnelExited(t *testing.T) {
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
 			tn := newTestTunnel(t)
-			tn.SetStartTimeout(500 * time.Millisecond)
+			tn.d.startTimeout = 500 * time.Millisecond
 			t.Setenv("FAKETSH_MODE", tc.mode)
 			err := tn.Start(context.Background())
 			var se *StartError
@@ -650,10 +650,10 @@ func TestStopKeepsRecordWhenTunnelDoesNotExit(t *testing.T) {
 	pid, _ := recorded(t, tn)
 
 	// A tunnel that survives every signal, as one stuck in the kernel does.
-	savedSignal, savedStop, savedKill := sendSignal, stopTimeout, killTimeout
-	sendSignal = func(int, syscall.Signal) error { return nil }
-	stopTimeout, killTimeout = 100*time.Millisecond, 100*time.Millisecond
-	defer func() { sendSignal, stopTimeout, killTimeout = savedSignal, savedStop, savedKill }()
+	// The cleanup stops the tunnel with the real signals.
+	defer func(d deps) { tn.d = d }(tn.d)
+	tn.d.sendSignal = func(int, syscall.Signal) error { return nil }
+	tn.d.stopTimeout, tn.d.killTimeout = 100*time.Millisecond, 100*time.Millisecond
 
 	err := tn.Stop()
 	if err == nil {
