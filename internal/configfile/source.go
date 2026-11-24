@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/netreason"
 	"github.com/enigma-brain/axon/internal/termtext"
 )
 
@@ -138,12 +140,12 @@ func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
 	case sourcePath:
 		f, err := os.Open(src.value)
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", src.value, unwrapPath(err))
+			return nil, fmt.Errorf("read %s: %w", src.value, axondir.UnwrapPath(err))
 		}
 		defer f.Close()
 		data, err := readLimited(f)
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", src.value, unwrapPath(err))
+			return nil, fmt.Errorf("read %s: %w", src.value, axondir.UnwrapPath(err))
 		}
 		return data, nil
 	}
@@ -154,15 +156,6 @@ func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
 // redirects only to https addresses. Errors name the address as shown.
 func fetch(ctx context.Context, address, shown string) ([]byte, error) {
 	fail := func(err error) error {
-		var uerr *url.Error
-		if errors.As(err, &uerr) {
-			err = uerr.Err
-		}
-		// net/http quotes a Location header it cannot parse, query
-		// string included, so that reason is replaced.
-		if strings.HasPrefix(err.Error(), "failed to parse Location header") {
-			err = badRedirect{err}
-		}
 		return fmt.Errorf("fetch %s: %w", shown, err)
 	}
 	client := &http.Client{
@@ -190,7 +183,7 @@ func fetch(ctx context.Context, address, shown string) ([]byte, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fail(err)
+		return nil, fail(requestError(err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -202,6 +195,27 @@ func fetch(ctx context.Context, address, shown string) ([]byte, error) {
 	}
 	return data, nil
 }
+
+// requestError returns the error of a failed request as its message gives
+// it after the address: the short network reason, such as "no such host" or
+// "timed out", or a badRedirect.
+func requestError(err error) error {
+	// net/http quotes a Location header it cannot parse, query string
+	// included, so that reason is replaced.
+	var uerr *url.Error
+	if errors.As(err, &uerr) && strings.HasPrefix(uerr.Err.Error(), "failed to parse Location header") {
+		return badRedirect{uerr.Err}
+	}
+	return netError{err}
+}
+
+// netError is a failed request. Its message is the short reason, since the
+// message it is part of already names the address.
+type netError struct{ err error }
+
+func (e netError) Error() string { return netreason.Short(e.err) }
+
+func (e netError) Unwrap() error { return e.err }
 
 // badRedirect is a redirect to an address that does not parse. Its message
 // leaves the address out, since it can hold a token; the cause it wraps
@@ -222,14 +236,4 @@ func readLimited(r io.Reader) ([]byte, error) {
 		return nil, fmt.Errorf("the file is larger than %d bytes", MaxSize)
 	}
 	return data, nil
-}
-
-// unwrapPath drops the path from a *fs.PathError, whose message the caller
-// already prefixes with the path.
-func unwrapPath(err error) error {
-	var perr *os.PathError
-	if errors.As(err, &perr) {
-		return perr.Err
-	}
-	return err
 }

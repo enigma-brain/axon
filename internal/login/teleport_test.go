@@ -103,17 +103,17 @@ func fence(bin string) error {
 	return nil
 }
 
-// metaHarness is one login on a teleport pathway against the fake tsh,
+// teleportHarness is one login on a teleport pathway against the fake tsh,
 // the fake sky and the fake API server, reached through a real tunnel on
 // testPort.
-type metaHarness struct {
+type teleportHarness struct {
 	*harness
 	tshDir string
 }
 
-func newMetaHarness(t *testing.T) *metaHarness {
+func newTeleportHarness(t *testing.T) *teleportHarness {
 	t.Helper()
-	h := &metaHarness{harness: newHarness(t), tshDir: t.TempDir()}
+	h := &teleportHarness{harness: newHarness(t), tshDir: t.TempDir()}
 	// Through the tunnel, Teleport supplies the identity: the server reports
 	// the user without a SkyPilot login.
 	h.logIn()
@@ -135,7 +135,7 @@ func newMetaHarness(t *testing.T) *metaHarness {
 	return h
 }
 
-func (h *metaHarness) writeTsh(name, content string) {
+func (h *teleportHarness) writeTsh(name, content string) {
 	h.t.Helper()
 	if err := os.WriteFile(filepath.Join(h.tshDir, name), []byte(content), 0o644); err != nil {
 		h.t.Fatal(err)
@@ -143,7 +143,7 @@ func (h *metaHarness) writeTsh(name, content string) {
 }
 
 // tunnel returns the login's tunnel.
-func (h *metaHarness) tunnel() *tunnel.Tunnel {
+func (h *teleportHarness) tunnel() *tunnel.Tunnel {
 	h.t.Helper()
 	stateDir, err := axondir.New(h.home).StateDir()
 	if err != nil {
@@ -153,7 +153,7 @@ func (h *metaHarness) tunnel() *tunnel.Tunnel {
 }
 
 // tunnelStatus returns the tunnel's status.
-func (h *metaHarness) tunnelStatus() tunnel.Status {
+func (h *teleportHarness) tunnelStatus() tunnel.Status {
 	h.t.Helper()
 	st, err := h.tunnel().Status(context.Background())
 	if err != nil {
@@ -163,7 +163,7 @@ func (h *metaHarness) tunnelStatus() tunnel.Status {
 }
 
 // tshCalls returns the arguments of each tsh run so far, and forgets them.
-func (h *metaHarness) tshCalls() []string {
+func (h *teleportHarness) tshCalls() []string {
 	h.t.Helper()
 	path := filepath.Join(h.tshDir, "calls")
 	data, err := os.ReadFile(path)
@@ -177,9 +177,9 @@ func (h *metaHarness) tshCalls() []string {
 	return strings.Split(strings.TrimSpace(string(data)), "\n")
 }
 
-func (h *metaHarness) endpoint() string { return "http://127.0.0.1:" + strconv.Itoa(testPort) }
+func (h *teleportHarness) endpoint() string { return "http://127.0.0.1:" + strconv.Itoa(testPort) }
 
-func (h *metaHarness) proxyCall() string {
+func (h *teleportHarness) proxyCall() string {
 	return fmt.Sprintf("--proxy=teleport.example.org proxy app skypilot --port %d", testPort)
 }
 
@@ -193,7 +193,7 @@ func contains(calls []string, call string) bool {
 }
 
 func TestTeleportFirstLogin(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
@@ -229,7 +229,7 @@ func TestTeleportFirstLogin(t *testing.T) {
 // With the config file on standard input, tsh's logins read the terminal,
 // as axon's own questions do, and not the used-up standard input.
 func TestTeleportLoginsReadTheTerminalWithConfigFromStdin(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	h.noFiles()
 	// A file the two logins share, as they share a terminal: each reads one
 	// line of it.
@@ -255,7 +255,7 @@ func TestTeleportLoginsReadTheTerminalWithConfigFromStdin(t *testing.T) {
 
 // With no terminal, tsh's logins read an empty input.
 func TestTeleportLoginsReadNothingWithConfigFromStdinAndNoTerminal(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	h.noFiles()
 	if err := h.login(Options{Config: "-", Pathway: "remote", In: strings.NewReader(exampleConfig)}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -269,7 +269,7 @@ func TestTeleportLoginsReadNothingWithConfigFromStdinAndNoTerminal(t *testing.T)
 }
 
 func TestTeleportRepeatedLoginKeepsTunnel(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("first login: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestTeleportRepeatedLoginKeepsTunnel(t *testing.T) {
 }
 
 func TestTeleportReplacesDeadTunnel(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("first login: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestTeleportReplacesDeadTunnel(t *testing.T) {
 }
 
 func TestTeleportPortHeld(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(testPort)))
 	if err != nil {
 		t.Fatal(err)
@@ -347,7 +347,7 @@ func TestTeleportPortHeld(t *testing.T) {
 
 // removeTunnelRecord deletes the tunnel's record, as a lost record or a
 // tunnel started by hand leaves things.
-func (h *metaHarness) removeTunnelRecord() {
+func (h *teleportHarness) removeTunnelRecord() {
 	h.t.Helper()
 	if err := os.Remove(filepath.Join(h.home, ".axon", "state", "tunnel.json")); err != nil {
 		h.t.Fatal(err)
@@ -355,7 +355,7 @@ func (h *metaHarness) removeTunnelRecord() {
 }
 
 func TestTeleportRecordsHealthyTunnelWithNoRecord(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("first login: %v", err)
 	}
@@ -383,7 +383,7 @@ func TestTeleportRecordsHealthyTunnelWithNoRecord(t *testing.T) {
 // laptop, with the client pointed at http://localhost. The next login
 // points it at 127.0.0.1 without a Teleport login in the browser.
 func TestTeleportMovesTheOldEndpoint(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("first login: %v", err)
 	}
@@ -425,7 +425,7 @@ func TestTeleportStoredEndpoint(t *testing.T) {
 		{"the tunnel's", "api_server:\n  endpoint: %s\n", 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			h := newMetaHarness(t)
+			h := newTeleportHarness(t)
 			if tc.config != "" {
 				config := tc.config
 				if strings.Contains(config, "%s") {
@@ -449,7 +449,7 @@ func TestTeleportStoredEndpoint(t *testing.T) {
 }
 
 func TestTeleportNoIdentityStopsBeforeSky(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := os.Remove(filepath.Join(h.skyDir, "loggedin")); err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +463,7 @@ func TestTeleportNoIdentityStopsBeforeSky(t *testing.T) {
 }
 
 func TestTeleportValidCertificateSkipsTeleportLogin(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	h.writeTsh("valid", testProxy)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("login: %v", err)
@@ -476,7 +476,7 @@ func TestTeleportValidCertificateSkipsTeleportLogin(t *testing.T) {
 // With no tsh on PATH, the login stops before any login step, with the
 // real lookup, which makes no request.
 func TestTeleportTshMissingStops(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	h.l.teleport.ensure = tsh.Ensure
 	err := h.run("remote")
 	want := "establish the Teleport session: this pathway needs Teleport's client, tsh, and no tsh was found on PATH. Install it from https://goteleport.com/docs/installation/ and run `axon login` again."
@@ -491,7 +491,7 @@ func TestTeleportTshMissingStops(t *testing.T) {
 // A missing tsh leaves the pathway that was connected as it was: the
 // active pathway and its record do not change.
 func TestTeleportTshMissingKeepsThePreviousPathway(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
 		t.Fatalf("login on campus: %v\n%s", err, h.out.String())
@@ -507,7 +507,7 @@ func TestTeleportTshMissingKeepsThePreviousPathway(t *testing.T) {
 
 // The login uses the tsh it finds on PATH.
 func TestTeleportUsesTshOnPath(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	t.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+filepath.Dir(fakeTsh))
 	var found string
 	h.l.teleport.ensure = func(context.Context, string) (string, error) {
@@ -527,7 +527,7 @@ func TestTeleportUsesTshOnPath(t *testing.T) {
 }
 
 func TestSwitchToDirectStopsTunnel(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("teleport login: %v", err)
 	}
@@ -543,7 +543,7 @@ func TestSwitchToDirectStopsTunnel(t *testing.T) {
 }
 
 func TestSwitchStopsRecordedTunnelByItsRecord(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("teleport login: %v", err)
 	}
@@ -581,7 +581,7 @@ func waitUntil(t *testing.T, cond func() bool) {
 }
 
 func TestTeleportTunnelExitsPrintsLog(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	h.writeTsh("proxy-mode", "exit")
 	err := h.run("remote")
 	var startErr *tunnel.StartError
@@ -603,7 +603,7 @@ func TestTeleportTunnelExitsPrintsLog(t *testing.T) {
 }
 
 func TestTeleportTunnelRunsWithoutAnswerReportsServer(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	newTunnel := h.l.teleport.newTunnel
 	h.l.teleport.newTunnel = func(stateDir, tshPath, proxy, app string) *tunnel.Tunnel {
 		tn := newTunnel(stateDir, tshPath, proxy, app)
@@ -624,7 +624,7 @@ func TestTeleportTunnelRunsWithoutAnswerReportsServer(t *testing.T) {
 }
 
 func TestSwitchToDirectKeepsTeleportWhenStopFails(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	dir := axondir.New(h.home)
 	if err := dir.SetPathway("remote"); err != nil {
 		t.Fatal(err)
@@ -650,7 +650,7 @@ func TestSwitchToDirectKeepsTeleportWhenStopFails(t *testing.T) {
 }
 
 func TestSkyLoginKeepsCallerDeadline(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	h.script("hang")
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
@@ -661,7 +661,7 @@ func TestSkyLoginKeepsCallerDeadline(t *testing.T) {
 }
 
 func TestTeleportSyncsClientBeforeSkyLogin(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	h.serverVersion = "0.14.0"
 	newDir := t.TempDir()
 	newSky := filepath.Join(newDir, "sky")
@@ -691,8 +691,8 @@ func TestTeleportSyncsClientBeforeSkyLogin(t *testing.T) {
 // lastFileGone runs a teleport login, then has gone make the stored config file disappear, and
 // checks that the next login disconnects by the records, stopping the
 // tunnel, before it asks for --config.
-func lastFileGone(t *testing.T, gone func(h *metaHarness)) {
-	h := newMetaHarness(t)
+func lastFileGone(t *testing.T, gone func(h *teleportHarness)) {
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("teleport login: %v", err)
 	}
@@ -731,7 +731,7 @@ func lastFileGone(t *testing.T, gone func(h *metaHarness)) {
 }
 
 func TestLastFileDeletedStopsTunnel(t *testing.T) {
-	lastFileGone(t, func(h *metaHarness) {
+	lastFileGone(t, func(h *teleportHarness) {
 		if err := os.Remove(filepath.Join(h.home, ".axon", "configs", "example.toml")); err != nil {
 			t.Fatal(err)
 		}
@@ -739,7 +739,7 @@ func TestLastFileDeletedStopsTunnel(t *testing.T) {
 }
 
 func TestLastFileFailingChecksStopsTunnel(t *testing.T) {
-	lastFileGone(t, func(h *metaHarness) {
+	lastFileGone(t, func(h *teleportHarness) {
 		if err := os.WriteFile(filepath.Join(h.home, ".axon", "configs", "example.toml"), []byte("not toml ["), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -747,7 +747,7 @@ func TestLastFileFailingChecksStopsTunnel(t *testing.T) {
 }
 
 func TestLastFileDeletedKeepsRecordsWhenStopFails(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	h.noFiles()
 	// A file where the state directory belongs makes the disconnect fail.
 	state := filepath.Join(h.home, ".axon", "state")
@@ -777,7 +777,7 @@ func TestTeleportStoredEndpointFollowsSkyPilotGlobalConfig(t *testing.T) {
 		{"only ~/.sky has the tunnel's", "https://sky.example.org", "%s", 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			h := newMetaHarness(t)
+			h := newTeleportHarness(t)
 			named := filepath.Join(h.home, "conf", "sky.yaml")
 			getenv := func(k string) string {
 				if k == "SKYPILOT_GLOBAL_CONFIG" {

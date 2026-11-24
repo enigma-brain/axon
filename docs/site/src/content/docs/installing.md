@@ -119,7 +119,8 @@ The install script exits with a non-zero status, and a message that begins
 
 ## Next
 
-Your organization gives you a config file, or an address that serves
-one. [Log in with it](/axon/logging-in/).
+[Log in](/axon/logging-in/): make a pathway by answering a few questions, or
+add the config file your organization gives you, or an address that serves
+one.
 
 When the install fails, see [Troubleshooting](/axon/troubleshooting/).

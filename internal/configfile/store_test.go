@@ -31,11 +31,17 @@ func oneDirect(fileID string, pathwayIDs ...string) string {
 	return s
 }
 
+// addFile stores data as a config file from src, as axon login --config
+// does.
+func addFile(s Store, data []byte, src Source) (File, error) {
+	return s.Put(data, PutOptions{Origin: FromSource(src)})
+}
+
 func add(t *testing.T, s Store, data, source string) File {
 	t.Helper()
-	f, err := s.Add([]byte(data), mustSource(t, source))
+	f, err := addFile(s, []byte(data), mustSource(t, source))
 	if err != nil {
-		t.Fatalf("Add: %v", err)
+		t.Fatalf("addFile: %v", err)
 	}
 	return f
 }
@@ -174,7 +180,7 @@ func TestAddRefusesTakenPathwayID(t *testing.T) {
 	add(t, s, oneDirect("first", "campus"), "-")
 	before := snapshot(t, filepath.Join(home, ".axon"))
 
-	_, err := s.Add([]byte(oneDirect("second", "lab", "campus")), mustSource(t, "-"))
+	_, err := addFile(s, []byte(oneDirect("second", "lab", "campus")), mustSource(t, "-"))
 	if err == nil {
 		t.Fatal("Add succeeded with a taken pathway id")
 	}
@@ -189,7 +195,7 @@ func TestAddRefusesTakenPathwayID(t *testing.T) {
 func TestAddRefusedChangesNothing(t *testing.T) {
 	s, home := newStore(t)
 	// With nothing stored, a refused file creates nothing.
-	if _, err := s.Add([]byte("format = 2\n"), mustSource(t, "-")); err == nil {
+	if _, err := addFile(s, []byte("format = 2\n"), mustSource(t, "-")); err == nil {
 		t.Fatal("Add succeeded with a bad file")
 	}
 	if _, err := os.Stat(filepath.Join(home, ".axon")); !os.IsNotExist(err) {
@@ -200,7 +206,7 @@ func TestAddRefusedChangesNothing(t *testing.T) {
 	add(t, s, campusFile, "https://example.org/campus.toml")
 	before := snapshot(t, filepath.Join(home, ".axon"))
 	bad := strings.Replace(campusFile, "https://sky.example.org", "http://sky.example.org", 1)
-	if _, err := s.Add([]byte(bad), mustSource(t, "-")); err == nil {
+	if _, err := addFile(s, []byte(bad), mustSource(t, "-")); err == nil {
 		t.Fatal("Add succeeded with a bad replacement")
 	}
 	if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(after, before) {
@@ -219,7 +225,7 @@ func TestAddRestoresTheFileWhenTheSourceCannotBeRecorded(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(state, "configs"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Add([]byte(campusFile), mustSource(t, "-")); err == nil {
+	if _, err := addFile(s, []byte(campusFile), mustSource(t, "-")); err == nil {
 		t.Fatal("Add succeeded although the source could not be recorded")
 	}
 	if _, err := os.Stat(s.Path("example-campus")); !os.IsNotExist(err) {
@@ -241,7 +247,7 @@ func TestAddRestoresTheFileWhenTheSourceCannotBeRecorded(t *testing.T) {
 		t.Fatal(err)
 	}
 	newer := strings.Replace(campusFile, "Campus\"", "Main campus\"", 1)
-	if _, err := s.Add([]byte(newer), mustSource(t, "https://example.org/campus.toml")); err == nil {
+	if _, err := addFile(s, []byte(newer), mustSource(t, "https://example.org/campus.toml")); err == nil {
 		t.Fatal("Add succeeded although the source could not be recorded")
 	}
 	got, err := os.ReadFile(s.Path("example-campus"))
@@ -260,7 +266,7 @@ func TestAddRefusesToReplaceANonRegularFile(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".axon", "configs", "example-campus.toml"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	_, err := s.Add([]byte(campusFile), mustSource(t, "-"))
+	_, err := addFile(s, []byte(campusFile), mustSource(t, "-"))
 	if err == nil || !strings.Contains(err.Error(), "not a regular file") {
 		t.Errorf("Add = %v, want a refusal of the non-regular file", err)
 	}
@@ -315,7 +321,7 @@ func TestListOrderAndProblems(t *testing.T) {
 	}
 	reported := map[string]string{}
 	for _, p := range problems {
-		reported[filepath.Base(p.Path)] = p.Error()
+		reported[filepath.Base(p.Path)] = p.Path + ": " + p.Err.Error()
 	}
 	want := map[string]string{
 		"adir.toml": "regular file",
@@ -355,7 +361,7 @@ func TestConcurrentAddsClaimingOnePathway(t *testing.T) {
 	for i := range n {
 		go func() {
 			<-start
-			_, err := s.Add([]byte(oneDirect(fmt.Sprintf("example-%d", i), "shared")), mustSource(t, "-"))
+			_, err := addFile(s, []byte(oneDirect(fmt.Sprintf("example-%d", i), "shared")), mustSource(t, "-"))
 			errs <- err
 		}()
 	}
@@ -385,13 +391,13 @@ func TestAddReleasesTheLock(t *testing.T) {
 	s, home := newStore(t)
 	add(t, s, oneDirect("example-a", "a"), "-")
 	// Refused after the lock is taken: another file claims pathway a.
-	_, err := s.Add([]byte(oneDirect("example-c", "a")), mustSource(t, "-"))
+	_, err := addFile(s, []byte(oneDirect("example-c", "a")), mustSource(t, "-"))
 	var clash *ClashError
 	if !errors.As(err, &clash) {
 		t.Fatalf("Add of a file claiming a stored pathway: err = %v", err)
 	}
 	add(t, s, oneDirect("example-b", "b"), "-")
-	if _, err := os.Stat(axondir.New(home).LockPath()); err != nil {
+	if _, err := os.Stat(filepath.Join(axondir.New(home).StatePath(), "configs.lock")); err != nil {
 		t.Errorf("lock file: %v", err)
 	}
 }

@@ -81,11 +81,11 @@ func (d Dir) MoveOldNames() (Moves, error) {
 	moves := Moves{Both: todo.Both}
 	for _, r := range todo.Moved {
 		if err := os.Rename(r.Old, r.New); err != nil {
-			return moves, fmt.Errorf("rename %s to %s: %w", r.Old, r.New, unwrapPath(err))
+			return moves, fmt.Errorf("rename %s to %s: %w", r.Old, r.New, UnwrapPath(err))
 		}
 		moves.Moved = append(moves.Moved, r)
 		if err := SyncDir(filepath.Dir(r.New)); err != nil {
-			return moves, fmt.Errorf("rename %s to %s: %w", r.Old, r.New, unwrapPath(err))
+			return moves, fmt.Errorf("rename %s to %s: %w", r.Old, r.New, UnwrapPath(err))
 		}
 	}
 	// The old lock file is empty and nothing reads it.
@@ -129,5 +129,5 @@ func exists(path string) (bool, error) {
 		// needs it to report.
 		return false, nil
 	}
-	return false, fmt.Errorf("read %s: %w", path, unwrapPath(err))
+	return false, fmt.Errorf("read %s: %w", path, UnwrapPath(err))
 }

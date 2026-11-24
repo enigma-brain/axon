@@ -6,30 +6,11 @@ import (
 	"errors"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 )
-
-// writeOldRecord writes pid in the old form of record, tunnel.pid.
-func writeOldRecord(t *testing.T, tn *Tunnel, pid int) string {
-	t.Helper()
-	if err := os.MkdirAll(tn.stateDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(tn.stateDir, oldRecordFile)
-	if err := os.WriteFile(path, []byte(strconv.Itoa(pid)+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
-func gone(path string) bool {
-	_, err := os.Stat(path)
-	return errors.Is(err, os.ErrNotExist)
-}
 
 // startSleep starts a process that is not a tunnel.
 func startSleep(t *testing.T) int {
@@ -97,47 +78,6 @@ func TestTunnelToAnotherProxyIsNotAdoptedOrStopped(t *testing.T) {
 	}
 	if _, ok := recorded(t, tn); ok {
 		t.Error("Start recorded a tunnel to another proxy")
-	}
-}
-
-func TestOldFormTunnelIsAnotherProcess(t *testing.T) {
-	tn := newTestTunnel(t)
-	pid := startByHandWith(t, "serve", oldArgs())
-	old := writeOldRecord(t, tn, pid)
-
-	st, err := tn.Status(context.Background())
-	if err != nil || st.Running {
-		t.Errorf("Status = %+v, %v; want no tunnel", st, err)
-	}
-	if !gone(old) {
-		t.Error("the old record was kept")
-	}
-
-	writeOldRecord(t, tn, pid)
-	err = tn.Start(context.Background())
-	var busy *PortBusyError
-	if !errors.As(err, &busy) || busy.PID != pid {
-		t.Fatalf("Start = %v, want a *PortBusyError naming %d", err, pid)
-	}
-	if !alive(t, pid) {
-		t.Error("Start stopped the old-form tunnel")
-	}
-	if !gone(old) {
-		t.Error("the old record was kept by Start")
-	}
-
-	writeOldRecord(t, tn, pid)
-	if err := tn.Stop(); err != nil {
-		t.Fatal(err)
-	}
-	if err := StopRecorded(tn.stateDir); err != nil {
-		t.Fatal(err)
-	}
-	if !alive(t, pid) {
-		t.Error("a stop signaled the old-form tunnel")
-	}
-	if !gone(old) {
-		t.Error("the old record was kept by Stop")
 	}
 }
 

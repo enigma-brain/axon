@@ -84,10 +84,10 @@ var realProbes = probes{
 	},
 }
 
-// check holds the probes Check uses.
+// check holds the probes checkConnection uses.
 var check = realProbes
 
-// Check checks the connection to the API server before a command runs,
+// checkConnection checks the connection to the API server before a command runs,
 // repairs what needs no action from the user, and otherwise returns an
 // error that names the user's next step. It makes one health request. On
 // a teleport pathway it first checks that the process on the tunnel's port
@@ -97,44 +97,47 @@ var check = realProbes
 // installs anything.
 //
 // It returns the active pathway and the logged-in email it checked, read
-// once before the health request, so that the command runs with the same
-// ones. The pathway counts as connected only while its settings for
+// once before the health request, and the installed client's version, so
+// that the command runs with the same ones. The pathway counts as connected only while its settings for
 // machines are the ones axon login recorded when it connected it.
-func Check(ctx context.Context, dir axondir.Dir, w io.Writer) (configfile.Pathway, string, error) {
+func checkConnection(ctx context.Context, dir axondir.Dir, w io.Writer) (configfile.Pathway, string, string, error) {
 	pw, err := activePathway(dir)
 	if err != nil {
-		return configfile.Pathway{}, "", err
+		return configfile.Pathway{}, "", "", err
 	}
 	email, hasEmail, err := dir.Email()
 	if err != nil {
-		return configfile.Pathway{}, "", err
+		return configfile.Pathway{}, "", "", err
 	}
 	if !hasEmail {
-		return configfile.Pathway{}, "", ErrNoLogin
+		return configfile.Pathway{}, "", "", ErrNoLogin
 	}
-	if err := check.run(ctx, dir, pw, w); err != nil {
-		return configfile.Pathway{}, "", err
+	version, err := check.run(ctx, dir, pw, w)
+	if err != nil {
+		return configfile.Pathway{}, "", "", err
 	}
-	return pw, email, nil
+	return pw, email, version, nil
 }
 
-func (p probes) run(ctx context.Context, dir axondir.Dir, pw configfile.Pathway, w io.Writer) error {
+// run checks the connection on pw and returns the installed client's
+// version, which the health request sends.
+func (p probes) run(ctx context.Context, dir axondir.Dir, pw configfile.Pathway, w io.Writer) (string, error) {
 	// A pathway whose settings changed after it was connected, such as by
 	// a file that --config replaced, is not the one connected.
 	same, err := connected.Is(dir, pw)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !same {
-		return ErrNoLogin
+		return "", ErrNoLogin
 	}
 
 	version, installed, err := p.clientVersion(dir)
 	if err != nil {
-		return fmt.Errorf("check the SkyPilot client: %w. Run `axon login`.", err)
+		return "", fmt.Errorf("check the SkyPilot client: %w. Run `axon login`.", err)
 	}
 	if !installed {
-		return errNoClient
+		return "", errNoClient
 	}
 	// Through the tunnel the request needs no login, and until the tunnel
 	// is known to be up, whatever listens on the local port is unknown, so
@@ -142,13 +145,13 @@ func (p probes) run(ctx context.Context, dir axondir.Dir, pw configfile.Pathway,
 	var cookies string
 	if pw.Kind == configfile.KindDirect {
 		if cookies, err = p.cookieFile(); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	if pw.Kind == configfile.KindTeleport {
 		if err := p.checkPort(ctx, dir, pw); err != nil {
-			return err
+			return "", err
 		}
 	}
 
@@ -157,17 +160,17 @@ func (p probes) run(ctx context.Context, dir axondir.Dir, pw configfile.Pathway,
 	h, err := p.health(ctx, endpoint, opts)
 	if err != nil && pw.Kind == configfile.KindTeleport && !errors.Is(err, apiserver.ErrNotLoggedIn) && ctx.Err() == nil {
 		if err := p.restartTunnel(ctx, dir, pw, w); err != nil {
-			return err
+			return "", err
 		}
 		h, err = p.health(ctx, endpoint, opts)
 	}
 	if err != nil {
-		return failure(ctx, pw, endpoint, err)
+		return "", failure(ctx, pw, endpoint, err)
 	}
 	if h.ServerVersion != "" && h.ServerVersion != version {
-		return errVersion
+		return "", errVersion
 	}
-	return nil
+	return version, nil
 }
 
 // failure returns the error the check stops with when the health request

@@ -31,9 +31,9 @@ const (
 	// The address.
 	msgChecking = "Checking %s\n"
 	// The address and the reason, for each.
-	msgSkyUnreachable   = "Can't reach the SkyPilot API server at %s: %s. Check the address and try again.\n"
-	msgSkyNotSkyPilot   = "%s answered, but not as a SkyPilot API server (%s). Check the address and try again.\n"
-	msgProxyUnreachable = "Can't reach the Teleport proxy at %s: %s. Check the address and try again.\n"
+	msgSkyUnreachable   = "Can't reach the SkyPilot API server at %s: %s. Check the address and try again."
+	msgSkyNotSkyPilot   = "%s answered, but not as a SkyPilot API server (%s). Check the address and try again."
+	msgProxyUnreachable = "Can't reach the Teleport proxy at %s: %s. Check the address and try again."
 
 	msgNoPathwayMade = "no pathway made. Run `axon login` again on a terminal, or with --sky-endpoint, --teleport-proxy or --config."
 
