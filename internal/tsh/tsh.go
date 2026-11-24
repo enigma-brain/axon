@@ -72,6 +72,10 @@ func Ensure(ctx context.Context, proxyAddr string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if major(version) > major(proxy) {
+		return "", fmt.Errorf("tsh %s at %s is newer than the Teleport proxy %s supports: it runs %s and accepts tsh %d or %d. Install an older tsh: %s",
+			version, path, proxyAddr, proxy, major(proxy), major(proxy)-1, InstallLink)
+	}
 	if !supported(version, proxy) {
 		return "", fmt.Errorf("tsh %s at %s does not work with the Teleport proxy %s, which runs %s and supports tsh %d and %d. Update tsh: %s",
 			version, path, proxyAddr, proxy, major(proxy), major(proxy)-1, InstallLink)
