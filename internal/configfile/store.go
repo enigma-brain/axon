@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -467,7 +468,8 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 }
 
 // removingExt is added to the name of a file a put is removing, until the
-// put has succeeded. No reader of the store reads such a file.
+// put has succeeded. No reader of the store reads such a file; Recover
+// deletes one that a put left behind.
 const removingExt = ".removing"
 
 // previousExt is added to the name of a copy of a stored file that a put is
@@ -526,41 +528,128 @@ func copyFile(from, to string) error {
 	return out.Close()
 }
 
-// Recover deals with the previous copies that a put stopped before it
-// ended left beside the stored files, and returns the paths of the stored
-// files it put a previous copy back in place of. The record says which copy
-// is the stored one: when its checksum is that of the stored file, the
-// copy is deleted; when it is that of the copy and not of the stored file,
-// the new file was written and its record was not, and the copy is put
-// back; when the stored file is missing, the copy is put back. Otherwise
-// the stored file is kept and the copy deleted.
+// Recover puts the store in order after a put that stopped before it
+// ended, and returns the paths of the stored files it put a previous copy
+// back in place of.
 //
-// It takes the store's lock only when it finds such a copy, so with none it
-// writes nothing.
+// It deals first with the previous copies left beside the stored files.
+// The record says which copy is the stored one: when its checksum is that
+// of the stored file, the copy is deleted; when it is that of the copy and
+// not of the stored file, the new file was written and its record was not,
+// and the copy is put back; when the stored file is missing, the copy is
+// put back. Otherwise the stored file is kept and the copy deleted.
+//
+// It then deletes every record whose stored file is gone, and every file
+// renamed aside with the suffix .removing. Recover holds the store's lock,
+// and only a put renames a file aside, under the same lock and finishing
+// before it releases it, so no put in progress owns such a file then.
+//
+// It takes the store's lock only when it finds something to do, so with
+// nothing to do it writes nothing.
 func (s Store) Recover() ([]string, error) {
-	entries, err := os.ReadDir(s.dir.ConfigsPath())
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", s.dir.ConfigsPath(), err)
-	}
-	found := false
-	for _, e := range entries {
-		found = found || strings.HasSuffix(e.Name(), fileExt+previousExt)
-	}
-	if !found {
-		return nil, nil
+	found, err := s.untidy()
+	if err != nil || !found {
+		return nil, err
 	}
 	unlock, err := s.lock()
 	if err != nil {
 		return nil, err
 	}
 	defer unlock()
-	return s.recoverPrevious()
+	restored, err := s.recoverPrevious()
+	if err != nil {
+		return restored, err
+	}
+	return restored, s.tidy()
 }
 
-// recoverPrevious is Recover, with the store's lock held.
+// untidy reports whether Recover has anything to do: a previous copy, a
+// file renamed aside, or a record without its stored file.
+func (s Store) untidy() (bool, error) {
+	configs, err := readDirNames(s.dir.ConfigsPath())
+	if err != nil {
+		return false, err
+	}
+	for _, name := range configs {
+		if strings.HasSuffix(name, fileExt+previousExt) || strings.HasSuffix(name, fileExt+removingExt) {
+			return true, nil
+		}
+	}
+	records, err := readDirNames(s.dir.RecordsPath())
+	if err != nil {
+		return false, err
+	}
+	for _, name := range records {
+		if strings.HasSuffix(name, fileExt+removingExt) {
+			return true, nil
+		}
+		if id, ok := strings.CutSuffix(name, fileExt); ok && fileIDPattern.MatchString(id) {
+			if _, err := os.Lstat(s.Path(id)); errors.Is(err, fs.ErrNotExist) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// tidy deletes, with the store's lock held, the records whose stored file
+// is gone and the files renamed aside with the suffix .removing. Only
+// regular files named for a valid id are deleted.
+func (s Store) tidy() error {
+	for _, dir := range []string{s.dir.ConfigsPath(), s.dir.RecordsPath()} {
+		entries, err := os.ReadDir(dir)
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("read %s: %w", dir, err)
+		}
+		for _, e := range entries {
+			id, aside := strings.CutSuffix(e.Name(), fileExt+removingExt)
+			if !aside {
+				if dir != s.dir.RecordsPath() {
+					continue
+				}
+				var ok bool
+				if id, ok = strings.CutSuffix(e.Name(), fileExt); !ok {
+					continue
+				}
+				if _, err := os.Lstat(s.Path(id)); !errors.Is(err, fs.ErrNotExist) {
+					continue
+				}
+			}
+			if !fileIDPattern.MatchString(id) || !e.Type().IsRegular() {
+				continue
+			}
+			path := filepath.Join(dir, e.Name())
+			if err := removeFile(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return fmt.Errorf("remove %s: %w", path, unwrapPath(err))
+			}
+		}
+	}
+	return nil
+}
+
+// readDirNames returns the names in dir, or none when dir does not exist
+// or a path above it is not a directory.
+func readDirNames(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", dir, err)
+	}
+	names := make([]string, len(entries))
+	for i, e := range entries {
+		names[i] = e.Name()
+	}
+	return names, nil
+}
+
+// recoverPrevious deals with the previous copies, as Recover does, with the
+// store's lock held. A put runs it before it renames anything aside; it
+// leaves files renamed aside and records alone.
 func (s Store) recoverPrevious() ([]string, error) {
 	dir := s.dir.ConfigsPath()
 	entries, err := os.ReadDir(dir)

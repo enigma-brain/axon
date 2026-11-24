@@ -379,6 +379,23 @@ func TestControlCharactersRemoved(t *testing.T) {
 	}
 }
 
+// A record whose stored file is gone, and files a put left renamed aside,
+// are not listed.
+func TestRecordWithoutItsFileNotListed(t *testing.T) {
+	dir, s := newDir(t)
+	add(t, s, campus, "https://example.org/campus.toml")
+	if err := os.Rename(s.Path("example-campus"), s.Path("example-campus")+".removing"); err != nil {
+		t.Fatal(err)
+	}
+	text, err := list(t, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text != "No config file or pathway is stored. Run `axon login` to add a pathway.\n" {
+		t.Errorf("listing:\n%s", text)
+	}
+}
+
 // Listing writes nothing: the directory's files are the same after it.
 func TestListingChangesNothing(t *testing.T) {
 	dir, s := newDir(t)
