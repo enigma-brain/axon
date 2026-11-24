@@ -120,10 +120,11 @@ func (w *scanWriter) containsWord(word string) bool {
 // Before the word comes the start of text, white space, or one of ( [ " ' ` :
 // and after it the end of text, white space, or one of ) ] " ' ` . , ; : so that
 // "(status: needs_auth)" holds it, and "https://host/needs_auth",
-// "?status=needs_auth" and "x_needs_auth" do not. A terminal color or style
-// sequence counts as white space, so colored output is read as plain text.
+// "?status=needs_auth" and "x_needs_auth" do not. Terminal color and style
+// sequences are removed first, so colored output is read as plain text and a
+// sequence never makes an edge of its own.
 func hasWord(text, word string) bool {
-	text = ansiEscape.ReplaceAllString(text, " ")
+	text = ansiEscape.ReplaceAllString(text, "")
 	for i := 0; ; {
 		j := strings.Index(text[i:], word)
 		if j < 0 {
