@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"github.com/enigma-brain/axon/internal/axondir"
 )
 
 // TestMain gives every test a temporary HOME, so that no test reaches the
@@ -30,7 +32,7 @@ func countMoves(t *testing.T) *int {
 	t.Helper()
 	n := new(int)
 	saved := moveOldNames
-	moveOldNames = func(io.Writer) error { *n++; return nil }
+	moveOldNames = func(io.Writer, axondir.Dir) error { *n++; return nil }
 	t.Cleanup(func() { moveOldNames = saved })
 	return n
 }

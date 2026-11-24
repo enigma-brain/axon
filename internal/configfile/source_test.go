@@ -28,7 +28,7 @@ func tlsServer(t *testing.T, h http.HandlerFunc) *httptest.Server {
 
 func mustSource(t *testing.T, s string) Source {
 	t.Helper()
-	src, err := ParseSource(s)
+	src, err := ParseSource(s, os.Getenv("HOME"))
 	if err != nil {
 		t.Fatalf("ParseSource(%q): %v", s, err)
 	}
@@ -76,7 +76,7 @@ func TestParseSourceRefuses(t *testing.T) {
 		"http://ada:pw@example.org/a.toml":  "https://",
 		"https://ada:pw@exa mple.org/a":     "not a valid URL",
 	} {
-		_, err := ParseSource(in)
+		_, err := ParseSource(in, "")
 		if err == nil {
 			t.Errorf("ParseSource(%q) succeeded", in)
 			continue
@@ -121,7 +121,7 @@ func TestParseSourceRefusalHidesTheSecret(t *testing.T) {
 		"https://ada:pw@example.org/a.toml?" + secret,
 		"https:///axon.toml?" + secret,
 	} {
-		_, err := ParseSource(in)
+		_, err := ParseSource(in, "")
 		if err == nil {
 			t.Errorf("ParseSource(%q) succeeded", in)
 			continue

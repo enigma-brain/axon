@@ -655,7 +655,7 @@ func (s Store) Record(id string) (Record, bool, error) {
 	}
 	rec := Record{HandMade: raw.HandMade, SHA256: raw.SHA256}
 	if !raw.HandMade {
-		if rec.Source, err = ParseSource(raw.Source); err != nil {
+		if rec.Source, err = ParseSource(raw.Source, s.dir.Home()); err != nil {
 			return Record{}, false, fmt.Errorf("read %s: %w", path, err)
 		}
 	}

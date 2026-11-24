@@ -12,26 +12,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/skyclient"
 )
 
-// Command returns the sky command.
-func Command() *cobra.Command {
-	return &cobra.Command{
-		Use:   "sky [command] [args]",
-		Short: "Run SkyPilot's sky commands against the API server axon login connected",
-		// Every argument, --help included, belongs to sky.
-		DisableFlagParsing: true,
-		// Errors are printed once, by the caller, in axon's own format.
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return dispatch(cmd.Context(), cmd.ErrOrStderr(), args)
-		},
-	}
+// Run runs axon sky with args for the user whose axon directory is dir. w
+// receives what the connection check repairs.
+func Run(ctx context.Context, dir axondir.Dir, w io.Writer, args []string) error {
+	return dispatch(ctx, dir, w, args)
 }
 
 // refusals are the sky api commands axon sky refuses, with the reason each
@@ -46,18 +34,14 @@ var refusals = map[string]string{
 
 // dispatch refuses args, runs sky's own help, or forwards args to sky after
 // the connection check. w receives what the check repairs.
-func dispatch(ctx context.Context, w io.Writer, args []string) error {
+func dispatch(ctx context.Context, dir axondir.Dir, w io.Writer, args []string) error {
 	if err := refusal(args); err != nil {
-		return err
-	}
-	dir, err := axondir.Default()
-	if err != nil {
 		return err
 	}
 	if wantsHelp(args) {
 		return help(dir, args)
 	}
-	err = forward(ctx, w, dir, args)
+	err := forward(ctx, w, dir, args)
 	if errors.Is(err, ErrNoLogin) && hasHelpFlag(args) {
 		return fmt.Errorf("%w %s", err, msgHelpHint)
 	}

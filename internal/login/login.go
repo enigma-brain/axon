@@ -86,13 +86,9 @@ type login struct {
 	probeProxy func(ctx context.Context, proxy string) error
 }
 
-// Run runs axon login.
-func Run(ctx context.Context, opts Options) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("find the home directory: %w", err)
-	}
-	return newLogin(home, os.Getenv).run(ctx, opts)
+// Run runs axon login for the user whose axon directory is dir.
+func Run(ctx context.Context, dir axondir.Dir, opts Options) error {
+	return newLogin(dir.Home(), os.Getenv).run(ctx, opts)
 }
 
 // newLogin returns the login for the user whose home directory is home, with
@@ -292,7 +288,7 @@ func (l *login) noConfig(opts Options) error {
 // flag stops and names the flag, and one without is answered no. closeIn
 // releases the terminal.
 func (l *login) addConfig(ctx context.Context, opts Options) (f configfile.File, in io.Reader, closeIn func(), err error) {
-	src, err := configfile.ParseSource(opts.Config)
+	src, err := configfile.ParseSource(opts.Config, l.dir.Home())
 	if err != nil {
 		return configfile.File{}, nil, nil, err
 	}

@@ -83,7 +83,7 @@ var pathways = map[string]string{
 // storeConfig stores exampleConfig under home.
 func storeConfig(t *testing.T, home string) {
 	t.Helper()
-	src, err := configfile.ParseSource("-")
+	src, err := configfile.ParseSource("-", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,17 +145,13 @@ func capture(t *testing.T) *[]call {
 	return &calls
 }
 
-// runSky runs axon sky with args and returns its standard output, its
-// standard error and its error.
+// runSky runs axon sky with args for the user whose home is HOME, and
+// returns its standard output, its standard error and its error. axon sky
+// writes nothing to standard output of its own.
 func runSky(args ...string) (string, string, error) {
-	cmd := Command()
-	var out, errOut bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&errOut)
-	// A nil slice makes cobra read the test binary's own arguments.
-	cmd.SetArgs(append([]string{}, args...))
-	err := cmd.ExecuteContext(context.Background())
-	return out.String(), errOut.String(), err
+	var errOut bytes.Buffer
+	err := Run(context.Background(), axondir.New(os.Getenv("HOME")), &errOut, append([]string{}, args...))
+	return "", errOut.String(), err
 }
 
 func TestForwardsEveryCommand(t *testing.T) {
@@ -533,9 +529,7 @@ func TestHelperProcess(t *testing.T) {
 	skyPath = func(axondir.Dir) (string, error) { return os.Getenv("AXON_TEST_FAKE_SKY"), nil }
 	skyPathFor = func(axondir.Dir, string) string { return os.Getenv("AXON_TEST_FAKE_SKY") }
 	check = helperProbes(os.Getenv(apiServerVar))
-	cmd := Command()
-	cmd.SetArgs(args)
-	if err := cmd.Execute(); err != nil {
+	if err := Run(context.Background(), axondir.New(os.Getenv("HOME")), os.Stderr, args); err != nil {
 		fail.Exit(err)
 	}
 	os.Exit(0)
@@ -643,7 +637,7 @@ func TestSkyNeverFetchesTheConfigFile(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	dir := login(t, "campus", "ada@example.org")
-	src, err := configfile.ParseSource(srv.URL + "/axon.toml")
+	src, err := configfile.ParseSource(srv.URL+"/axon.toml", "")
 	if err != nil {
 		t.Fatal(err)
 	}

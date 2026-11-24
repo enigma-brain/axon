@@ -78,13 +78,9 @@ type logout struct {
 // pathway's tunnel and the recorded one, ends the Teleport session of the connected pathway, and
 // removes the records of the connection. It keeps the config files and the
 // active pathway. It works by axon's own records alone, never by a config
-// file.
-func Logout(ctx context.Context, opts LogoutOptions) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("find the home directory: %w", err)
-	}
-	dir := axondir.New(home)
+// file. dir is the user's axon directory.
+func Logout(ctx context.Context, dir axondir.Dir, opts LogoutOptions) error {
+	home := dir.Home()
 	lo := &logout{
 		dir:        dir,
 		client:     skyClient{dir: dir},

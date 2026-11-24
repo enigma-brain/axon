@@ -114,7 +114,7 @@ func connectedProbes() probes {
 		health: func(context.Context, string, apiserver.Options) (apiserver.Health, error) {
 			return apiserver.Health{User: "ada@example.org", ServerVersion: clientVersion}, nil
 		},
-		cookieFile:    func() (string, error) { return "", nil },
+		cookieFile:    func(string) string { return "" },
 		clientVersion: func(axondir.Dir) (string, bool, error) { return clientVersion, true, nil },
 		findTsh:       func() (string, error) { return "", errors.New("unexpected tsh lookup") },
 		sessionValid: func(context.Context, string, string) (bool, error) {
@@ -442,7 +442,7 @@ func TestCheckSendsCookiesOnlyToADirectEndpoint(t *testing.T) {
 			login(t, tc.pathway, "ada@example.org")
 			capture(t)
 			check = w.probes()
-			check.cookieFile = func() (string, error) { return jar, nil }
+			check.cookieFile = func(string) string { return jar }
 			if _, _, err := runSky("status"); err != nil {
 				t.Fatal(err)
 			}

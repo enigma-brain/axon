@@ -77,7 +77,7 @@ func newDir(t *testing.T) (axondir.Dir, configfile.Store) {
 
 func add(t *testing.T, s configfile.Store, data, source string) {
 	t.Helper()
-	src, err := configfile.ParseSource(source)
+	src, err := configfile.ParseSource(source, "")
 	if err != nil {
 		t.Fatal(err)
 	}

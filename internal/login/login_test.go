@@ -198,7 +198,7 @@ func newHarness(t *testing.T) *harness {
 // store adds data as a config file.
 func (h *harness) store(data string) {
 	h.t.Helper()
-	src, err := configfile.ParseSource("-")
+	src, err := configfile.ParseSource("-", "")
 	if err != nil {
 		h.t.Fatal(err)
 	}

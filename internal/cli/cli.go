@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -28,6 +29,10 @@ const usesAxonDir = "axon-dir"
 
 // NewRoot returns the axon command, which reports version for --version.
 func NewRoot(version string) *cobra.Command {
+	// dir is the user's axon directory. The root's hook resolves it, with
+	// the home directory, before any command that uses it runs; the
+	// commands read it when they run.
+	var dir axondir.Dir
 	root := &cobra.Command{
 		Use:     "axon",
 		Short:   "axon is the command-line entry point to the platform",
@@ -40,24 +45,25 @@ func NewRoot(version string) *cobra.Command {
 		if cmd.Annotations[usesAxonDir] == "no" {
 			return nil
 		}
-		return moveOldNames(cmd.ErrOrStderr())
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("find the home directory: %w", err)
+		}
+		dir = axondir.New(home)
+		return moveOldNames(cmd.ErrOrStderr(), dir)
 	}
 	root.SetVersionTemplate("axon {{.Version}}\n")
 	root.CompletionOptions.DisableDefaultCmd = true
 	root.SetHelpCommand(&cobra.Command{Use: "no-help", Hidden: true})
 
-	root.AddCommand(newLogin(), newLogout(), newConfig(), sky.Command(), newUpdate(version))
+	root.AddCommand(newLogin(&dir), newLogout(&dir), newConfig(&dir), newSky(&dir), newUpdate(version))
 	return root
 }
 
-// moveOldNames moves what axon v0.3.0 and earlier kept in ~/.axon to the
+// moveOldNames moves what axon v0.3.0 and earlier kept in dir to the
 // current names, and tells w what it moved and what it found under both
 // names. Tests replace it.
-var moveOldNames = func(w io.Writer) error {
-	dir, err := axondir.Default()
-	if err != nil {
-		return err
-	}
+var moveOldNames = func(w io.Writer, dir axondir.Dir) error {
 	moves, err := dir.MoveOldNames()
 	reportMoves(w, dir, moves)
 	if err != nil {
@@ -86,7 +92,7 @@ func Execute(ctx context.Context, version string) error {
 	return NewRoot(version).ExecuteContext(ctx)
 }
 
-func newLogin() *cobra.Command {
+func newLogin(dir *axondir.Dir) *cobra.Command {
 	var opts login.Options
 	cmd := &cobra.Command{
 		Use:   "login",
@@ -102,7 +108,7 @@ switch.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.In, opts.Out, opts.Err = cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()
-			return login.Run(cmd.Context(), opts)
+			return login.Run(cmd.Context(), *dir, opts)
 		},
 	}
 	f := cmd.Flags()
@@ -116,7 +122,7 @@ switch.`,
 	return cmd
 }
 
-func newLogout() *cobra.Command {
+func newLogout(dir *axondir.Dir) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Log out and disconnect every command group",
@@ -128,7 +134,7 @@ The config files and the active pathway are kept, so "axon login" logs in
 again.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return login.Logout(cmd.Context(), login.LogoutOptions{
+			return login.Logout(cmd.Context(), *dir, login.LogoutOptions{
 				Out: cmd.OutOrStdout(),
 				Err: cmd.ErrOrStderr(),
 			})
@@ -136,7 +142,7 @@ again.`,
 	}
 }
 
-func newConfig() *cobra.Command {
+func newConfig(dir *axondir.Dir) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "See the config files and pathways stored on this laptop",
@@ -163,14 +169,25 @@ A stored file that cannot be read is listed with the reason, and the command
 then exits with an error. Nothing is contacted and nothing is changed.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			dir, err := axondir.Default()
-			if err != nil {
-				return err
-			}
-			return configlist.Run(configlist.Options{Dir: dir, Out: cmd.OutOrStdout()})
+			return configlist.Run(configlist.Options{Dir: *dir, Out: cmd.OutOrStdout()})
 		},
 	})
 	return cmd
+}
+
+func newSky(dir *axondir.Dir) *cobra.Command {
+	return &cobra.Command{
+		Use:   "sky [command] [args]",
+		Short: "Run SkyPilot's sky commands against the API server axon login connected",
+		// Every argument, --help included, belongs to sky.
+		DisableFlagParsing: true,
+		// Errors are printed once, by the caller, in axon's own format.
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return sky.Run(cmd.Context(), *dir, cmd.ErrOrStderr(), args)
+		},
+	}
 }
 
 func newUpdate(current string) *cobra.Command {
