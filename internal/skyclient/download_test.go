@@ -118,6 +118,7 @@ func (c *cancelAt) Write(p []byte) (int, error) {
 }
 
 func TestQuarters(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	report := quarters(&out)
 	for _, done := range []int64{10, 25, 60, 99, 100, 100} {

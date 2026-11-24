@@ -436,6 +436,7 @@ func TestEnsureLongResolverErrorIsUnavailable(t *testing.T) {
 }
 
 func TestTailFindsResolverHeaderAcrossWrites(t *testing.T) {
+	t.Parallel()
 	var tl tail
 	for _, b := range []byte("error:\n  × " + uvNoSolution + ":\n") {
 		tl.Write([]byte{b})
@@ -621,6 +622,7 @@ func TestCommandIgnoresSkyOnPath(t *testing.T) {
 }
 
 func TestNotInstalled(t *testing.T) {
+	t.Parallel()
 	dir := axondir.New(t.TempDir())
 	if v, ok, err := Version(dir); err != nil || ok || v != "" {
 		t.Errorf("Version = %q, %v, %v; want \"\", false, nil", v, ok, err)
@@ -808,6 +810,7 @@ func TestEnsureWaitHonorsCancellation(t *testing.T) {
 
 // Reading the version of a client that is not installed creates nothing.
 func TestVersionCreatesNothing(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	if _, installed, err := Version(axondir.New(home)); installed || err != nil {
 		t.Fatalf("Version = %v, %v; want not installed", installed, err)
@@ -864,6 +867,7 @@ func TestDamagedVersionRecordIsNoClient(t *testing.T) {
 }
 
 func TestClientEnvDropsPythonVars(t *testing.T) {
+	t.Parallel()
 	env := []string{
 		"PATH=/usr/bin",
 		"PYTHONPATH=/elsewhere/lib",
