@@ -34,6 +34,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/enigma-brain/axon/internal/termtext"
 	"github.com/enigma-brain/axon/internal/tsh"
 )
 
@@ -94,7 +95,7 @@ type PortBusyError struct {
 }
 
 func (e *PortBusyError) Error() string {
-	return fmt.Sprintf("port %d is held by process %d (%s), which is not the Teleport tunnel", Port, e.PID, cleanText(e.Command))
+	return fmt.Sprintf("port %d is held by process %d (%s), which is not the Teleport tunnel", Port, e.PID, termtext.Clean(e.Command))
 }
 
 // StartError reports a started tunnel that did not come to serve. Start has
