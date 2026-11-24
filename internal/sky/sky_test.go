@@ -210,6 +210,7 @@ func TestEnvironment(t *testing.T) {
 			want := []string{
 				endpointVar + "=" + endpoint,
 				"SKYPILOT_DEBUG=1",
+				projectFileVar + "=" + filepath.Join(os.Getenv("HOME"), ".axon", "state", "sky-project.yaml"),
 				userVar + "=ada@example.org",
 			}
 			if !slices.Equal(sky, want) {
@@ -264,12 +265,13 @@ func TestEnviron(t *testing.T) {
 		endpointVar + "_EXTRA=kept",
 		endpointVar + "=http://b",
 	}
-	got := environ(base, "http://127.0.0.1:46581", "ada@example.org")
+	got := environ(base, "http://127.0.0.1:46581", "ada@example.org", "/p.yaml")
 	want := []string{
 		"PATH=/bin",
 		endpointVar + "_EXTRA=kept",
 		endpointVar + "=http://127.0.0.1:46581",
 		userVar + "=ada@example.org",
+		projectFileVar + "=/p.yaml",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("environ = %q, want %q", got, want)
@@ -576,6 +578,7 @@ func TestReplacesProcessWithSky(t *testing.T) {
 	want := strings.Join([]string{
 		sky, "a-command-sky-adds-later", "-c", "dev", "task.yaml",
 		endpointVar + "=http://127.0.0.1:46581",
+		projectFileVar + "=" + filepath.Join(home, ".axon", "state", "sky-project.yaml"),
 		userVar + "=ada@example.org",
 	}, "\n") + "\n"
 	if out != want {

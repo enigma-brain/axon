@@ -93,17 +93,21 @@ sky: restarting the Teleport tunnel
 
 ## What axon sets for the command
 
-Before it runs a command, `axon` sets two environment variables for it,
+Before it runs a command, `axon` sets three environment variables for it,
 replacing any value your shell exports:
 
 | Variable | Value |
 |---|---|
 | `SKYPILOT_API_SERVER_ENDPOINT` | The address of the server your pathway uses |
 | `SKYPILOT_USER` | The email `axon login` recorded |
+| `SKYPILOT_PROJECT_CONFIG` | A file of `axon`'s that labels what you launch `axon-client: "true"` |
 
 The first keeps the client on your organization's server whatever your shell
 exports. The second makes SkyPilot's volume checks run as your email and not
-as your laptop username.
+as your laptop username. The third lets your organization apply its own rules
+to what is launched through `axon`. SkyPilot reads one project file, so a
+`.sky.yaml` of yours is not read: put its settings in `~/.sky/config.yaml` or
+pass them with `--config`.
 
 ## What the login does for sky
 
