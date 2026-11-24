@@ -168,15 +168,15 @@ func TestReport(t *testing.T) {
 	}
 }
 
-// stopped runs the trapping child under Stop with grace, cancels its
+// stopped runs the trapping child under stop with grace, cancels its
 // context with cause once it is ready, and returns what Wait returned, what
 // the child printed after it was ready, and how long Wait took after the
 // cancellation.
-func stopped(t *testing.T, cause error, grace time.Duration, deliver func(*exec.Cmd)) (error, string, time.Duration) {
+func stopped(t *testing.T, stop func(context.Context, *exec.Cmd, time.Duration), cause error, grace time.Duration, deliver func(*exec.Cmd)) (error, string, time.Duration) {
 	t.Helper()
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
-	cmd, out := child(t, ctx, "trap", func(cmd *exec.Cmd) { Stop(ctx, cmd, grace) })
+	cmd, out := child(t, ctx, "trap", func(cmd *exec.Cmd) { stop(ctx, cmd, grace) })
 	rest := make(chan string, 1)
 	go func() {
 		b, _ := io.ReadAll(out)
@@ -195,7 +195,7 @@ func stopped(t *testing.T, cause error, grace time.Duration, deliver func(*exec.
 
 func TestStopForwardsSIGTERM(t *testing.T) {
 	t.Parallel()
-	_, out, _ := stopped(t, &Error{Signal: syscall.SIGTERM}, 5*time.Second, nil)
+	_, out, _ := stopped(t, Stop, &Error{Signal: syscall.SIGTERM}, 5*time.Second, nil)
 	if !strings.Contains(out, "got terminated") {
 		t.Fatalf("the program printed %q, want it to have received SIGTERM", out)
 	}
@@ -205,7 +205,7 @@ func TestStopSendsNothingOnSIGINT(t *testing.T) {
 	t.Parallel()
 	// The terminal delivers SIGINT to the program; here the test does.
 	deliver := func(cmd *exec.Cmd) { cmd.Process.Signal(syscall.SIGINT) }
-	err, out, _ := stopped(t, &Error{Signal: syscall.SIGINT}, 5*time.Second, deliver)
+	err, out, _ := stopped(t, Stop, &Error{Signal: syscall.SIGINT}, 5*time.Second, deliver)
 	if !strings.Contains(out, "got interrupt") {
 		t.Fatalf("the program printed %q, want it to have received the one SIGINT", out)
 	}
@@ -217,7 +217,7 @@ func TestStopSendsNothingOnSIGINT(t *testing.T) {
 func TestStopKillsAfterGrace(t *testing.T) {
 	t.Parallel()
 	grace := 300 * time.Millisecond
-	err, out, took := stopped(t, &Error{Signal: syscall.SIGINT}, grace, nil)
+	err, out, took := stopped(t, Stop, &Error{Signal: syscall.SIGINT}, grace, nil)
 	if strings.Contains(out, "got") {
 		t.Fatalf("the program printed %q, want no signal sent to it on SIGINT", out)
 	}
@@ -231,7 +231,45 @@ func TestStopKillsAfterGrace(t *testing.T) {
 
 func TestStopKillsOnOtherCancellations(t *testing.T) {
 	t.Parallel()
-	err, out, took := stopped(t, context.DeadlineExceeded, time.Minute, nil)
+	err, out, took := stopped(t, Stop, context.DeadlineExceeded, time.Minute, nil)
+	if strings.Contains(out, "got") || !signaledBy(err, syscall.SIGKILL) {
+		t.Fatalf("Wait returned %v and the program printed %q, want it killed", err, out)
+	}
+	if took > 10*time.Second {
+		t.Fatalf("the program was killed after %s, want at once", took)
+	}
+}
+
+func TestStopGroupStartsAGroupOfItsOwn(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cmd, _ := child(t, ctx, "trap", func(cmd *exec.Cmd) { StopGroup(ctx, cmd, time.Second) })
+	pgid, err := syscall.Getpgid(cmd.Process.Pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pgid != cmd.Process.Pid {
+		t.Fatalf("the program is in the process group %d, want its own, %d", pgid, cmd.Process.Pid)
+	}
+}
+
+func TestStopGroupSendsSIGTERMOnEitherSignal(t *testing.T) {
+	t.Parallel()
+	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
+		_, out, took := stopped(t, StopGroup, &Error{Signal: sig}, time.Minute, nil)
+		if !strings.Contains(out, "got terminated") {
+			t.Errorf("interrupted by %v, the program printed %q, want it to have received SIGTERM", sig, out)
+		}
+		if took > 10*time.Second {
+			t.Errorf("interrupted by %v, the program ended after %s, want at once", sig, took)
+		}
+	}
+}
+
+func TestStopGroupKillsOnOtherCancellations(t *testing.T) {
+	t.Parallel()
+	err, out, took := stopped(t, StopGroup, context.DeadlineExceeded, time.Minute, nil)
 	if strings.Contains(out, "got") || !signaledBy(err, syscall.SIGKILL) {
 		t.Fatalf("Wait returned %v and the program printed %q, want it killed", err, out)
 	}

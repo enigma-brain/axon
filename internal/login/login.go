@@ -229,7 +229,7 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	// A direct pathway has no session apart from each service's own.
 
 	// 5. Connect each command group.
-	streams := sky.Options{In: opts.In, Out: opts.Out, Err: opts.Err}
+	streams := sky.Options{Out: opts.Out, Err: opts.Err}
 	teleport := func(ctx context.Context, clientVersion string) (apiserver.Health, error) {
 		return l.connectTeleport(ctx, p, opts, clientVersion)
 	}

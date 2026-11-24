@@ -65,9 +65,11 @@ func (c Connector) browserLogin(ctx context.Context, opts Options, skyPath, endp
 	defer cancel()
 	cmd := exec.CommandContext(ctx, skyPath, "api", "login", "-e", endpoint)
 	cmd.Env = browserLoginEnviron(c.Environ())
-	interrupt.Stop(ctx, cmd, WaitDelay)
+	// The client reads Ctrl-C as a request to log in another way, so it
+	// runs apart from the terminal and axon stops it. With no input, the
+	// client's last way, a token pasted at a prompt, ends at once.
+	interrupt.StopGroup(ctx, cmd, WaitDelay)
 	var seen scanWriter
-	cmd.Stdin = opts.In
 	cmd.Stdout = io.MultiWriter(opts.Out, &seen)
 	cmd.Stderr = io.MultiWriter(opts.Err, &seen)
 
@@ -82,11 +84,19 @@ func (c Connector) browserLogin(ctx context.Context, opts Options, skyPath, endp
 	if seen.containsWord(apiserver.NeedsAuth) {
 		return true, nil
 	}
+	if runErr != nil && seen.contains(pastePrompt) {
+		return false, fmt.Errorf("the SkyPilot login failed (%v). The login could not be completed in a browser. Run `axon login` again.", runErr)
+	}
 	if runErr != nil {
 		return false, fmt.Errorf("the SkyPilot login failed (%v). Run `axon login` again.", runErr)
 	}
 	return false, nil
 }
+
+// pastePrompt is the prompt of the client's last way to log in, which asks
+// for a token. The client reaches it only when no way through the browser
+// worked.
+const pastePrompt = "Paste the token"
 
 // scanWriter keeps what is written to it, so the output can be searched once
 // the command ends.
@@ -99,6 +109,13 @@ func (w *scanWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.buf.Write(p)
+}
+
+// contains reports whether what was written holds s.
+func (w *scanWriter) contains(s string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return strings.Contains(w.buf.String(), s)
 }
 
 // containsWord reports whether what was written holds word as a word of its

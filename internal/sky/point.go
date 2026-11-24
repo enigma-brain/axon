@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -68,9 +69,12 @@ func (c Connector) skyLogin(ctx context.Context, opts Options, skyPath, endpoint
 	defer cancel()
 	cmd := exec.CommandContext(ctx, skyPath, "api", "login", "-e", endpoint)
 	cmd.Env = apiEnviron(c.Environ())
-	interrupt.Stop(ctx, cmd, WaitDelay)
-	cmd.Stdout = opts.Out
-	cmd.Stderr = opts.Err
+	// The client runs apart from the terminal, as the browser login's
+	// does, and writes through pipes, since a group that is not the
+	// terminal's can be stopped for writing to it.
+	interrupt.StopGroup(ctx, cmd, WaitDelay)
+	cmd.Stdout = struct{ io.Writer }{opts.Out}
+	cmd.Stderr = struct{ io.Writer }{opts.Err}
 
 	fmt.Fprintf(opts.Out, "sky: pointing the SkyPilot client at %s\n", endpoint)
 	runErr := cmd.Run()
