@@ -149,7 +149,8 @@ func Stop(ctx context.Context, cmd *exec.Cmd, grace time.Duration) {
 //     killed.
 //
 // When the program has not exited grace after ctx ended, it is killed, and
-// its output is no longer waited for.
+// its output is no longer waited for; whatever is left of its group is
+// killed then too.
 func StopGroup(ctx context.Context, cmd *exec.Cmd, grace time.Duration) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
@@ -157,12 +158,14 @@ func StopGroup(ctx context.Context, cmd *exec.Cmd, grace time.Duration) {
 	cmd.SysProcAttr.Setpgid = true
 	cmd.WaitDelay = grace
 	cmd.Cancel = func() error {
+		// The group's ID is the program's own process ID.
+		group := -cmd.Process.Pid
 		sig := syscall.SIGKILL
 		if _, ok := Signal(ctx); ok {
 			sig = syscall.SIGTERM
+			time.AfterFunc(grace, func() { syscall.Kill(group, syscall.SIGKILL) })
 		}
-		// The group's ID is the program's own process ID.
-		err := syscall.Kill(-cmd.Process.Pid, sig)
+		err := syscall.Kill(group, sig)
 		if errors.Is(err, syscall.ESRCH) {
 			return os.ErrProcessDone
 		}

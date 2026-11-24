@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -31,6 +32,11 @@ func TestMain(m *testing.M) {
 		Exit(syscall.SIGTERM)
 	case "trap":
 		childTrap()
+	case "stubborn":
+		childStubborn()
+	case "stubborn-child":
+		signal.Ignore(syscall.SIGTERM)
+		time.Sleep(time.Minute)
 	}
 	os.Exit(3)
 }
@@ -54,6 +60,20 @@ func childTrap() {
 	fmt.Println("ready")
 	fmt.Println("got", <-ch)
 	os.Exit(0)
+}
+
+// childStubborn ignores SIGTERM and starts a child that ignores it too,
+// prints the child's process ID and ready, and waits.
+func childStubborn() {
+	signal.Ignore(syscall.SIGTERM)
+	cmd := exec.Command(os.Args[0], "-test.run=^$")
+	cmd.Env = append(os.Environ(), childEnv+"=stubborn-child")
+	if err := cmd.Start(); err != nil {
+		os.Exit(5)
+	}
+	fmt.Println(cmd.Process.Pid)
+	fmt.Println("ready")
+	time.Sleep(time.Minute)
 }
 
 // child starts the test binary as part, with its standard output on a pipe,
@@ -275,5 +295,42 @@ func TestStopGroupKillsOnOtherCancellations(t *testing.T) {
 	}
 	if took > 10*time.Second {
 		t.Fatalf("the program was killed after %s, want at once", took)
+	}
+}
+
+func TestStopGroupKillsTheGroupAfterGrace(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	grace := 300 * time.Millisecond
+	var out bytes.Buffer
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
+	cmd.Env = append(os.Environ(), childEnv+"=stubborn")
+	StopGroup(ctx, cmd, grace)
+	r, w := io.Pipe()
+	cmd.Stdout = w
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) })
+	lines := bufio.NewReader(r)
+	first, _ := lines.ReadString('\n')
+	grandchild, err := strconv.Atoi(strings.TrimSpace(first))
+	if err != nil {
+		t.Fatalf("the program printed %q, want its child's process ID", first)
+	}
+	if line, _ := lines.ReadString('\n'); line != "ready\n" {
+		t.Fatalf("the program printed %q, want ready", line)
+	}
+	go io.Copy(&out, lines)
+	cancel(&Error{Signal: syscall.SIGINT})
+	cmd.Wait()
+	w.Close()
+	deadline := time.Now().Add(5 * time.Second)
+	for syscall.Kill(grandchild, 0) == nil {
+		if time.Now().After(deadline) {
+			t.Fatalf("the program's child, process %d, ignored SIGTERM and still runs", grandchild)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
