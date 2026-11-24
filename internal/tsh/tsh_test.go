@@ -364,6 +364,7 @@ func TestBadProxyIsRefused(t *testing.T) {
 }
 
 func TestCheckProxy(t *testing.T) {
+	t.Parallel()
 	for proxy, want := range map[string]bool{
 		"teleport.example.org":                   true,
 		"teleport.example.org:443":               true,
@@ -399,6 +400,7 @@ func TestCheckProxy(t *testing.T) {
 }
 
 func TestSameProxy(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		a, b string
 		want bool
@@ -432,6 +434,7 @@ func TestVersionIsReadFromTheProxyPassed(t *testing.T) {
 }
 
 func TestPingURL(t *testing.T) {
+	t.Parallel()
 	for proxy, want := range map[string]string{
 		"teleport.example.org":      "https://teleport.example.org/webapi/ping",
 		"teleport.example.org:3080": "https://teleport.example.org:3080/webapi/ping",
