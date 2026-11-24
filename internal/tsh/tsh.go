@@ -169,7 +169,7 @@ func SessionValid(ctx context.Context, tshPath, proxy string) (bool, error) {
 		return false, nil
 	}
 	u, err := url.Parse(status.Active.ProfileURL)
-	if err != nil || !sameProxy(u.Host, proxy) {
+	if err != nil || !SameProxy(u.Host, proxy) {
 		return false, nil
 	}
 	return status.Active.ValidUntil.After(now()), nil

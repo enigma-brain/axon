@@ -556,15 +556,16 @@ instead of the latest. CI runs it on Linux when `internal/update/` or
 | `internal/cli` | The command tree: `login`, `logout`, `config`, `sky` and `update`. |
 | `internal/configlist` | `axon config list`: printing the stored config files, their pathways and the pathway in use. |
 | `internal/update` | `axon update`: finding a release, verifying its archive, and replacing the running binary. |
+| `internal/download` | Downloading a release archive: the one client, its redirect rule, the stall and size limits, the SHA-256 check, taking one program out of a `.tar.gz`, and printing an address without what can hold a token. `axon update` and the SkyPilot client install use it. |
 | `internal/fail` | Prints the error that ends a command to standard error, prefixed `axon:`, and exits non-zero. |
 | `internal/configfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/configs/`. |
-| `internal/axondir` | `~/.axon`: the names of its directories, the settings file, `tools/`, `state/`, the store's lock, and renaming what `v0.3.0` and earlier kept under other names. |
+| `internal/axondir` | `~/.axon`: the names of its directories, the settings file, `tools/`, `state/`, the store's lock, renaming what `v0.3.0` and earlier kept under other names, and `ReplaceFile`, through which `axon` replaces every file it writes. |
 | `internal/connected` | The record of the connected pathway and its settings, in `~/.axon/state/pathway.toml`. |
 | `internal/login` | `axon login` and `axon logout` (`logout.go`): adding a file, choosing the pathway, disconnecting the one left, the stages, the sky group's connect steps, and each kind's login in `direct.go` and `teleport.go`. |
 | `internal/sky` | The `axon sky` command group: its refusals, its connection check, and each pathway kind's endpoint. |
 | `internal/apiserver` | The SkyPilot API server's health request, with SkyPilot's cookies and the client's version headers. |
 | `internal/skyclient` | `axon`'s own SkyPilot client. |
-| `internal/tsh` | Teleport's client: finding it on `PATH`, login, application login, certificate check. |
+| `internal/tsh` | Teleport's client: finding it on `PATH`, login, application login, certificate check, and the one rule for a proxy address. |
 | `internal/tunnel` | The Teleport tunnel to the API server. |
 | `internal/netreason` | The short reason of a failed network request, such as `no such host` or `timed out`. |
 | `internal/termtext` | Making text from outside `axon` safe to print on a terminal. |

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/download"
 	"github.com/enigma-brain/axon/internal/netreason"
 	"github.com/enigma-brain/axon/internal/termtext"
 )
@@ -62,20 +63,20 @@ func ParseSource(s string) (Source, error) {
 	case s == stdinValue:
 		return Source{kind: sourceStdin, value: stdinValue}, nil
 	case schemePattern.MatchString(s):
-		// Errors name the address as printable gives it, and say nothing
+		// Errors name the address as download.Redact gives it, and say nothing
 		// of an address that does not parse, since it can hold a secret.
 		u, err := url.Parse(s)
 		if err != nil {
 			return Source{}, errors.New("the config file's address is not a valid URL")
 		}
 		if u.Scheme != "https" {
-			return Source{}, fmt.Errorf("%s: an address must start with https://", printable(u))
+			return Source{}, fmt.Errorf("%s: an address must start with https://", download.Redact(u))
 		}
 		if u.Host == "" {
-			return Source{}, fmt.Errorf("%s: the address has no host", printable(u))
+			return Source{}, fmt.Errorf("%s: the address has no host", download.Redact(u))
 		}
 		if u.User != nil {
-			return Source{}, fmt.Errorf("%s: an address must not carry a user name or password", printable(u))
+			return Source{}, fmt.Errorf("%s: an address must not carry a user name or password", download.Redact(u))
 		}
 		return Source{kind: sourceAddress, value: s}, nil
 	}
@@ -105,20 +106,12 @@ func (s Source) String() string {
 	if err != nil {
 		return s.value
 	}
-	return printable(u)
+	return download.Redact(u)
 }
 
 // raw returns the source as it is recorded and read: the whole address, the
 // absolute path, or "-". It is never printed.
 func (s Source) raw() string { return s.value }
-
-// printable returns u as a message prints it: the scheme, host and path,
-// without the user information, query string and fragment, which can hold
-// a token.
-func printable(u *url.URL) string {
-	c := url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path, RawPath: u.RawPath}
-	return c.String()
-}
 
 // IsAddress reports whether the source is an address, the one kind of
 // source that can be read again without the user.
@@ -166,10 +159,10 @@ func fetch(ctx context.Context, address, shown string) ([]byte, error) {
 			// query string included, which can hold a token.
 			req.Header.Del("Referer")
 			if req.URL.Scheme != "https" {
-				return fmt.Errorf("redirected to %s, which is not an https address", printable(req.URL))
+				return fmt.Errorf("redirected to %s, which is not an https address", download.Redact(req.URL))
 			}
 			if req.URL.User != nil {
-				return fmt.Errorf("redirected to %s, which carries a user name or password", printable(req.URL))
+				return fmt.Errorf("redirected to %s, which carries a user name or password", download.Redact(req.URL))
 			}
 			if len(via) >= 10 {
 				return errors.New("stopped after 10 redirects")

@@ -101,7 +101,6 @@ const MaxFileIDLength = 32
 var (
 	fileIDPattern    = regexp.MustCompile(fmt.Sprintf(`^[a-z][a-z0-9-]{0,%d}$`, MaxFileIDLength-1))
 	pathwayIDPattern = regexp.MustCompile(`^[a-z0-9-]+$`)
-	hostLabelPattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 )
 
 // rawFile and its parts receive the decoded TOML. Values are decoded as
@@ -378,7 +377,7 @@ func checkPathway(i int, rp rawPathway) (Pathway, error) {
 			proxy = rp.Teleport.Proxy
 		}
 		host, ok := proxy.(string)
-		if !ok || !isHostPort(host) {
+		if !ok || tsh.CheckProxy(host) != nil {
 			return Pathway{}, refuse(field("teleport.proxy"), "must be a hostname, optionally with a port")
 		}
 		p.Teleport = &Teleport{Proxy: host}
@@ -431,34 +430,4 @@ func isHTTPSAddress(s string) bool {
 	u, err := url.Parse(s)
 	return err == nil && u.Scheme == "https" && u.Host != "" && u.Opaque == "" &&
 		u.User == nil && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && !strings.Contains(s, "#")
-}
-
-// IsHostPort reports whether s is a Teleport proxy address a config file
-// accepts: a hostname, optionally followed by a colon and a port.
-func IsHostPort(s string) bool { return isHostPort(s) }
-
-// isHostPort reports whether s is a hostname, optionally followed by a
-// colon and a port from 1 to 65535.
-func isHostPort(s string) bool {
-	host := s
-	if i := strings.LastIndexByte(s, ':'); i >= 0 {
-		host = s[:i]
-		port := s[i+1:]
-		if port == "" || strings.TrimLeft(port, "0123456789") != "" {
-			return false
-		}
-		n, err := strconv.Atoi(port)
-		if err != nil || n < 1 || n > 65535 {
-			return false
-		}
-	}
-	if host == "" || len(host) > 253 {
-		return false
-	}
-	for _, label := range strings.Split(host, ".") {
-		if !hostLabelPattern.MatchString(label) {
-			return false
-		}
-	}
-	return true
 }

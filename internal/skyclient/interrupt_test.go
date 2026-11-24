@@ -3,7 +3,6 @@ package skyclient
 import (
 	"context"
 	"errors"
-	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -68,24 +67,6 @@ func TestEnsureWaitStopsWhenCancelled(t *testing.T) {
 	}
 	if d := time.Since(start); d > 2*time.Second {
 		t.Errorf("Ensure took %s to stop after the cancellation", d)
-	}
-}
-
-// A download cancelled while its body arrives ends with the cancellation,
-// not as a stall.
-func TestDownloadCancelledMidBody(t *testing.T) {
-	setDownloadLimits(t, time.Minute, 1<<20)
-	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Length", "1000")
-		w.Write([]byte("partial"))
-		w.(http.Flusher).Flush()
-		hang(t, r)
-	})
-
-	_, err := download(cancelAfter(t, 200*time.Millisecond, nil), url, io.Discard, io.Discard)
-	var stalled *stallError
-	if errors.As(err, &stalled) || !errors.Is(err, context.Canceled) {
-		t.Fatalf("download error = %v, want the cancellation", err)
 	}
 }
 

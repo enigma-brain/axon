@@ -3,13 +3,11 @@ package skyclient
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -40,115 +38,12 @@ func hang(t *testing.T, r *http.Request) {
 	}
 }
 
-func TestDownloadEndsWhenHeadersStall(t *testing.T) {
-	setDownloadLimits(t, 100*time.Millisecond, 1<<20)
-	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
-		hang(t, r)
-	})
-
-	start := time.Now()
-	_, err := download(context.Background(), url, io.Discard, io.Discard)
-	var stalled *stallError
-	if !errors.As(err, &stalled) {
-		t.Fatalf("download error = %v, want a stall", err)
-	}
-	if time.Since(start) > 5*time.Second {
-		t.Errorf("the stall took %s to end", time.Since(start))
-	}
-}
-
-func TestDownloadEndsWhenBodyStalls(t *testing.T) {
-	setDownloadLimits(t, 100*time.Millisecond, 1<<20)
-	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Length", "1000")
-		w.Write([]byte("partial"))
-		w.(http.Flusher).Flush()
-		hang(t, r)
-	})
-
-	_, err := download(context.Background(), url, io.Discard, io.Discard)
-	var stalled *stallError
-	if !errors.As(err, &stalled) {
-		t.Fatalf("download error = %v, want a stall", err)
-	}
-	if want := "the download stopped because no data arrived for 100ms"; err.Error() != want {
-		t.Errorf("error = %q, want %q", err, want)
-	}
-}
-
-func TestDownloadKeepsASlowBodyThatMoves(t *testing.T) {
-	// Each piece arrives well within the stall timeout, but the whole body
-	// takes several times as long.
-	setDownloadLimits(t, 300*time.Millisecond, 1<<20)
-	const pieces = 12
-	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Length", strconv.Itoa(pieces))
-		for i := 0; i < pieces; i++ {
-			w.Write([]byte("x"))
-			w.(http.Flusher).Flush()
-			time.Sleep(100 * time.Millisecond)
-		}
-	})
-
-	var got bytes.Buffer
-	sum, err := download(context.Background(), url, &got, io.Discard)
-	if err != nil {
-		t.Fatalf("download: %v", err)
-	}
-	want := sha256.Sum256([]byte(strings.Repeat("x", pieces)))
-	if sum != hex.EncodeToString(want[:]) || got.String() != strings.Repeat("x", pieces) {
-		t.Errorf("download = %q (%s), want %d bytes of x", got.String(), sum, pieces)
-	}
-}
-
-func TestDownloadRefusesADeclaredSizeOverTheLimit(t *testing.T) {
-	setDownloadLimits(t, time.Second, 1<<20)
-	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Length", strconv.Itoa(2<<20))
-		w.(http.Flusher).Flush()
-	})
-
-	var got bytes.Buffer
-	_, err := download(context.Background(), url, &got, io.Discard)
-	var tooLarge *tooLargeError
-	if !errors.As(err, &tooLarge) {
-		t.Fatalf("download error = %v, want a refusal for size", err)
-	}
-	if want := "the download was refused because it is larger than 1 MiB"; err.Error() != want {
-		t.Errorf("error = %q, want %q", err, want)
-	}
-	if got.Len() != 0 {
-		t.Errorf("download wrote %d bytes before refusing", got.Len())
-	}
-}
-
-func TestDownloadRefusesAnUndeclaredSizeOverTheLimit(t *testing.T) {
-	setDownloadLimits(t, time.Second, 1<<20)
-	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
-		// No Content-Length: the body is sent in chunks.
-		chunk := bytes.Repeat([]byte("x"), 64<<10)
-		for i := 0; i < 40; i++ {
-			if _, err := w.Write(chunk); err != nil {
-				return
-			}
-			w.(http.Flusher).Flush()
-		}
-	})
-
-	_, err := download(context.Background(), url, io.Discard, io.Discard)
-	var tooLarge *tooLargeError
-	if !errors.As(err, &tooLarge) {
-		t.Fatalf("download error = %v, want a refusal for size", err)
-	}
-}
-
 func TestEnsureStalledDownloadSaysSo(t *testing.T) {
 	f := newFixture(t)
 	setDownloadLimits(t, 100*time.Millisecond, 1<<20)
-	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
+	uvBaseURL = serve(t, func(w http.ResponseWriter, r *http.Request) {
 		hang(t, r)
 	})
-	uvBaseURL = url
 
 	_, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil)
 	want := "download uv " + uvVersion + ": the download stopped because no data arrived for 100ms"
@@ -160,14 +55,77 @@ func TestEnsureStalledDownloadSaysSo(t *testing.T) {
 	}
 }
 
-func TestInWords(t *testing.T) {
-	for d, want := range map[time.Duration]string{
-		30 * time.Second:        "30 seconds",
-		time.Second:             "1 second",
-		1500 * time.Millisecond: "1.5s",
-	} {
-		if got := inWords(d); got != want {
-			t.Errorf("inWords(%s) = %q, want %q", d, got, want)
+// An install interrupted part way through uv's download, once part of the
+// archive is written, stops at once and leaves neither uv nor the partial
+// archive.
+func TestEnsureCancelledMidDownloadLeavesNothing(t *testing.T) {
+	f := newFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	uvBaseURL = serve(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1000")
+		w.Write(bytes.Repeat([]byte("x"), 300))
+		w.(http.Flusher).Flush()
+		hang(t, r)
+	})
+	// The progress report passes 25% only once the client has written 250
+	// bytes of the archive, and the install is cancelled there.
+	progress := &cancelAt{mark: "25%", cancel: cancel}
+
+	start := time.Now()
+	_, _, err := Ensure(ctx, f.dir, "0.13.0", progress)
+	if !progress.seen {
+		t.Fatalf("the download was not cancelled part way through; progress: %q, error: %v", progress.buf.String(), err)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Ensure error = %v, want it cancelled", err)
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Errorf("the cancellation took %s to end the install", time.Since(start))
+	}
+	uvRoot := filepath.Join(f.tools, "uv")
+	if _, err := os.Stat(filepath.Join(uvRoot, uvVersion, "uv")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("uv is there after a cancelled download: %v", err)
+	}
+	entries, err := os.ReadDir(uvRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() != uvVersion {
+			t.Errorf("%s is left in %s", e.Name(), uvRoot)
 		}
+	}
+}
+
+// cancelAt records what is written to it, and cancels once mark appears.
+type cancelAt struct {
+	mark   string
+	cancel context.CancelFunc
+	buf    bytes.Buffer
+	seen   bool
+}
+
+func (c *cancelAt) Write(p []byte) (int, error) {
+	c.buf.Write(p)
+	if !c.seen && strings.Contains(c.buf.String(), c.mark) {
+		c.seen = true
+		c.cancel()
+	}
+	return len(p), nil
+}
+
+func TestQuarters(t *testing.T) {
+	var out bytes.Buffer
+	report := quarters(&out)
+	for _, done := range []int64{10, 25, 60, 99, 100, 100} {
+		report(done, 100)
+	}
+	if want := " 25% 50% 75% 100%"; out.String() != want {
+		t.Errorf("quarters wrote %q, want %q", out.String(), want)
+	}
+	out.Reset()
+	quarters(&out)(50, -1)
+	if out.Len() != 0 {
+		t.Errorf("quarters wrote %q for an undeclared size", out.String())
 	}
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/tsh"
 )
 
 const fileExt = ".toml"
@@ -248,7 +249,7 @@ func SameServer(a, b Pathway) bool {
 	case KindDirect:
 		return sameEndpoint(a.Sky.Endpoint, b.Sky.Endpoint)
 	case KindTeleport:
-		return a.Teleport != nil && b.Teleport != nil && sameProxy(a.Teleport.Proxy, b.Teleport.Proxy) && a.Sky.App == b.Sky.App
+		return a.Teleport != nil && b.Teleport != nil && tsh.SameProxy(a.Teleport.Proxy, b.Teleport.Proxy) && a.Sky.App == b.Sky.App
 	}
 	return false
 }
@@ -270,19 +271,14 @@ func sameEndpoint(a, b string) bool {
 	return norm(a) == norm(b)
 }
 
-// sameProxy reports whether the proxy addresses a and b name the same
-// proxy: the same host, ignoring case, and the same port, 443 when one
-// names none.
-func sameProxy(a, b string) bool {
-	split := func(p string) (string, string) {
-		if i := strings.LastIndexByte(p, ':'); i >= 0 {
-			return strings.ToLower(p[:i]), p[i+1:]
-		}
-		return strings.ToLower(p), "443"
-	}
-	ah, ap := split(a)
-	bh, bp := split(b)
-	return ah == bh && ap == bp
+// Add checks data as a config file from src and stores it, byte for
+// byte, replacing the stored file with the same id, and records src as its
+// source. It refuses data that fails the checks, that has the same pathway
+// name or identifier as another stored file, or that lowers the stored
+// copy's revision. A refused file writes nothing.
+func (s Store) Add(data []byte, src Source) (File, error) {
+	f, _, err := s.put(data, PutOptions{Origin: FromSource(src)}, "")
+	return f, err
 }
 
 // Put checks data and stores it as opts say: it removes the stored files
@@ -763,8 +759,13 @@ var (
 	removeFile  = os.Remove
 	renameFile  = os.Rename
 	linkFile    = os.Link
-	replaceFile = axondir.ReplaceFile
+	replaceFile = writeFile
 )
+
+// writeFile replaces path with data, readable by the user only.
+func writeFile(path string, data []byte) error {
+	return axondir.ReplaceFile(path, bytes.NewReader(data), 0o600)
+}
 
 func (s Store) recordPath(id string) string {
 	return filepath.Join(s.dir.RecordsPath(), id+fileExt)
