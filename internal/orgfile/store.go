@@ -532,8 +532,22 @@ func copyFile(from, to string) error {
 // the new file was written and its record was not, and the copy is put
 // back; when the stored file is missing, the copy is put back. Otherwise
 // the stored file is kept and the copy deleted.
+//
+// It takes the store's lock only when it finds such a copy, so with none it
+// writes nothing.
 func (s Store) Recover() ([]string, error) {
-	if _, err := os.Stat(filepath.Join(s.dir.Root(), "orgs")); errors.Is(err, fs.ErrNotExist) {
+	entries, err := os.ReadDir(filepath.Join(s.dir.Root(), "orgs"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", filepath.Join(s.dir.Root(), "orgs"), err)
+	}
+	found := false
+	for _, e := range entries {
+		found = found || strings.HasSuffix(e.Name(), fileExt+previousExt)
+	}
+	if !found {
 		return nil, nil
 	}
 	unlock, err := s.lock()
