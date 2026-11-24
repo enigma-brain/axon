@@ -130,7 +130,7 @@ file, `axon` uses that file, as SkyPilot does.
 ### On a Teleport pathway
 
 The login points the SkyPilot client at the tunnel's address,
-`http://localhost:46581`, when the client is pointed elsewhere. No browser
+`http://127.0.0.1:46581`, when the client is pointed elsewhere. No browser
 opens for this: Teleport supplies your identity. The
 [Teleport pathway's page](/axon/pathways/teleport/) describes the tunnel.
 

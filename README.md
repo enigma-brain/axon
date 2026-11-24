@@ -321,8 +321,8 @@ A Teleport pathway reaches the API server through Teleport, from anywhere.
   still matches. A tunnel started by an older `axon`, without `--proxy`, is
   another process to it: stop that process and run `axon login` again.
   `ssh` to a cluster, VS Code Remote-SSH and the dashboard at
-  `http://localhost:46581` all go through it.
-- **It points the SkyPilot client at `http://localhost:46581`** with `sky api
+  `http://127.0.0.1:46581` all go through it.
+- **It points the SkyPilot client at `http://127.0.0.1:46581`** with `sky api
   login`, only when the client is pointed elsewhere. No browser opens:
   Teleport supplies your identity.
 

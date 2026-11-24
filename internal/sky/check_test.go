@@ -119,6 +119,7 @@ func connectedProbes() probes {
 		sessionValid: func(context.Context, string, string) (bool, error) {
 			return false, errors.New("unexpected certificate check")
 		},
+		checkTunnel: func(context.Context, string, string, string) error { return nil },
 		startTunnel: func(context.Context, string, string, string, string) error {
 			return errors.New("unexpected tunnel start")
 		},
@@ -145,6 +146,10 @@ type world struct {
 	// start is what the fake tunnel start does.
 	start  func(*apiServer) error
 	starts int
+	// portErr is what the fake check of the tunnel's port returns, and
+	// portChecks counts the checks.
+	portErr    error
+	portChecks int
 }
 
 func newWorld(t *testing.T) *world {
@@ -171,6 +176,13 @@ func (w *world) probes() probes {
 			return false, fmt.Errorf("certificate checked with %q for %q", path, proxy)
 		}
 		return w.valid, nil
+	}
+	p.checkTunnel = func(_ context.Context, stateDir, proxy, app string) error {
+		w.portChecks++
+		if filepath.Base(stateDir) != "state" || proxy != "teleport.example.org" || app != "skypilot" {
+			return fmt.Errorf("port checked in %q for %q through %q", stateDir, app, proxy)
+		}
+		return w.portErr
 	}
 	p.startTunnel = func(_ context.Context, stateDir, path, proxy, app string) error {
 		w.starts++
@@ -213,6 +225,13 @@ func TestCheckRunsTheCommandWhenConnected(t *testing.T) {
 			}
 			if errOut != "" || w.starts != 0 || w.server.count() != 1 {
 				t.Errorf("stderr %q, %d restarts, %d requests; want none, 0, 1", errOut, w.starts, w.server.count())
+			}
+			wantChecks := 0
+			if p == "remote" {
+				wantChecks = 1
+			}
+			if w.portChecks != wantChecks {
+				t.Errorf("%d checks of the tunnel's port, want %d", w.portChecks, wantChecks)
 			}
 		})
 	}
@@ -322,6 +341,18 @@ func TestCheckStops(t *testing.T) {
 			},
 			want:   "port 46581 is held by process 42 (nc -l 46581), which is not the Teleport tunnel. Stop that process and retry.",
 			starts: 1, requests: 1,
+		},
+		{
+			name: "Teleport: another process holds the port before the request", pathway: "remote",
+			setup: func(w *world) {
+				w.portErr = &tunnel.PortBusyError{PID: 42, Command: "nc -l 46581"}
+			},
+			want: "port 46581 is held by process 42 (nc -l 46581), which is not the Teleport tunnel. Stop that process and retry.",
+		},
+		{
+			name: "Teleport: the tunnel's port cannot be checked", pathway: "remote",
+			setup: func(w *world) { w.portErr = errors.New("lsof did not finish") },
+			want:  "Couldn't check the Teleport tunnel: lsof did not finish. Run `axon login`.",
 		},
 		{
 			name: "Teleport: not logged in through the tunnel", pathway: "remote",

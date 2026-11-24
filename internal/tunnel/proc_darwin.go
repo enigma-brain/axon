@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -120,10 +122,22 @@ func parseProcargs(raw []byte) []string {
 	return args
 }
 
+// lsofPath is where macOS installs lsof. It is run from there, so that a
+// PATH without /usr/sbin, or with another lsof first, changes nothing.
+const lsofPath = "/usr/sbin/lsof"
+
+// lsofTimeout bounds one run of lsof.
+const lsofTimeout = 5 * time.Second
+
 // portListeners asks lsof for the processes listening on port and their
 // addresses. lsof sees only the sockets of processes it may inspect.
 func portListeners(port int) ([]listener, error) {
-	out, err := exec.Command("lsof", "-nP", "-iTCP:"+strconv.Itoa(port), "-sTCP:LISTEN", "-Fptn").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), lsofTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, lsofPath, "-nP", "-iTCP:"+strconv.Itoa(port), "-sTCP:LISTEN", "-Fptn").Output()
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("find the process on port %d: lsof did not finish within %s", port, lsofTimeout)
+	}
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) && len(bytes.TrimSpace(out)) == 0 {
 		// lsof exits non-zero when it finds nothing.

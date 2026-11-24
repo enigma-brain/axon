@@ -51,6 +51,11 @@ type probes struct {
 	// sessionValid reports whether the Teleport certificate for proxy is
 	// valid.
 	sessionValid func(ctx context.Context, tshPath, proxy string) (bool, error)
+	// checkTunnel checks that no process other than the tunnel to the
+	// Teleport application app through proxy holds the tunnel's port, and
+	// records that tunnel in stateDir when it serves unrecorded. It returns
+	// a *tunnel.PortBusyError when another process holds the port.
+	checkTunnel func(ctx context.Context, stateDir, proxy, app string) error
 	// startTunnel starts the tunnel to the Teleport application app through
 	// proxy, run with tshPath and recorded in stateDir.
 	startTunnel func(ctx context.Context, stateDir, tshPath, proxy, app string) error
@@ -69,6 +74,11 @@ var realProbes = probes{
 	clientVersion: skyclient.Version,
 	findTsh:       tsh.Find,
 	sessionValid:  tsh.SessionValid,
+	checkTunnel: func(ctx context.Context, stateDir, proxy, app string) error {
+		// Checking needs no tsh: only a start runs it.
+		_, err := tunnel.New(stateDir, "", proxy, app).Check(ctx)
+		return err
+	},
 	startTunnel: func(ctx context.Context, stateDir, tshPath, proxy, app string) error {
 		return tunnel.New(stateDir, tshPath, proxy, app).Start(ctx)
 	},
@@ -80,7 +90,8 @@ var check = realProbes
 // Check checks the connection to the API server before a command runs,
 // repairs what needs no action from the user, and otherwise returns an
 // error that names the user's next step. It makes one health request. On
-// a teleport pathway, when that request fails for a reason other than
+// a teleport pathway it first checks that the process on the tunnel's port
+// is the tunnel, and stops when it is another; when the health request fails for a reason other than
 // a missing login, it restarts the tunnel once, writes one line saying so to
 // w, and makes the request again. It never opens a browser and never
 // installs anything.
@@ -135,6 +146,12 @@ func (p probes) run(ctx context.Context, dir axondir.Dir, pw configfile.Pathway,
 		}
 	}
 
+	if pw.Kind == configfile.KindTeleport {
+		if err := p.checkPort(ctx, dir, pw); err != nil {
+			return err
+		}
+	}
+
 	endpoint := p.endpoint(pw)
 	opts := apiserver.Options{ClientVersion: version, CookieFile: cookies}
 	h, err := p.health(ctx, endpoint, opts)
@@ -165,6 +182,28 @@ func failure(ctx context.Context, p configfile.Pathway, endpoint string, err err
 		return errors.New(Unreachable(p, endpoint))
 	default:
 		return errNotAnswering
+	}
+}
+
+// checkPort returns an error when a process other than the pathway's
+// tunnel holds the tunnel's port, so that the client never sends its
+// requests to it. A tunnel that is down is left to the restart.
+func (p probes) checkPort(ctx context.Context, dir axondir.Dir, pw configfile.Pathway) error {
+	stateDir, err := dir.StateDir()
+	if err != nil {
+		return err
+	}
+	err = p.checkTunnel(ctx, stateDir, pw.Teleport.Proxy, pw.Sky.App)
+	var busy *tunnel.PortBusyError
+	switch {
+	case err == nil:
+		return nil
+	case ctx.Err() != nil:
+		return ctx.Err()
+	case errors.As(err, &busy):
+		return fmt.Errorf("%w. Stop that process and retry.", busy)
+	default:
+		return fmt.Errorf("Couldn't check the Teleport tunnel: %w. Run `axon login`.", err)
 	}
 }
 

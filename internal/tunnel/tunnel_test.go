@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -89,8 +88,8 @@ func run(m *testing.M) int {
 }
 
 // fence sets HOME to an empty directory and PATH to a directory under bin
-// that holds only the shell tools the tests run, and lsof, which the
-// package runs on macOS to find a port's listeners.
+// that holds only the shell tools the tests run. lsof, which the package
+// runs on macOS, is not on it: the package runs lsof by its fixed path.
 func fence(bin string) error {
 	home := filepath.Join(bin, "home")
 	path := filepath.Join(bin, "path")
@@ -99,12 +98,9 @@ func fence(bin string) error {
 			return err
 		}
 	}
-	for _, tool := range []string{"sh", "sleep", "lsof"} {
+	for _, tool := range []string{"sh", "sleep"} {
 		real, err := exec.LookPath(tool)
 		if err != nil {
-			if tool == "lsof" && runtime.GOOS != "darwin" {
-				continue
-			}
 			return err
 		}
 		if err := os.Symlink(real, filepath.Join(path, tool)); err != nil {
@@ -176,8 +172,17 @@ func startByHandNoWaitWith(t *testing.T, mode string, args []string) int {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	go cmd.Wait()
-	t.Cleanup(func() { cmd.Process.Kill() })
+	reaped := make(chan struct{})
+	go func() {
+		cmd.Wait()
+		close(reaped)
+	}()
+	// Wait for the process to be reaped, so that a later cleanup never finds
+	// it half gone.
+	t.Cleanup(func() {
+		cmd.Process.Kill()
+		<-reaped
+	})
 	return cmd.Process.Pid
 }
 
@@ -216,7 +221,7 @@ func TestNew(t *testing.T) {
 		}
 	}
 	tn := New("/state", "/bin/tsh", testProxy, testApp)
-	if got, want := tn.healthURL(), "http://localhost:46581/api/health"; got != want {
+	if got, want := tn.healthURL(), "http://127.0.0.1:46581/api/health"; got != want {
 		t.Errorf("healthURL = %q, want %q", got, want)
 	}
 	if got, want := recordPath(tn.stateDir), "/state/tunnel.json"; got != want {
@@ -315,16 +320,14 @@ func TestStartFailsWhenTunnelExits(t *testing.T) {
 }
 
 func TestStartFailsWhenTunnelDoesNotServe(t *testing.T) {
-	if testing.Short() {
-		t.Skip("waits the full start timeout")
-	}
 	tn := newTestTunnel(t)
+	tn.SetStartTimeout(500 * time.Millisecond)
 	t.Setenv("FAKETSH_MODE", "refuse")
 	err := tn.Start(context.Background())
 	if err == nil {
 		t.Fatal("Start succeeded, want an error")
 	}
-	for _, want := range []string{"did not answer on " + tn.healthURL() + " within 10s", "Proxying connections"} {
+	for _, want := range []string{"did not answer on " + tn.healthURL() + " within 500ms", "Proxying connections"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not contain %q", err, want)
 		}
@@ -348,10 +351,8 @@ func TestStartErrorSaysWhetherTheTunnelExited(t *testing.T) {
 		{"refuse", false, "Proxying connections"},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
-			if !tc.exited && testing.Short() {
-				t.Skip("waits the full start timeout")
-			}
 			tn := newTestTunnel(t)
+			tn.SetStartTimeout(500 * time.Millisecond)
 			t.Setenv("FAKETSH_MODE", tc.mode)
 			err := tn.Start(context.Background())
 			var se *StartError
@@ -643,7 +644,7 @@ func TestHealthDoesNotFollowRedirect(t *testing.T) {
 
 // TestHealthTiedToAnsweringAddress puts the tunnel and another server on
 // the same port at different loopback addresses. The tunnel is up only when
-// the health request to localhost reaches the tunnel's address.
+// the health request to 127.0.0.1 reaches the tunnel's address.
 func TestHealthTiedToAnsweringAddress(t *testing.T) {
 	probe, err := net.Listen("tcp", "[::1]:0")
 	if err != nil {
@@ -672,8 +673,8 @@ func TestHealthTiedToAnsweringAddress(t *testing.T) {
 				return err == nil && len(ls) == 2
 			})
 
-			// Whichever address localhost reaches first, the tunnel answers
-			// 503 and the other server 200, so the tunnel is never healthy.
+			// The tunnel answers 503 and the other server 200, so whichever
+			// listens on 127.0.0.1, the tunnel is not healthy.
 			st, err := tn.Status(context.Background())
 			if err != nil {
 				t.Fatal(err)
@@ -703,15 +704,278 @@ func TestStopKeepsRecordWhenTunnelDoesNotExit(t *testing.T) {
 	if err == nil {
 		t.Fatal("Stop succeeded, want an error")
 	}
-	for _, want := range []string{"could not stop the Teleport tunnel", strconv.Itoa(pid), "kill -9"} {
+	for _, want := range []string{"process " + strconv.Itoa(pid) + " did not exit", "kill -9 " + strconv.Itoa(pid)} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not contain %q", err, want)
 		}
+	}
+	if strings.Contains(err.Error(), "Teleport tunnel") {
+		t.Errorf("error %q names the step, which the caller names", err)
 	}
 	if got, ok := recorded(t, tn); !ok || got != pid {
 		t.Errorf("record = %d, %v, want %d kept", got, ok, pid)
 	}
 	if !alive(t, pid) {
 		t.Error("the tunnel exited although no signal was sent")
+	}
+}
+
+func TestCheckRecordsTunnelWithNoRecord(t *testing.T) {
+	tn := newTestTunnel(t)
+	pid := startByHand(t, "serve")
+	st, err := tn.Check(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (Status{Running: true, Healthy: true, PID: pid}); st != want {
+		t.Errorf("Check = %+v, want %+v", st, want)
+	}
+	if got, ok := recorded(t, tn); !ok || got != pid {
+		t.Errorf("record = %d, %v, want the hand-started %d", got, ok, pid)
+	}
+	// The record makes the tunnel stoppable by its record alone.
+	if err := StopRecorded(tn.stateDir); err != nil {
+		t.Fatal(err)
+	}
+	if alive(t, pid) {
+		t.Errorf("tunnel %d still runs after StopRecorded", pid)
+	}
+}
+
+func TestCheckRecordsNothingForTunnelThatIsDown(t *testing.T) {
+	tn := newTestTunnel(t)
+	pid := startByHand(t, "refuse")
+	st, err := tn.Check(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (Status{Running: true, Healthy: false, PID: pid}); st != want {
+		t.Errorf("Check = %+v, want %+v", st, want)
+	}
+	if _, ok := recorded(t, tn); ok {
+		t.Error("Check recorded a tunnel that does not serve")
+	}
+}
+
+func TestCheckReportsOtherProcessOnPort(t *testing.T) {
+	tn := newTestTunnel(t)
+	// Another server answers the health request on the tunnel's port.
+	other := exec.Command(fakeTsh, "proxy", "app", "grafana", "--port", strconv.Itoa(testPort))
+	other.Env = append(os.Environ(), "FAKETSH_MODE=serve")
+	if err := other.Start(); err != nil {
+		t.Fatal(err)
+	}
+	go other.Wait()
+	t.Cleanup(func() { other.Process.Kill() })
+	waitFor(t, func() bool { _, ok := tn.healthy(context.Background()); return ok })
+
+	_, err := tn.Check(context.Background())
+	var busy *PortBusyError
+	if !errors.As(err, &busy) || busy.PID != other.Process.Pid {
+		t.Fatalf("Check = %v, want a *PortBusyError naming %d", err, other.Process.Pid)
+	}
+	if !strings.Contains(err.Error(), "grafana") {
+		t.Errorf("error %q does not name the other process's command", err)
+	}
+	if _, ok := recorded(t, tn); ok {
+		t.Error("Check recorded the other process")
+	}
+	if !alive(t, other.Process.Pid) {
+		t.Error("Check stopped the other process on the port")
+	}
+}
+
+func TestCheckWithNothingOnPort(t *testing.T) {
+	tn := newTestTunnel(t)
+	st, err := tn.Check(context.Background())
+	if err != nil || st != (Status{}) {
+		t.Errorf("Check = %+v, %v, want zero, nil", st, err)
+	}
+}
+
+func TestRunning(t *testing.T) {
+	tn := newTestTunnel(t)
+	if running, err := tn.Running(); err != nil || running {
+		t.Errorf("Running with no tunnel = %v, %v, want false, nil", running, err)
+	}
+	startByHandNoWait(t, "idle")
+	if running, err := tn.Running(); err != nil || !running {
+		t.Errorf("Running with a hand-started tunnel = %v, %v, want true, nil", running, err)
+	}
+}
+
+// TestConcurrentStarts restarts a dead tunnel from two goroutines at once,
+// as two axon commands would. Both succeed, and one tunnel runs, recorded.
+func TestConcurrentStarts(t *testing.T) {
+	tn := newTestTunnel(t)
+	dead := startByHand(t, "refuse")
+	t.Setenv("FAKETSH_MODE", "serve")
+
+	const n = 2
+	errs := make(chan error, n)
+	start := make(chan struct{})
+	for range n {
+		other := *tn
+		go func() {
+			<-start
+			errs <- other.Start(context.Background())
+		}()
+	}
+	close(start)
+	for range n {
+		if err := <-errs; err != nil {
+			t.Errorf("Start = %v, want nil", err)
+		}
+	}
+
+	st, err := tn.Status(context.Background())
+	if err != nil || !st.Running || !st.Healthy || st.PID == dead {
+		t.Fatalf("Status = %+v, %v, want a new healthy tunnel", st, err)
+	}
+	if pid, ok := recorded(t, tn); !ok || pid != st.PID {
+		t.Errorf("record = %d, %v, want the running tunnel %d", pid, ok, st.PID)
+	}
+	procs, err := tn.find(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(procs) != 1 {
+		t.Errorf("tunnel processes = %v, want one", procs)
+	}
+}
+
+func TestFailedStartKeepsRecordOfAnotherProcess(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeRecord(dir, record{PID: 12345, Args: handArgs(testProxy)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeRecordOf(dir, 54321); err != nil {
+		t.Fatal(err)
+	}
+	if rec, ok, err := readRecord(dir); err != nil || !ok || rec.PID != 12345 {
+		t.Errorf("record = %+v, %v, %v, want the record of 12345 kept", rec, ok, err)
+	}
+	if err := removeRecordOf(dir, 12345); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := readRecord(dir); err != nil || ok {
+		t.Errorf("record of 12345 = %v, %v, want removed", ok, err)
+	}
+}
+
+func TestLockWaitsAndHonorsContext(t *testing.T) {
+	dir := t.TempDir()
+	unlock, err := lock(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if _, err := lock(ctx, dir); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("lock while held = %v, want context.DeadlineExceeded", err)
+	}
+	unlock()
+	again, err := lock(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("lock after release = %v", err)
+	}
+	again()
+}
+
+func TestPortBusyErrorCleansCommand(t *testing.T) {
+	err := &PortBusyError{PID: 7, Command: "evil \x1b[2J‮cmd\n"}
+	if got, want := err.Error(), "port 46581 is held by process 7 (evil [2Jcmd), which is not the Teleport tunnel"; got != want {
+		t.Errorf("Error = %q, want %q", got, want)
+	}
+}
+
+func TestAdoptSkipsProcessThatIsGone(t *testing.T) {
+	tn := newTestTunnel(t)
+	gone := exec.Command("sleep", "0")
+	if err := gone.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := tn.adopt(context.Background(), gone.Process.Pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := recorded(t, tn); ok {
+		t.Error("adopt recorded a process that has exited")
+	}
+}
+
+func TestAdoptKeepsRecordOfTunnelStartedInItsPlace(t *testing.T) {
+	tn := newTestTunnel(t)
+	seen := startByHandNoWait(t, "idle")
+	// Another axon recorded a tunnel after seen was observed.
+	other := startByHandNoWait(t, "idle")
+	if err := tn.record(other); err != nil {
+		t.Fatal(err)
+	}
+	if err := tn.adopt(context.Background(), seen); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := recorded(t, tn); !ok || got != other {
+		t.Errorf("record = %d, %v, want %d kept", got, ok, other)
+	}
+}
+
+func TestDiscardRecordKeepsReplacement(t *testing.T) {
+	dir := t.TempDir()
+	stale := record{PID: 12345, Args: handArgs(testProxy)}
+	fresh := record{PID: 54321, Args: handArgs(testProxy)}
+	if err := writeRecord(dir, fresh); err != nil {
+		t.Fatal(err)
+	}
+	// A reader without the lock read stale before fresh replaced it.
+	if err := discardRecord(context.Background(), dir, stale, false); err != nil {
+		t.Fatal(err)
+	}
+	if rec, ok, err := readRecord(dir); err != nil || !ok || rec.PID != fresh.PID {
+		t.Errorf("record = %+v, %v, %v, want the replacement kept", rec, ok, err)
+	}
+	if err := discardRecord(context.Background(), dir, fresh, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := readRecord(dir); err != nil || ok {
+		t.Errorf("record after discarding it = %v, %v, want none", ok, err)
+	}
+}
+
+func TestDiscardRecordStopsWaitingWhenCancelled(t *testing.T) {
+	dir := t.TempDir()
+	stale := record{PID: 12345, Args: handArgs(testProxy)}
+	if err := writeRecord(dir, stale); err != nil {
+		t.Fatal(err)
+	}
+	unlock, err := lock(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if err := discardRecord(ctx, dir, stale, false); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("discardRecord while the lock is held = %v, want context.DeadlineExceeded", err)
+	}
+}
+
+// TestCheckPortFreeProbesWhenOwnListenerMissesLoopback has the tunnel
+// listen only on the IPv6 loopback address. Its listener does not take the
+// client's address, 127.0.0.1, so that address is probed; with nothing
+// there the port counts as free. Another user's listener there, invisible
+// to the process table, would answer the probe, which a test run by one
+// user cannot set up.
+func TestCheckPortFreeProbesWhenOwnListenerMissesLoopback(t *testing.T) {
+	probe, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skipf("no IPv6 loopback: %v", err)
+	}
+	probe.Close()
+
+	tn := newTestTunnel(t)
+	t.Setenv("FAKETSH_HOST", "::1")
+	pid := startByHand(t, "serve")
+	if err := tn.checkPortFree([]int{pid}); err != nil {
+		t.Errorf("checkPortFree with nothing on 127.0.0.1 = %v, want nil", err)
 	}
 }
