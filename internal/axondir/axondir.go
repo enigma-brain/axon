@@ -1,9 +1,12 @@
 // Package axondir owns ~/.axon, the one directory axon keeps on the laptop.
 //
 // The directory holds the config files, the settings file, the tools axon
-// installs for its own use, and the state it records. Every name in it is
-// defined here. Directories are created on first use, readable by the user
-// only; files are written readable by the user only.
+// installs for its own use, and the state it records. The names of its
+// directories and of the files this package reads and writes are defined
+// here; a package that keeps its own files in one of the directories, such
+// as the SkyPilot client under tools/ or the tunnel's record under state/,
+// names them itself. Directories are created on first use, readable by the
+// user only; files are written readable by the user only.
 package axondir
 
 import (
