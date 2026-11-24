@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -32,13 +31,51 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 	if _, err := s.recoverPrevious(); err != nil {
 		return File{}, false, err
 	}
-	change, err := s.inspect(f, opts.Origin.HandMade)
+	p, err := s.planPut(f, data, opts, id)
 	if err != nil {
 		return File{}, false, err
 	}
+	if !p.write {
+		return f, false, nil
+	}
+	return s.applyPut(p)
+}
+
+// putPlan is what a put does to the stored files, decided before any of it
+// is done.
+type putPlan struct {
+	// file is the checked file being stored, and data is its bytes.
+	file File
+	data []byte
+	// origin is where the file comes from, for its record.
+	origin Origin
+	// change is the comparison with the stored files: the stored file the
+	// file updates, and the clashes callers ask about before the put.
+	change Change
+	// path is where the file is stored.
+	path string
+	// replace reports that a stored file is in place at path.
+	replace bool
+	// remove holds the ids of the other stored files to remove, in the order
+	// the put was asked to remove them.
+	remove []string
+	// write is false when the put writes nothing, because data is the stored
+	// file byte for byte and has the recorded source.
+	write bool
+}
+
+// planPut decides, with the store's lock held, what storing f, whose bytes
+// are data, does as opts say, writing nothing. It lists the stored files
+// once and returns the refusal when the put is refused. When id is not
+// empty, the stored file id is being refreshed.
+func (s Store) planPut(f File, data []byte, opts PutOptions, id string) (putPlan, error) {
 	stored, _, err := s.List()
 	if err != nil {
-		return File{}, false, err
+		return putPlan{}, err
+	}
+	change, err := s.compare(f, opts.Origin.HandMade, stored)
+	if err != nil {
+		return putPlan{}, err
 	}
 	remove := map[string]bool{}
 	for _, r := range opts.Remove {
@@ -49,45 +86,56 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 			}
 		}
 		if current == nil || !reflect.DeepEqual(*current, r) {
-			return File{}, false, &ChangedError{Path: s.Path(r.ID)}
+			return putPlan{}, &ChangedError{Path: s.Path(r.ID)}
 		}
 		remove[r.ID] = true
 	}
 	for _, c := range change.Clashes {
 		if c.SameName && !remove[c.Stored.ID] {
-			return File{}, false, &ClashError{Clash: c, Path: s.Path(c.Stored.ID)}
+			return putPlan{}, &ClashError{Clash: c, Path: s.Path(c.Stored.ID)}
 		}
 	}
 	if change.Lower() && !opts.AllowLower {
-		return File{}, false, &LowerRevisionError{Stored: change.Previous.Revision, New: f.Revision}
+		return putPlan{}, &LowerRevisionError{Stored: change.Previous.Revision, New: f.Revision}
 	}
 
-	configs, err := s.dir.ConfigsDir()
-	if err != nil {
-		return File{}, false, err
+	p := putPlan{file: f, data: data, origin: opts.Origin, change: change, path: s.Path(f.ID), write: true}
+	for _, r := range opts.Remove {
+		if r.ID != f.ID {
+			p.remove = append(p.remove, r.ID)
+		}
 	}
-	path := filepath.Join(configs, f.ID+fileExt)
 	var previous []byte
-	info, err := os.Stat(path)
-	hadPrevious := err == nil
+	info, err := os.Stat(p.path)
+	p.replace = err == nil
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
-		return File{}, false, fmt.Errorf("read %s: %w", path, axondir.UnwrapPath(err))
+		return putPlan{}, fmt.Errorf("read %s: %w", p.path, axondir.UnwrapPath(err))
 	case !info.Mode().IsRegular():
-		return File{}, false, fmt.Errorf("replace %s: it is not a regular file", path)
+		return putPlan{}, fmt.Errorf("replace %s: it is not a regular file", p.path)
 	default:
-		if previous, err = os.ReadFile(path); err != nil {
-			return File{}, false, fmt.Errorf("read %s: %w", path, axondir.UnwrapPath(err))
+		if previous, err = os.ReadFile(p.path); err != nil {
+			return putPlan{}, fmt.Errorf("read %s: %w", p.path, axondir.UnwrapPath(err))
 		}
 	}
-	if id != "" && !hadPrevious {
-		return File{}, false, fmt.Errorf("replace %s: it is no longer stored", path)
+	if id != "" && !p.replace {
+		return putPlan{}, fmt.Errorf("replace %s: it is no longer stored", p.path)
 	}
 	if id != "" && bytes.Equal(previous, data) {
 		if cur, ok, err := s.Source(id); err == nil && ok && cur.raw() == opts.Origin.Source.raw() {
-			return f, false, nil
+			p.write = false
 		}
+	}
+	return p, nil
+}
+
+// applyPut carries out p, which planPut returned with the store's lock still
+// held, as one transaction.
+func (s Store) applyPut(p putPlan) (File, bool, error) {
+	f, data, path, hadPrevious := p.file, p.data, p.path, p.replace
+	if _, err := s.dir.ConfigsDir(); err != nil {
+		return File{}, false, err
 	}
 	// A failure at any step puts everything back, so the stored files and
 	// records end either all as they were or all as they are meant to
@@ -145,11 +193,8 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 		return File{}, false, err
 	}
 
-	for _, r := range opts.Remove {
-		if r.ID == f.ID {
-			continue
-		}
-		for _, p := range []string{s.Path(r.ID), s.recordPath(r.ID)} {
+	for _, id := range p.remove {
+		for _, p := range []string{s.Path(id), s.recordPath(id)} {
 			err := renameFile(p, p+removingExt)
 			if errors.Is(err, fs.ErrNotExist) {
 				continue
@@ -163,7 +208,7 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 	if err := replaceFile(path, data); err != nil {
 		return fail(err)
 	}
-	if err := s.writeRecord(f.ID, opts.Origin, data); err != nil {
+	if err := s.writeRecord(f.ID, p.origin, data); err != nil {
 		return fail(err)
 	}
 	// The put has succeeded. A file left aside because its deletion

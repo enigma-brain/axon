@@ -193,6 +193,12 @@ func (s Store) inspect(f File, handMade bool) (Change, error) {
 	if err != nil {
 		return Change{}, err
 	}
+	return s.compare(f, handMade, stored)
+}
+
+// compare compares f, a file being stored, with stored, the stored files as
+// List returned them, reading each one's record.
+func (s Store) compare(f File, handMade bool, stored []File) (Change, error) {
 	c := Change{File: f}
 	for _, other := range stored {
 		rec, _, err := s.Record(other.ID)
