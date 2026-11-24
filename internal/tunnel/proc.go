@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 )
 
 // process is one live process of the machine, as the process table shows it.
@@ -70,3 +71,15 @@ func isTunnelCommand(args, want []string) bool {
 //	portListeners(port int) ([]listener, error)
 //	    The sockets listening on TCP port and their processes, among those
 //	    whose sockets can be read.
+
+// cleanText returns s without control and format characters, so that a
+// process's command line printed in a message cannot move the cursor,
+// change colors or reorder the text around it.
+func cleanText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, s)
+}

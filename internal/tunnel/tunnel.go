@@ -11,7 +11,9 @@
 // The tunnel's process ID and arguments are recorded in tunnel.json and its
 // output kept in tunnel.log, both in the state directory. A recorded process
 // is taken for the tunnel only while its command line is still the recorded
-// one.
+// one. Starting, stopping and recording the tunnel are done under a lock on
+// tunnel.lock in the state directory, so that two axon commands at once
+// leave one running, recorded tunnel.
 package tunnel
 
 import (
@@ -49,8 +51,6 @@ const (
 
 	fileMode fs.FileMode = 0o600
 
-	// startTimeout bounds the wait for a started tunnel to serve.
-	startTimeout = 10 * time.Second
 	// pollInterval is the pause between health requests while starting.
 	pollInterval = 250 * time.Millisecond
 	// probeTimeout bounds one health request.
@@ -60,13 +60,15 @@ const (
 	logTailLines = 20
 )
 
-// stopTimeout is how long a tunnel has to exit after SIGTERM before it is
-// sent SIGKILL, and killTimeout how long after SIGKILL. sendSignal sends a
-// signal. Tests change them.
+// startTimeout bounds the wait for a started tunnel to serve. stopTimeout
+// is how long a tunnel has to exit after SIGTERM before it is sent SIGKILL,
+// and killTimeout how long after SIGKILL. sendSignal sends a signal. Tests
+// change them.
 var (
-	stopTimeout = 3 * time.Second
-	killTimeout = time.Second
-	sendSignal  = syscall.Kill
+	startTimeout = 10 * time.Second
+	stopTimeout  = 3 * time.Second
+	killTimeout  = time.Second
+	sendSignal   = syscall.Kill
 )
 
 // Status holds two separate facts about the tunnel, so that a failed tunnel
@@ -87,7 +89,7 @@ type PortBusyError struct {
 }
 
 func (e *PortBusyError) Error() string {
-	return fmt.Sprintf("port %d is held by process %d (%s), which is not the Teleport tunnel", Port, e.PID, e.Command)
+	return fmt.Sprintf("port %d is held by process %d (%s), which is not the Teleport tunnel", Port, e.PID, cleanText(e.Command))
 }
 
 // StartError reports a started tunnel that did not come to serve. Start has
@@ -178,7 +180,10 @@ func (t *Tunnel) Status(ctx context.Context) (Status, error) {
 // port, Start leaves it running and returns a *PortBusyError.
 //
 // A new tunnel runs detached, in its own session, and outlives axon and its
-// terminal. Start waits up to 10 seconds for it to serve. When it does not,
+// terminal. Start waits up to 10 seconds for it to serve.
+//
+// Start holds the tunnel's lock throughout, so a second Start waits for the
+// first and then finds the tunnel it started. When it does not,
 // Start stops it, deletes the record, and returns a *StartError that carries
 // the end of the tunnel's log.
 func (t *Tunnel) Start(ctx context.Context) error {
@@ -188,6 +193,11 @@ func (t *Tunnel) Start(ctx context.Context) error {
 	if err := t.checkTarget(); err != nil {
 		return err
 	}
+	unlock, err := lock(ctx, t.stateDir)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	procs, err := t.find()
 	if err != nil {
 		return err
@@ -209,16 +219,75 @@ func (t *Tunnel) Start(ctx context.Context) error {
 			return err
 		}
 	}
-	if err := t.checkPortFree(); err != nil {
+	if err := t.checkPortFree(nil); err != nil {
 		return err
 	}
 	return t.launch(ctx)
+}
+
+// Check reports whether the tunnel's process runs and whether it serves,
+// as Status does, and makes sure that a tunnel that serves is recorded: a
+// tunnel started by hand, or one whose record was lost, is recorded then.
+// When a process that is not the tunnel holds the port, Check leaves it
+// running and returns a *PortBusyError.
+func (t *Tunnel) Check(ctx context.Context) (Status, error) {
+	procs, err := t.find()
+	if err != nil {
+		return Status{}, err
+	}
+	var st Status
+	if len(procs) > 0 {
+		pid, healthy, err := t.up(ctx, procs)
+		if err != nil {
+			return Status{}, err
+		}
+		st = Status{Running: true, Healthy: healthy, PID: pid}
+		if healthy {
+			return st, t.adopt(ctx, pid)
+		}
+		if err := ctx.Err(); err != nil {
+			return Status{}, err
+		}
+	}
+	if err := t.checkPortFree(procs); err != nil {
+		return Status{}, err
+	}
+	return st, nil
+}
+
+// adopt records pid as the tunnel, unless the record already names it.
+func (t *Tunnel) adopt(ctx context.Context, pid int) error {
+	unlock, err := lock(ctx, t.stateDir)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	rec, ok, err := recordedProcess(t.stateDir)
+	if err != nil {
+		return err
+	}
+	if ok && rec.PID == pid && slices.Equal(rec.Args, t.args()) {
+		return nil
+	}
+	return writeRecord(t.stateDir, record{PID: pid, Args: t.args()})
+}
+
+// Running reports whether a process that is the tunnel runs, recorded or
+// not. It reads the process table only and makes no request.
+func (t *Tunnel) Running() (bool, error) {
+	procs, err := t.find()
+	return len(procs) > 0, err
 }
 
 // Stop stops the tunnel, when one is running, and deletes the record. It
 // stops only processes that are the tunnel; a recorded process ID that has
 // passed to another process is discarded and that process left alone.
 func (t *Tunnel) Stop() error {
+	unlock, err := lock(context.Background(), t.stateDir)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	procs, err := t.find()
 	if err != nil {
 		return err
@@ -256,6 +325,11 @@ func RecordedRunning(stateDir string) (bool, error) {
 // command line is still the recorded one. Otherwise the process is left
 // alone and the record discarded.
 func StopRecorded(stateDir string) error {
+	unlock, err := lock(context.Background(), stateDir)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	rec, ok, err := recordedProcess(stateDir)
 	if err != nil {
 		return err
@@ -353,23 +427,30 @@ func (t *Tunnel) up(ctx context.Context, procs []int) (int, bool, error) {
 	return own[0].PID, false, nil
 }
 
-// checkPortFree returns a *PortBusyError when a process holds the port.
-func (t *Tunnel) checkPortFree() error {
+// checkPortFree returns a *PortBusyError when a process other than own
+// holds the port.
+func (t *Tunnel) checkPortFree(own []int) error {
 	listeners, err := portListeners(t.port)
 	if err != nil {
 		return err
 	}
-	if len(listeners) > 0 {
-		pid := listeners[0].PID
+	for _, l := range listeners {
+		if slices.Contains(own, l.PID) {
+			continue
+		}
+		pid := l.PID
 		cmd := "unknown command"
 		if p, ok, err := lookupProcess(pid); err == nil && ok {
 			cmd = p.command()
 		}
 		return &PortBusyError{PID: pid, Command: cmd}
 	}
+	if len(listeners) > 0 {
+		return nil
+	}
 	// A listener of another user is invisible to the process table but
 	// still accepts connections.
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort("localhost", strconv.Itoa(t.port)), probeTimeout)
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(loopback, strconv.Itoa(t.port)), probeTimeout)
 	if err == nil {
 		conn.Close()
 		return &PortBusyError{PID: 0, Command: "a process axon cannot inspect"}
@@ -418,7 +499,7 @@ func (t *Tunnel) launch(ctx context.Context) error {
 	reason := fmt.Sprintf("it did not answer on %s within %s", t.healthURL(), startTimeout)
 	exitedFirst := false
 	for {
-		if _, healthy, err := t.up(ctx, []int{pid}); err == nil && healthy {
+		if t.serves(ctx, pid) {
 			return nil
 		}
 		select {
@@ -434,10 +515,30 @@ func (t *Tunnel) launch(ctx context.Context) error {
 		break
 	}
 	terminate(pid, exited, nil)
-	if err := removeRecord(t.stateDir); err != nil {
+	if err := removeRecordOf(t.stateDir, pid); err != nil {
 		return err
 	}
 	return &StartError{Exited: exitedFirst, Log: t.logTail(), reason: reason, logPath: t.logPath()}
+}
+
+// serves reports whether pid serves: the health endpoint answers, and the
+// address the request reached is one pid listens on. The listeners are
+// looked up only once the endpoint answers.
+func (t *Tunnel) serves(ctx context.Context, pid int) bool {
+	remote, ok := t.healthy(ctx)
+	if !ok {
+		return false
+	}
+	listeners, err := portListeners(t.port)
+	if err != nil {
+		return false
+	}
+	for _, l := range listeners {
+		if l.PID == pid && l.accepts(remote) {
+			return true
+		}
+	}
+	return false
 }
 
 // stopAll stops each of pids that is a tunnel, as isTunnel says. A process
@@ -457,7 +558,7 @@ func stopAll(pids []int, isTunnel func(process) bool) error {
 				return err
 			}
 			if live && isTunnel(p) {
-				return fmt.Errorf("could not read the start time of the Teleport tunnel, process %d. Stop it with `kill %d` and try again", pid, pid)
+				return fmt.Errorf("could not read the start time of process %d. Stop it with `kill %d` and try again", pid, pid)
 			}
 			continue
 		}
@@ -478,7 +579,7 @@ func stopAll(pids []int, isTunnel func(process) bool) error {
 		}
 		terminate(pid, nil, same)
 		if !processExited(pid) && same() {
-			return fmt.Errorf("could not stop the Teleport tunnel, process %d. Stop it with `kill -9 %d` and try again", pid, pid)
+			return fmt.Errorf("process %d did not exit. Stop it with `kill -9 %d` and try again", pid, pid)
 		}
 	}
 	return nil
@@ -529,8 +630,12 @@ func terminate(pid int, exited <-chan struct{}, same func() bool) {
 	}
 }
 
+// loopback is the address the tunnel is reached at. It is the one the
+// SkyPilot client uses, so the checks reach whatever the client reaches.
+const loopback = "127.0.0.1"
+
 func (t *Tunnel) healthURL() string {
-	return "http://localhost:" + strconv.Itoa(t.port) + "/api/health"
+	return "http://" + net.JoinHostPort(loopback, strconv.Itoa(t.port)) + "/api/health"
 }
 
 // healthy reports whether the health endpoint answers with a 2xx status
@@ -641,6 +746,16 @@ func writeRecord(stateDir string, rec record) error {
 // removeRecord deletes the record in stateDir, when there is one.
 func removeRecord(stateDir string) error {
 	return removeFile(recordPath(stateDir))
+}
+
+// removeRecordOf deletes the record in stateDir when it names pid, and
+// leaves a record of any other process.
+func removeRecordOf(stateDir string, pid int) error {
+	rec, ok, err := readRecord(stateDir)
+	if err != nil || !ok || rec.PID != pid {
+		return err
+	}
+	return removeRecord(stateDir)
 }
 
 // removeOldRecord deletes the old form of record in stateDir, when there is
