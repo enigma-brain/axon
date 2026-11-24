@@ -18,10 +18,11 @@ var ErrNoLogin = errors.New("Run `axon login` first.")
 
 // Endpoint returns the URL of the SkyPilot API server that the client uses
 // on p: the pathway's own endpoint on a direct pathway, and the tunnel's
-// local address on a teleport pathway.
+// local address on a teleport pathway. The tunnel listens on the IPv4
+// loopback address, which localhost does not always resolve to first.
 func Endpoint(p configfile.Pathway) string {
 	if p.Kind == configfile.KindTeleport {
-		return "http://localhost:" + strconv.Itoa(tunnel.Port)
+		return "http://127.0.0.1:" + strconv.Itoa(tunnel.Port)
 	}
 	return p.Sky.Endpoint
 }

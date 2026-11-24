@@ -76,7 +76,7 @@ app = "skypilot"
 // the client uses on each.
 var pathways = map[string]string{
 	"campus": "https://sky.example.org",
-	"remote": "http://localhost:46581",
+	"remote": "http://127.0.0.1:46581",
 }
 
 // storeConfig stores exampleConfig under home.
@@ -227,11 +227,11 @@ func TestEnviron(t *testing.T) {
 		endpointVar + "_EXTRA=kept",
 		endpointVar + "=http://b",
 	}
-	got := environ(base, "http://localhost:46581", "ada@example.org")
+	got := environ(base, "http://127.0.0.1:46581", "ada@example.org")
 	want := []string{
 		"PATH=/bin",
 		endpointVar + "_EXTRA=kept",
-		endpointVar + "=http://localhost:46581",
+		endpointVar + "=http://127.0.0.1:46581",
 		userVar + "=ada@example.org",
 	}
 	if !slices.Equal(got, want) {
@@ -308,7 +308,7 @@ func TestHelpGetsTheLoginsEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := (*calls)[0].env
-	for _, want := range []string{endpointVar + "=http://localhost:46581", userVar + "=ada@example.org"} {
+	for _, want := range []string{endpointVar + "=http://127.0.0.1:46581", userVar + "=ada@example.org"} {
 		if !slices.Contains(env, want) {
 			t.Errorf("help environment lacks %s", want)
 		}
@@ -477,7 +477,7 @@ func TestReplacesProcessWithSky(t *testing.T) {
 	out, errOut, code := helper(t, home, sky, srv.URL(), "a-command-sky-adds-later", "-c", "dev", "task.yaml")
 	want := strings.Join([]string{
 		sky, "a-command-sky-adds-later", "-c", "dev", "task.yaml",
-		endpointVar + "=http://localhost:46581",
+		endpointVar + "=http://127.0.0.1:46581",
 		userVar + "=ada@example.org",
 	}, "\n") + "\n"
 	if out != want {
