@@ -57,6 +57,7 @@ func execute(root *cobra.Command, args ...string) error {
 // Every command that can run moves the old names first, except update, so
 // that a command added later cannot read ~/.axon under the old names.
 func TestEveryCommandMovesTheOldNamesFirst(t *testing.T) {
+	t.Parallel()
 	var paths [][]string
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
@@ -92,6 +93,7 @@ func TestEveryCommandMovesTheOldNamesFirst(t *testing.T) {
 // moves the old names; cobra answers --help and --version for axon's own
 // commands before any hook runs.
 func TestWhichFormsMoveTheOldNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		args  []string
 		moves int
