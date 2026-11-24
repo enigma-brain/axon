@@ -15,6 +15,7 @@ import (
 
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/interrupt"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // lockedBuffer is a buffer that a process writes to while a test reads it.
@@ -41,15 +42,7 @@ func (b *lockedBuffer) String() string {
 // and how it ended. The signal goes only to the axon the test started.
 func interruptAxon(t *testing.T, bin, home string, sig syscall.Signal, waitFor string, args ...string) (string, error) {
 	t.Helper()
-	cmd := exec.Command(bin, args...)
-	cmd.Env = []string{
-		"HOME=" + home,
-		"PATH=" + t.TempDir(),
-		"HTTPS_PROXY=" + deadProxy,
-		"HTTP_PROXY=" + deadProxy,
-		"https_proxy=" + deadProxy,
-		"http_proxy=" + deadProxy,
-	}
+	cmd := testkit.Command(t, home, testkit.DeadProxy(), bin, args...)
 	// A pipe of the operating system's, so that Wait does not wait for a
 	// copy of the input.
 	stdin, typed, err := os.Pipe()
@@ -58,7 +51,6 @@ func interruptAxon(t *testing.T, bin, home string, sig syscall.Signal, waitFor s
 	}
 	defer typed.Close()
 	cmd.Stdin = stdin
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	var out, errOut lockedBuffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	if err := cmd.Start(); err != nil {

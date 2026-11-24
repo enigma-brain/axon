@@ -202,7 +202,7 @@ func TestTeleportLoginsReadTheTerminalWithConfigFromStdin(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.l.openTerminal = func() (io.ReadCloser, error) { return tty, nil }
-	if err := h.login(Options{Config: "-", Pathway: "remote", In: strings.NewReader(exampleConfig)}); err != nil {
+	if err := h.login(Options{Config: "-", Pathway: "remote", In: strings.NewReader(testkit.ExampleConfig)}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	for name, want := range map[string]string{"stdin.login": "for login\n", "stdin.apps": "for apps login\n"} {
@@ -217,7 +217,7 @@ func TestTeleportLoginsReadTheTerminalWithConfigFromStdin(t *testing.T) {
 func TestTeleportLoginsReadNothingWithConfigFromStdinAndNoTerminal(t *testing.T) {
 	h := newTeleportHarness(t)
 	h.noFiles()
-	if err := h.login(Options{Config: "-", Pathway: "remote", In: strings.NewReader(exampleConfig)}); err != nil {
+	if err := h.login(Options{Config: "-", Pathway: "remote", In: strings.NewReader(testkit.ExampleConfig)}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	for _, name := range []string{"stdin.login", "stdin.apps"} {
@@ -263,7 +263,7 @@ func TestTeleportReplacesDeadTunnel(t *testing.T) {
 	if err := syscall.Kill(before.PID, syscall.SIGKILL); err != nil {
 		t.Fatal(err)
 	}
-	waitUntil(t, func() bool { return !h.tunnelStatus().Running })
+	testkit.WaitUntil(t, func() bool { return !h.tunnelStatus().Running })
 	h.tshCalls()
 
 	if err := h.run("remote"); err != nil {
@@ -336,7 +336,7 @@ func TestTeleportRecordsHealthyTunnelWithNoRecord(t *testing.T) {
 	if err := h.run("campus"); err != nil {
 		t.Fatalf("direct login: %v\n%s", err, h.out.String())
 	}
-	waitUntil(t, func() bool { return syscall.Kill(st.PID, 0) != nil })
+	testkit.WaitUntil(t, func() bool { return syscall.Kill(st.PID, 0) != nil })
 }
 
 // TestTeleportMovesTheOldEndpoint logs in as an earlier axon left the
@@ -524,21 +524,10 @@ func TestSwitchStopsRecordedTunnelByItsRecord(t *testing.T) {
 	if !strings.Contains(h.out.String(), "sky: stopping the Teleport tunnel") {
 		t.Errorf("output %q does not say the tunnel stopped", h.out.String())
 	}
-	waitUntil(t, func() bool {
+	testkit.WaitUntil(t, func() bool {
 		_, err := os.FindProcess(st.PID)
 		return err == nil && syscall.Kill(st.PID, 0) != nil
 	})
-}
-
-func waitUntil(t *testing.T, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatal("timed out waiting")
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
 }
 
 func TestTeleportTunnelExitsPrintsLog(t *testing.T) {
@@ -662,7 +651,7 @@ func lastFileGone(t *testing.T, gone func(h *teleportHarness)) {
 	if !strings.Contains(h.out.String(), "sky: stopping the Teleport tunnel") {
 		t.Errorf("output %q does not say the tunnel stopped", h.out.String())
 	}
-	waitUntil(t, func() bool { return syscall.Kill(st.PID, 0) != nil })
+	testkit.WaitUntil(t, func() bool { return syscall.Kill(st.PID, 0) != nil })
 	if e := h.email(); e != "" {
 		t.Errorf("email %q stayed after the pathway was left", e)
 	}

@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -34,7 +35,13 @@ type Fenced struct {
 	Home string
 	// Tsh is the path of the fake tsh, when it was asked for.
 	Tsh string
+
+	inherited bool
 }
+
+// fenceVar names the fence's directory in the environment of a fenced
+// process and of every process it starts.
+const fenceVar = "AXON_TEST_FENCE"
 
 // FenceOptions says what Fence sets up.
 type FenceOptions struct {
@@ -54,7 +61,18 @@ type FenceOptions struct {
 //
 // The fake tsh is built with go build, which reuses Go's build cache, so
 // it is compiled once and linked by each package that asks for it.
+//
+// A test binary that a fenced test starts again, as a helper process,
+// inherits the fence: Fence then changes nothing, so that the HOME the
+// parent gave the helper stays, and Close removes nothing.
 func Fence(opts FenceOptions) (*Fenced, error) {
+	if dir := os.Getenv(fenceVar); dir != "" {
+		f := &Fenced{Dir: dir, Home: filepath.Join(dir, "home"), inherited: true}
+		if opts.FakeTsh {
+			f.Tsh = filepath.Join(dir, "tsh")
+		}
+		return f, nil
+	}
 	dir, err := os.MkdirTemp("", "axon-test")
 	if err != nil {
 		return nil, err
@@ -93,11 +111,31 @@ func (f *Fenced) setUp(opts FenceOptions) error {
 	if err := os.Setenv("HOME", f.Home); err != nil {
 		return err
 	}
+	if err := os.Setenv(fenceVar, f.Dir); err != nil {
+		return err
+	}
 	return os.Setenv("PATH", path)
 }
 
-// Close removes the fence's directory.
-func (f *Fenced) Close() { os.RemoveAll(f.Dir) }
+// Close removes the fence's directory, unless the fence was inherited.
+func (f *Fenced) Close() {
+	if !f.inherited {
+		os.RemoveAll(f.Dir)
+	}
+}
+
+// Main is a TestMain for a package that needs nothing but the fence: it
+// fences the process as Fence does, runs the tests, and returns the exit
+// code.
+func Main(m *testing.M, opts FenceOptions) int {
+	f, err := Fence(opts)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer f.Close()
+	return m.Run()
+}
 
 // FreePort returns a port on the loopback address that was free when it
 // was asked for, so that a test's tunnel never touches a real one.
@@ -139,15 +177,16 @@ func Command(t testing.TB, home string, env []string, name string, args ...strin
 }
 
 // Snapshot returns every file and directory under root. A file maps to
-// its mode and content, and a directory, whose key ends in a slash, to its
-// mode. A missing root gives an empty map.
+// its content, and a directory, whose key ends in a slash, to "". A
+// missing root gives an empty map.
 func Snapshot(t testing.TB, root string) map[string]string {
 	t.Helper()
 	return snapshot(t, root, false)
 }
 
-// SnapshotTimes is Snapshot with each entry's modification time as well,
-// for a test that checks nothing under root was even rewritten.
+// SnapshotTimes is Snapshot with each entry's mode and modification time
+// before its content, for a test that checks nothing under root was even
+// rewritten.
 func SnapshotTimes(t testing.TB, root string) map[string]string {
 	t.Helper()
 	return snapshot(t, root, true)
@@ -160,20 +199,20 @@ func snapshot(t testing.TB, root string, times bool) map[string]string {
 		if err != nil {
 			return err
 		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		value := info.Mode().String()
+		prefix := ""
 		if times {
-			value += " " + info.ModTime().String()
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			prefix = info.Mode().String() + " " + info.ModTime().String() + " "
 		}
 		if d.IsDir() {
-			entries[path+"/"] = value
+			entries[path+"/"] = strings.TrimSuffix(prefix, " ")
 			return nil
 		}
 		data, err := os.ReadFile(path)
-		entries[path] = value + " " + string(data)
+		entries[path] = prefix + string(data)
 		return err
 	})
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {

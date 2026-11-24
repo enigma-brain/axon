@@ -104,7 +104,7 @@ func startByHand(t *testing.T, mode string) int {
 func startByHandWith(t *testing.T, mode string, args []string) int {
 	t.Helper()
 	pid := startByHandNoWaitWith(t, mode, args)
-	waitFor(t, func() bool {
+	testkit.WaitUntil(t, func() bool {
 		ls, err := portListeners(testPort)
 		return err == nil && len(ls) > 0
 	})
@@ -350,7 +350,7 @@ func TestStatusIgnoresOtherServer(t *testing.T) {
 	}
 	go other.Wait()
 	t.Cleanup(func() { other.Process.Kill() })
-	waitFor(t, func() bool { _, ok := tn.healthy(context.Background()); return ok })
+	testkit.WaitUntil(t, func() bool { _, ok := tn.healthy(context.Background()); return ok })
 
 	st, err := tn.Status(context.Background())
 	if err != nil || st != (Status{}) {
@@ -394,7 +394,7 @@ func TestStartReplacesTunnelThatIsDown(t *testing.T) {
 	if err := tn.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, func() bool { return !alive(t, pid) })
+	testkit.WaitUntil(t, func() bool { return !alive(t, pid) })
 	st, err := tn.Status(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -546,7 +546,7 @@ func TestTunnelNotListeningWhileOtherServerAnswers(t *testing.T) {
 	}
 	go other.Wait()
 	t.Cleanup(func() { other.Process.Kill() })
-	waitFor(t, func() bool { _, ok := tn.healthy(context.Background()); return ok })
+	testkit.WaitUntil(t, func() bool { _, ok := tn.healthy(context.Background()); return ok })
 
 	st, err := tn.Status(context.Background())
 	if err != nil {
@@ -623,7 +623,7 @@ func TestHealthTiedToAnsweringAddress(t *testing.T) {
 			}
 			go other.Wait()
 			t.Cleanup(func() { other.Process.Kill() })
-			waitFor(t, func() bool {
+			testkit.WaitUntil(t, func() bool {
 				ls, err := portListeners(testPort)
 				return err == nil && len(ls) == 2
 			})
@@ -722,7 +722,7 @@ func TestCheckReportsOtherProcessOnPort(t *testing.T) {
 	}
 	go other.Wait()
 	t.Cleanup(func() { other.Process.Kill() })
-	waitFor(t, func() bool { _, ok := tn.healthy(context.Background()); return ok })
+	testkit.WaitUntil(t, func() bool { _, ok := tn.healthy(context.Background()); return ok })
 
 	_, err := tn.Check(context.Background())
 	var busy *PortBusyError

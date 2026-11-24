@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 func newStore(t *testing.T) (Store, string) {
@@ -46,24 +47,6 @@ func add(t *testing.T, s Store, data, source string) File {
 	return f
 }
 
-// snapshot returns every file under root with its content.
-func snapshot(t *testing.T, root string) map[string]string {
-	t.Helper()
-	files := map[string]string{}
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		data, err := os.ReadFile(path)
-		files[path] = string(data)
-		return err
-	})
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		t.Fatal(err)
-	}
-	return files
-}
-
 func pathwayIDs(files []File) []string {
 	var ids []string
 	for _, f := range files {
@@ -95,8 +78,8 @@ func TestAddStoresBytesAndSource(t *testing.T) {
 	if string(got) != data {
 		t.Errorf("stored file = %q, want %q", got, data)
 	}
-	assertMode(t, path, 0o600)
-	assertMode(t, filepath.Dir(path), 0o700)
+	testkit.AssertMode(t, path, 0o600)
+	testkit.AssertMode(t, filepath.Dir(path), 0o700)
 
 	src, ok, err := s.Source("example-campus")
 	if err != nil || !ok {
@@ -106,8 +89,8 @@ func TestAddStoresBytesAndSource(t *testing.T) {
 		t.Errorf("recorded source = %q (address %v)", src, src.IsAddress())
 	}
 	record := filepath.Join(home, ".axon", "state", "configs", "example-campus.toml")
-	assertMode(t, record, 0o600)
-	assertMode(t, filepath.Dir(record), 0o700)
+	testkit.AssertMode(t, record, 0o600)
+	testkit.AssertMode(t, filepath.Dir(record), 0o700)
 
 	if _, ok, err := s.Source("example-remote"); ok || err != nil {
 		t.Errorf("Source of a file never added = %v, %v", ok, err)
@@ -178,7 +161,7 @@ func TestAddReplacesTheSameID(t *testing.T) {
 func TestAddRefusesTakenPathwayID(t *testing.T) {
 	s, home := newStore(t)
 	add(t, s, oneDirect("first", "campus"), "-")
-	before := snapshot(t, filepath.Join(home, ".axon"))
+	before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
 
 	_, err := addFile(s, []byte(oneDirect("second", "lab", "campus")), mustSource(t, "-"))
 	if err == nil {
@@ -187,7 +170,7 @@ func TestAddRefusesTakenPathwayID(t *testing.T) {
 	if !strings.Contains(err.Error(), `"campus"`) || !strings.Contains(err.Error(), s.Path("first")) {
 		t.Errorf("error %q does not name the identifier and the stored file", err)
 	}
-	if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(after, before) {
+	if after := testkit.Snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(after, before) {
 		t.Errorf("a refused file changed the disk:\nbefore %v\nafter  %v", before, after)
 	}
 }
@@ -204,12 +187,12 @@ func TestAddRefusedChangesNothing(t *testing.T) {
 
 	// A refused replacement leaves the stored file and its source.
 	add(t, s, campusFile, "https://example.org/campus.toml")
-	before := snapshot(t, filepath.Join(home, ".axon"))
+	before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
 	bad := strings.Replace(campusFile, "https://sky.example.org", "http://sky.example.org", 1)
 	if _, err := addFile(s, []byte(bad), mustSource(t, "-")); err == nil {
 		t.Fatal("Add succeeded with a bad replacement")
 	}
-	if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(after, before) {
+	if after := testkit.Snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(after, before) {
 		t.Errorf("a refused file changed the disk:\nbefore %v\nafter  %v", before, after)
 	}
 }
@@ -339,17 +322,6 @@ func TestListOrderAndProblems(t *testing.T) {
 	}
 }
 
-func assertMode(t *testing.T, path string, want os.FileMode) {
-	t.Helper()
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := info.Mode().Perm(); got != want {
-		t.Errorf("%s has mode %o, want %o", path, got, want)
-	}
-}
-
 // TestConcurrentAddsClaimingOnePathway adds, at the same moment, several
 // files with different ids that all claim one pathway identifier. Adds are
 // serialized, so exactly one is stored and every other is refused.
@@ -432,7 +404,7 @@ func TestRefreshOfTheSameBytesWritesNothing(t *testing.T) {
 	if err := os.Chtimes(path, old, old); err != nil {
 		t.Fatal(err)
 	}
-	before := snapshot(t, filepath.Join(home, ".axon"))
+	before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
 	_, changed, err := s.Refresh("example", []byte(oneDirect("example", "a")), mustSource(t, refreshAddress), false)
 	if err != nil || changed {
 		t.Fatalf("Refresh = %v, %v, want no change", changed, err)
@@ -440,7 +412,7 @@ func TestRefreshOfTheSameBytesWritesNothing(t *testing.T) {
 	if info, err := os.Stat(path); err != nil || !info.ModTime().Equal(old) {
 		t.Errorf("the stored file was written again: %v", err)
 	}
-	if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
+	if after := testkit.Snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
 		t.Errorf("~/.axon changed:\nbefore %v\nafter  %v", before, after)
 	}
 }
@@ -458,12 +430,12 @@ func TestRefreshRefusals(t *testing.T) {
 			s, home := newStore(t)
 			add(t, s, oneDirect("example", "a"), refreshAddress)
 			add(t, s, oneDirect("other", "lab"), "-")
-			before := snapshot(t, filepath.Join(home, ".axon"))
+			before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
 			_, changed, err := s.Refresh("example", []byte(tc.data), mustSource(t, refreshAddress), false)
 			if err == nil || changed || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("Refresh = %v, %v, want a refusal containing %q", changed, err, tc.want)
 			}
-			if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
+			if after := testkit.Snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
 				t.Errorf("a refused refresh changed ~/.axon:\nbefore %v\nafter  %v", before, after)
 			}
 		})

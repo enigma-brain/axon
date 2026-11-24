@@ -16,6 +16,7 @@ import (
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
+	"github.com/enigma-brain/axon/internal/testkit"
 	"github.com/enigma-brain/axon/internal/tsh"
 )
 
@@ -341,11 +342,11 @@ func TestContradictingFlags(t *testing.T) {
 		{Options{Pathway: "campus", SkyEndpoint: "a"}, "--pathway can't be used with --sky-endpoint: --pathway picks a stored pathway, and --sky-endpoint makes a new one."},
 	} {
 		h := newHarness(t)
-		before := snapshot(t, filepath.Join(h.home, ".axon"))
+		before := testkit.Snapshot(t, filepath.Join(h.home, ".axon"))
 		if err := h.login(tc.opts); err == nil || err.Error() != tc.want {
 			t.Errorf("err = %v, want %q", err, tc.want)
 		}
-		if after := snapshot(t, filepath.Join(h.home, ".axon")); !equalMaps(before, after) {
+		if after := testkit.Snapshot(t, filepath.Join(h.home, ".axon")); !equalMaps(before, after) {
 			t.Errorf("refused flags changed ~/.axon")
 		}
 	}
@@ -568,7 +569,7 @@ func TestConfigProxyCantBeReached(t *testing.T) {
 	}
 
 	// The pathway's unreachable_hint, when it has one, is the next step.
-	h.store(strings.Replace(exampleConfig, `description = "Works from anywhere."`,
+	h.store(strings.Replace(testkit.ExampleConfig, `description = "Works from anywhere."`,
 		"description = \"Works from anywhere.\"\nunreachable_hint = \"Connect to the VPN and retry.\"", 1))
 	err = h.run("remote")
 	want = "establish the Teleport session: can't reach the Teleport proxy at " + testProxy + ": no such host. Connect to the VPN and retry."

@@ -22,6 +22,7 @@ import (
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/fail"
 	"github.com/enigma-brain/axon/internal/skyclient"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 const fakeSky = "/opt/axon-test/sky"
@@ -45,49 +46,21 @@ func clearSkyPilotEnv(t *testing.T) {
 	}
 }
 
-// exampleConfig is the config file the tests store: a direct pathway,
-// campus, and a teleport pathway, remote. Every detail is made up.
-const exampleConfig = `format = 2
-id = "example"
-
-[[pathway]]
-id = "campus"
-kind = "direct"
-name = "Campus"
-description = "Single sign-on in a browser."
-unreachable_hint = "Connect to the campus VPN and retry."
-
-[pathway.sky]
-endpoint = "https://sky.example.org"
-
-[[pathway]]
-id = "remote"
-kind = "teleport"
-name = "Remote"
-description = "Works from anywhere."
-
-[pathway.teleport]
-proxy = "teleport.example.org"
-
-[pathway.sky]
-app = "skypilot"
-`
-
-// pathways are the identifiers of exampleConfig's pathways, with the endpoint
+// pathways are the identifiers of testkit.ExampleConfig's pathways, with the endpoint
 // the client uses on each.
 var pathways = map[string]string{
 	"campus": "https://sky.example.org",
 	"remote": "http://127.0.0.1:46581",
 }
 
-// storeConfig stores exampleConfig under home.
+// storeConfig stores testkit.ExampleConfig under home.
 func storeConfig(t *testing.T, home string) {
 	t.Helper()
 	src, err := configfile.ParseSource("-", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := configfile.NewStore(axondir.New(home)).Put([]byte(exampleConfig), configfile.PutOptions{Origin: configfile.FromSource(src)}); err != nil {
+	if _, err := configfile.NewStore(axondir.New(home)).Put([]byte(testkit.ExampleConfig), configfile.PutOptions{Origin: configfile.FromSource(src)}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -95,7 +68,7 @@ func storeConfig(t *testing.T, home string) {
 // pathwayOf returns the stored pathway id.
 func pathwayOf(t *testing.T, id string) configfile.Pathway {
 	t.Helper()
-	f, err := configfile.Parse([]byte(exampleConfig))
+	f, err := configfile.Parse([]byte(testkit.ExampleConfig))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +81,7 @@ func pathwayOf(t *testing.T, id string) configfile.Pathway {
 	return configfile.Pathway{}
 }
 
-// login sets HOME to a new directory, stores exampleConfig, and records a
+// login sets HOME to a new directory, stores testkit.ExampleConfig, and records a
 // login on the pathway id.
 func login(t *testing.T, id string, email string) axondir.Dir {
 	t.Helper()
@@ -626,7 +599,7 @@ func TestNoLoginStopsBeforeSky(t *testing.T) {
 func TestSkyNeverFetchesTheConfigFile(t *testing.T) {
 	var conns atomic.Int32
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, exampleConfig)
+		io.WriteString(w, testkit.ExampleConfig)
 	}))
 	srv.Config.ConnState = func(_ net.Conn, s http.ConnState) {
 		if s == http.StateNew {
@@ -641,7 +614,7 @@ func TestSkyNeverFetchesTheConfigFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := configfile.NewStore(dir).Put([]byte(exampleConfig), configfile.PutOptions{Origin: configfile.FromSource(src)}); err != nil {
+	if _, err := configfile.NewStore(dir).Put([]byte(testkit.ExampleConfig), configfile.PutOptions{Origin: configfile.FromSource(src)}); err != nil {
 		t.Fatal(err)
 	}
 	calls := capture(t)

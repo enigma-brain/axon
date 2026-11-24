@@ -8,8 +8,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
+
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // build compiles axon with version into a temporary directory.
@@ -23,36 +24,18 @@ func build(t *testing.T, version string) string {
 	return bin
 }
 
-// deadProxy is a proxy address where nothing listens.
-const deadProxy = "http://127.0.0.1:1"
-
 // runAxon runs the built axon with args, with stdin as its standard input,
-// inside a fence. Every test that runs the built binary goes through it.
-//
-//   - HOME is the temporary directory the caller passes, and PATH a fresh
-//     empty temporary directory, so no real tsh, sky or browser opener can
-//     be found.
-//   - Every HTTP and HTTPS request goes through a proxy where nothing
-//     listens, so no request reaches a real server.
-//   - The process runs in a new session, with no controlling terminal, so
-//     a question meant for the terminal finds none.
+// inside testkit's fence: HOME is the temporary directory the caller
+// passes, PATH an empty one, there is no controlling terminal, and every
+// HTTP and HTTPS request goes through a proxy where nothing listens.
 //
 // A login that gets as far as connecting a command group is stopped by the
 // home directory itself: home(t) makes ~/.axon/tools a file, so the
 // SkyPilot client can be neither found nor installed.
 func runAxon(t *testing.T, bin, home string, stdin io.Reader, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
-	cmd := exec.Command(bin, args...)
-	cmd.Env = []string{
-		"HOME=" + home,
-		"PATH=" + t.TempDir(),
-		"HTTPS_PROXY=" + deadProxy,
-		"HTTP_PROXY=" + deadProxy,
-		"https_proxy=" + deadProxy,
-		"http_proxy=" + deadProxy,
-	}
+	cmd := testkit.Command(t, home, testkit.DeadProxy(), bin, args...)
 	cmd.Stdin = stdin
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	err = cmd.Run()

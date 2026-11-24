@@ -11,6 +11,7 @@ import (
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // writeConfig writes data to a file in a temporary directory and returns its
@@ -24,7 +25,7 @@ func writeConfig(t *testing.T, data string) string {
 	return path
 }
 
-// otherCampus has a pathway named Campus, like exampleConfig's, under another
+// otherCampus has a pathway named Campus, like testkit.ExampleConfig's, under another
 // identifier and server.
 const otherCampus = `format = 2
 id = "other"
@@ -39,7 +40,7 @@ description = "Another campus."
 endpoint = "https://main.example.org"
 `
 
-// sameServer reaches exampleConfig's campus server under another name.
+// sameServer reaches testkit.ExampleConfig's campus server under another name.
 const sameServer = `format = 2
 id = "other"
 
@@ -92,14 +93,14 @@ func TestConfigNameClashYes(t *testing.T) {
 
 func TestConfigNameClashNo(t *testing.T) {
 	h := newHarness(t)
-	before := snapshot(t, filepath.Join(h.home, ".axon"))
+	before := testkit.Snapshot(t, filepath.Join(h.home, ".axon"))
 	err := h.login(Options{Config: writeConfig(t, otherCampus), In: strings.NewReader("\n")})
 	want := `add the config file: not added, since its pathway "campus" has the same name as a stored pathway in ` +
 		filepath.Join(h.home, ".axon", "configs", "example.toml") + ". Run the command again with --replace to replace that file."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
-	if after := snapshot(t, filepath.Join(h.home, ".axon")); !equalMaps(before, after) {
+	if after := testkit.Snapshot(t, filepath.Join(h.home, ".axon")); !equalMaps(before, after) {
 		t.Error("a declined file changed ~/.axon")
 	}
 }
@@ -232,9 +233,9 @@ func TestReplacingTheActivePathwayLeavesIt(t *testing.T) {
 	}
 }
 
-// revised returns exampleConfig with a revision.
+// revised returns testkit.ExampleConfig with a revision.
 func revised(n string) string {
-	return strings.Replace(exampleConfig, "id = \"example\"\n", "id = \"example\"\nrevision = "+n+"\n", 1)
+	return strings.Replace(testkit.ExampleConfig, "id = \"example\"\n", "id = \"example\"\nrevision = "+n+"\n", 1)
 }
 
 func TestLowerRevisionAsks(t *testing.T) {
@@ -302,7 +303,7 @@ func TestStoredAndUpdatedLinesNameTheRevision(t *testing.T) {
 		t.Errorf("output:\n%s", h.out.String())
 	}
 	h.out.Reset()
-	if err := h.login(Options{Config: writeConfig(t, exampleConfig), Pathway: "campus"}); err != nil {
+	if err := h.login(Options{Config: writeConfig(t, testkit.ExampleConfig), Pathway: "campus"}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(h.out.String(), "Updated the config file "+path+" from revision 3 to no revision\n") {
@@ -344,9 +345,9 @@ func TestRefreshThatNewlyClashesIsLeftOut(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
 	srv := h.serveConfigs()
-	h.storeFrom("/config.toml", exampleConfig)
+	h.storeFrom("/config.toml", testkit.ExampleConfig)
 	h.store(otherConfig)
-	srv.publish("/config.toml", strings.Replace(exampleConfig, `name = "Remote"`, `name = "Lab"`, 1))
+	srv.publish("/config.toml", strings.Replace(testkit.ExampleConfig, `name = "Remote"`, `name = "Lab"`, 1))
 	h.logIn()
 	if err := h.l.run(context.Background(), Options{Pathway: "campus", In: strings.NewReader(""), Out: &h.out, Err: &h.errOut}); err != nil {
 		t.Fatal(err)

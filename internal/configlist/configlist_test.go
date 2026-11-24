@@ -3,6 +3,7 @@ package configlist
 import (
 	"bytes"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 const campus = `format = 2
@@ -400,38 +402,14 @@ func TestRecordWithoutItsFileNotListed(t *testing.T) {
 func TestListingChangesNothing(t *testing.T) {
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")
-	before := snapshot(t, dir.Root())
+	before := testkit.SnapshotTimes(t, dir.Root())
 	if _, err := list(t, dir); err != nil {
 		t.Fatal(err)
 	}
-	after := snapshot(t, dir.Root())
-	if strings.Join(before, "\n") != strings.Join(after, "\n") {
+	after := testkit.SnapshotTimes(t, dir.Root())
+	if !maps.Equal(before, after) {
 		t.Errorf("files changed:\nbefore %v\nafter  %v", before, after)
 	}
-}
-
-func snapshot(t *testing.T, root string) []string {
-	t.Helper()
-	var out []string
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		data := ""
-		if info.Mode().IsRegular() {
-			b, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			data = string(b)
-		}
-		out = append(out, path+" "+info.Mode().String()+" "+info.ModTime().String()+" "+data)
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return out
 }
 
 type failingWriter struct{}

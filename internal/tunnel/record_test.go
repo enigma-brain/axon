@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // startSleep starts a process that is not a tunnel.
@@ -147,7 +149,7 @@ func TestRecordedTunnelToAnotherProxyIsNotThisTunnel(t *testing.T) {
 	if err := StopRecorded(tn.stateDir); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, func() bool { return !alive(t, pid) })
+	testkit.WaitUntil(t, func() bool { return !alive(t, pid) })
 }
 
 func TestStopRecorded(t *testing.T) {
@@ -192,7 +194,7 @@ func TestStopRecorded(t *testing.T) {
 		if err := StopRecorded(tn.stateDir); err != nil {
 			t.Fatal(err)
 		}
-		waitFor(t, func() bool { return !alive(t, pid) })
+		testkit.WaitUntil(t, func() bool { return !alive(t, pid) })
 	})
 	t.Run("unrecorded tunnel", func(t *testing.T) {
 		tn := newTestTunnel(t)

@@ -8,6 +8,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 func TestIsTunnelCommand(t *testing.T) {
@@ -47,7 +49,7 @@ func TestLookupProcess(t *testing.T) {
 
 	// Right after the fork the child has not yet replaced its arguments.
 	var p process
-	waitFor(t, func() bool {
+	testkit.WaitUntil(t, func() bool {
 		q, ok, err := lookupProcess(cmd.Process.Pid)
 		p = q
 		return err == nil && ok && len(q.Args) == 2
@@ -81,7 +83,7 @@ func TestLookupProcessUnreaped(t *testing.T) {
 	}
 	t.Cleanup(func() { cmd.Wait() })
 	// The child exits at once and stays in the table until it is reaped.
-	waitFor(t, func() bool {
+	testkit.WaitUntil(t, func() bool {
 		_, ok, err := lookupProcess(cmd.Process.Pid)
 		return err == nil && !ok
 	})
@@ -133,18 +135,6 @@ func TestListenerAccepts(t *testing.T) {
 	}
 }
 
-// waitFor fails the test when cond is not true within five seconds.
-func waitFor(t *testing.T, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatal("condition not met within 5s")
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-}
-
 func TestProcessStart(t *testing.T) {
 	first := exec.Command("sleep", "30")
 	if err := first.Start(); err != nil {
@@ -174,7 +164,7 @@ func TestProcessStart(t *testing.T) {
 
 	// A zombie still has its start time; a reaped process has none.
 	first.Process.Kill()
-	waitFor(t, func() bool { return processExited(first.Process.Pid) })
+	testkit.WaitUntil(t, func() bool { return processExited(first.Process.Pid) })
 	if s, ok := processStart(first.Process.Pid); !ok || s != a {
 		t.Errorf("processStart of the zombie = %d, %v, want %d", s, ok, a)
 	}

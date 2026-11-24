@@ -2,12 +2,12 @@ package configfile
 
 import (
 	"errors"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // plan parses data and returns what storing it as opts say would do, as put
@@ -169,29 +169,6 @@ func TestPlanANoOp(t *testing.T) {
 	}
 }
 
-// tree returns every file and directory under root, with each file's
-// content.
-func tree(t *testing.T, root string) map[string]string {
-	t.Helper()
-	entries := map[string]string{}
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			entries[path+"/"] = ""
-			return nil
-		}
-		data, err := os.ReadFile(path)
-		entries[path] = string(data)
-		return err
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return entries
-}
-
 // A refused put leaves the home as it was: no file changed, and no
 // directory created, even the config files directory when it is missing.
 func TestARefusedPutLeavesTheHomeAsItWas(t *testing.T) {
@@ -226,11 +203,11 @@ func TestARefusedPutLeavesTheHomeAsItWas(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			before := tree(t, home)
+			before := testkit.Snapshot(t, home)
 			if err := tc.put(t, s); !tc.refused(err) {
 				t.Fatalf("put = %v, want %s refused", err, tc.name)
 			}
-			if after := tree(t, home); !reflect.DeepEqual(after, before) {
+			if after := testkit.Snapshot(t, home); !reflect.DeepEqual(after, before) {
 				t.Errorf("a refused put changed the home:\nbefore %v\nafter  %v", before, after)
 			}
 		})

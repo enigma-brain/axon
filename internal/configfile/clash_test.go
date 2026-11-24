@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // withRevision returns data with a top-level revision n after its id.
@@ -233,13 +235,13 @@ func TestPutRefusesToRemoveAFileThatChanged(t *testing.T) {
 	}
 	// Another login adds a pathway to the file in between.
 	add(t, s, oneDirect("a", "one", "extra"), "-")
-	before := snapshot(t, filepath.Join(home, ".axon"))
+	before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
 	_, err = s.Put([]byte(added), PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{c.Clashes[0].Stored}})
 	var changed *ChangedError
 	if !errors.As(err, &changed) || changed.Path != s.Path("a") {
 		t.Fatalf("Put = %v, want the file named as changed", err)
 	}
-	if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
+	if after := testkit.Snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
 		t.Error("a refused put changed ~/.axon")
 	}
 }
@@ -301,13 +303,13 @@ func TestPutRestoresEverythingWhenAStepFails(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, home := newStore(t)
 			added, old := clashing(t, s)
-			before := snapshot(t, filepath.Join(home, ".axon"))
+			before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
 			tc.fail(t, home, s)
 			_, err := s.Put(added, PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{old}})
 			if err == nil || !strings.Contains(err.Error(), "injected failure") {
 				t.Fatalf("Put = %v, want the injected failure", err)
 			}
-			if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
+			if after := testkit.Snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
 				t.Errorf("a failed put left changes:\nbefore %v\nafter  %v", before, after)
 			}
 		})

@@ -21,6 +21,7 @@ import (
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/skyclient"
+	"github.com/enigma-brain/axon/internal/testkit"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
@@ -90,34 +91,6 @@ func (c *fakeClient) Path() (string, error) {
 	}
 	return c.sky, nil
 }
-
-// exampleConfig is the config file the harness stores: a direct
-// pathway, campus, and a teleport pathway, remote. Every detail is made up.
-const exampleConfig = `format = 2
-id = "example"
-
-[[pathway]]
-id = "campus"
-kind = "direct"
-name = "Campus"
-description = "Single sign-on in a browser. Needs the campus network."
-unreachable_hint = "Connect to the campus VPN and retry."
-
-[pathway.sky]
-endpoint = "https://sky.example.org"
-
-[[pathway]]
-id = "remote"
-kind = "teleport"
-name = "Remote"
-description = "Works from anywhere."
-
-[pathway.teleport]
-proxy = "teleport.example.org"
-
-[pathway.sky]
-app = "skypilot"
-`
 
 // harness is one login against a fake sky and a fake API server.
 type harness struct {
@@ -199,7 +172,7 @@ func newHarness(t *testing.T) *harness {
 			},
 		},
 	}
-	h.store(exampleConfig)
+	h.store(testkit.ExampleConfig)
 	return h
 }
 
@@ -654,7 +627,7 @@ func TestLoginPutsBackAnInterruptedUpdate(t *testing.T) {
 	if want := fmt.Sprintf(msgPutBack, path); !strings.Contains(h.out.String(), want) {
 		t.Errorf("output does not say the file was put back:\n%s", h.out.String())
 	}
-	if got, _ := os.ReadFile(path); string(got) != exampleConfig {
+	if got, _ := os.ReadFile(path); string(got) != testkit.ExampleConfig {
 		t.Errorf("stored file = %q, want the previous copy", got)
 	}
 	if _, err := os.Stat(path + ".previous"); !os.IsNotExist(err) {
