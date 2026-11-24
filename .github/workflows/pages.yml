@@ -1,12 +1,16 @@
 name: Pages
 
 # Publishes the documentation site to GitHub Pages on each push to the
-# default branch. Where Pages is not switched on, the site is still built, the
+# default branch that changes the site or this workflow, and when started by
+# hand. Where Pages is not switched on, the site is still built, the
 # publishing steps are skipped, and the run is green with a summary that says
 # so. Where Pages is on, a failure to publish fails the run.
 on:
   push:
     branches: [main]
+    paths:
+      - "docs/site/**"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
