@@ -23,8 +23,10 @@ version whatever the version of `axon`.
   is older and says to run `axon update`. It catches members who never
   update, without stopping anyone from running something newer.
 - **A pinned version in the config file.** `axon update` installs that
-  version, not the latest. It keeps a whole organization on one version,
-  and it needs a rule for a member whose config files name different
+  version, not the latest. It controls only what an update installs: a
+  member who never runs `axon update` keeps the version they have, so
+  holding everyone to the pin also needs the check of a minimum version at
+  login. It needs a rule for a member whose config files name different
   versions.
 
 ## Recommendation
