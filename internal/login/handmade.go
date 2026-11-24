@@ -101,7 +101,7 @@ func cleanEndpoint(s string) (string, error) {
 		addr = "https://" + addr
 	}
 	u, err := url.Parse(addr)
-	if err != nil || termtext.HasUnsafe(s) || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Opaque != "" || u.RawQuery != "" || u.Fragment != "" {
+	if err != nil || termtext.HasUnsafe(s) || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Opaque != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(addr, "#") {
 		return "", fmt.Errorf(msgNotHTTPS, s)
 	}
 	return strings.TrimRight(addr, "/"), nil

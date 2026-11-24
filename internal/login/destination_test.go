@@ -52,6 +52,7 @@ func TestRefetchMovingThePathwayAsksAndNoKeepsTheStoredCopy(t *testing.T) {
 	for name, answer := range map[string]string{"enter": "\n", "no": "n\n"} {
 		t.Run(name, func(t *testing.T) {
 			h, _ := connectedFromAddress(t, movedCampus)
+			h.terminal()
 			before := h.emailFile()
 			if err := h.login(Options{In: strings.NewReader(answer)}); err != nil {
 				t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -85,6 +86,20 @@ func TestRefetchMovingThePathwayWithoutATerminalKeepsTheStoredCopy(t *testing.T)
 	keptCampus(t, h, before)
 }
 
+// Input that is not a terminal is not read for the answer: a piped yes
+// keeps the stored copy, as no terminal does.
+func TestRefetchMovingThePathwayIgnoresPipedAnswers(t *testing.T) {
+	h, _ := connectedFromAddress(t, movedCampus)
+	before := h.emailFile()
+	if err := h.login(Options{In: strings.NewReader("y\n")}); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	if strings.Contains(h.out.String(), destinationPrompt) || !strings.Contains(h.errOut.String(), "Run `axon login --replace` to switch.") {
+		t.Errorf("output:\n%s\nwarnings: %q", h.out.String(), h.errOut.String())
+	}
+	keptCampus(t, h, before)
+}
+
 func TestRefetchMovingThePathwayWithReplaceSwitches(t *testing.T) {
 	h, _ := connectedFromAddress(t, movedCampus)
 	if err := h.login(Options{Replace: true}); err != nil {
@@ -100,6 +115,7 @@ func TestRefetchMovingThePathwayWithReplaceSwitches(t *testing.T) {
 
 func TestRefetchMovingThePathwayYesSwitches(t *testing.T) {
 	h, _ := connectedFromAddress(t, movedCampus)
+	h.terminal()
 	if err := h.login(Options{In: strings.NewReader("y\n")}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
@@ -135,6 +151,7 @@ func TestRefetchAsksForEveryValueOfWhereThePathwayGoes(t *testing.T) {
 			}
 			server := h.serveConfigs()
 			h.noFiles()
+			h.terminal()
 			h.storeFrom("/example.toml", exampleConfig)
 			server.publish("/example.toml", tc.next)
 			if err := axondir.New(h.home).SetPathway(tc.pathway); err != nil {
@@ -174,6 +191,7 @@ func TestRefetchKeepingWhereThePathwayGoesIsStored(t *testing.T) {
 
 func TestRefetchDroppingThePathwayAsksAndNoKeepsTheStoredCopy(t *testing.T) {
 	h, _ := connectedFromAddress(t, dropCampus)
+	h.terminal()
 	before := h.emailFile()
 	if err := h.login(Options{In: strings.NewReader("\n")}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -200,6 +218,7 @@ func TestRefetchAsksAboutTheServerBeforeTheRevision(t *testing.T) {
 		h.storeFrom("/example.toml", withRevision(exampleConfig, "5"))
 		server.publish("/example.toml", withRevision(exampleConfig, "5"))
 		h.connectedTo("campus")
+		h.terminal()
 		server.publish("/example.toml", withRevision(movedCampus, "4"))
 		return h
 	}

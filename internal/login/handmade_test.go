@@ -440,6 +440,14 @@ func TestCleanRefusesUnsafeCharacters(t *testing.T) {
 	if _, err := cleanEndpoint("https://sky.example.org/\u202e"); err == nil {
 		t.Error("cleanEndpoint accepted a format character")
 	}
+	for _, bad := range []string{"https://sky.example.org/?", "https://sky.example.org/#", "sky.example.org/#x", "https://sky.example.org/?a=b"} {
+		if _, err := cleanEndpoint(bad); err == nil {
+			t.Errorf("cleanEndpoint(%q) accepted it", bad)
+		}
+	}
+	if got, err := cleanEndpoint("sky.example.org/api/"); err != nil || got != "https://sky.example.org/api" {
+		t.Errorf("cleanEndpoint of a plain address = %q, %v", got, err)
+	}
 	if _, err := cleanApp("sky\u200b"); err == nil {
 		t.Error("cleanApp accepted a format character")
 	}

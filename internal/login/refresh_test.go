@@ -366,6 +366,7 @@ func TestDroppedPathwayWithOneLeftIsReplacedWithoutAsking(t *testing.T) {
 	server := h.serveConfigs()
 	h.storeFrom("/example.toml", oneCampus)
 	h.connectedTo("campus")
+	h.terminal()
 	server.publish("/example.toml", strings.Replace(oneCampus, `id = "campus"`, `id = "campus-sso"`, 1))
 
 	if err := h.login(Options{In: strings.NewReader("y\n")}); err != nil {
@@ -399,6 +400,7 @@ func TestDroppedPathwayWithSeveralLeftAsks(t *testing.T) {
 	h.storeFrom("/other.toml", otherConfig)
 	server.publish("/other.toml", otherConfig)
 	h.connectedTo("campus")
+	h.terminal()
 	server.publish("/example.toml", dropCampus)
 
 	if err := h.login(Options{In: strings.NewReader("y\nlab\n")}); err != nil {
@@ -424,6 +426,7 @@ func TestDroppedPathwayWithoutAnAnswerChangesNothing(t *testing.T) {
 	h.storeFrom("/example.toml", exampleConfig)
 	h.store(otherConfig)
 	h.connectedTo("campus")
+	h.terminal()
 	before := h.record()
 	server.publish("/example.toml", dropCampus)
 
@@ -505,6 +508,7 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 	}
 	moved := h.l.teleport.newTunnel(stateDir, fakeTsh, testProxy, "skypilot2")
 	t.Cleanup(func() { moved.Stop() })
+	h.terminal()
 
 	if err := h.login(Options{In: strings.NewReader("yes\n")}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())

@@ -54,7 +54,7 @@ func (l *login) refresh(ctx context.Context, p configfile.Pathway, added *config
 		changed bool
 	)
 	if err == nil {
-		switch keep, askErr := confirmDestination(p, data, src, path, opts); {
+		switch keep, askErr := l.confirmDestination(p, data, src, path, opts); {
 		case askErr != nil:
 			return configfile.Pathway{}, askErr
 		case keep:
@@ -132,10 +132,12 @@ func (l *login) refresh(ctx context.Context, p configfile.Pathway, added *config
 // compare servers, or when it no longer holds p. It prints the old and the
 // new values first. The default answer is no; --replace answers yes. keep
 // reports that the stored copy is kept, and the login goes on with it:
-// the answer was no, or there is no terminal to ask on, which a warning
-// line says. A file that fails the checks, or whose id is not p's file's,
+// the answer was no, or standard input is not a terminal, which a warning
+// line says. Input that is not a terminal is never read for this answer,
+// so a script that pipes answers in cannot move the pathway without
+// --replace. A file that fails the checks, or whose id is not p's file's,
 // is not asked about: storing it refuses it.
-func confirmDestination(p configfile.Pathway, data []byte, src configfile.Source, path string, opts Options) (keep bool, err error) {
+func (l *login) confirmDestination(p configfile.Pathway, data []byte, src configfile.Source, path string, opts Options) (keep bool, err error) {
 	fetched, err := configfile.Parse(data)
 	if err != nil || fetched.ID != p.File {
 		return false, nil
@@ -153,6 +155,10 @@ func confirmDestination(p configfile.Pathway, data []byte, src configfile.Source
 	}
 	if opts.Replace {
 		return false, nil
+	}
+	if l.isTerminal == nil || !l.isTerminal(opts.In) {
+		fmt.Fprintf(opts.Err, msgDestinationWarning, src, p.ID)
+		return true, nil
 	}
 	yes, err := askYesNo(opts.In, opts.Out, msgDestinationPrompt)
 	switch {
