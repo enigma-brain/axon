@@ -29,6 +29,7 @@ func writeJSON(w http.ResponseWriter, body string) {
 }
 
 func TestLoggedIn(t *testing.T) {
+	t.Parallel()
 	var gotPath, gotAPI, gotVersion string
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
@@ -52,6 +53,7 @@ func TestLoggedIn(t *testing.T) {
 }
 
 func TestNeedsAuthCarriesServerVersion(t *testing.T) {
+	t.Parallel()
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, `{"status":"needs_auth","api_version":"56","version":"0.13.0"}`)
 	})
@@ -65,6 +67,7 @@ func TestNeedsAuthCarriesServerVersion(t *testing.T) {
 }
 
 func TestHealthyWithoutUserIsNotLoggedIn(t *testing.T) {
+	t.Parallel()
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, `{"status":"healthy"}`)
 	})
@@ -74,6 +77,7 @@ func TestHealthyWithoutUserIsNotLoggedIn(t *testing.T) {
 }
 
 func TestRefusalsAreNotLoggedIn(t *testing.T) {
+	t.Parallel()
 	for _, code := range []int{http.StatusFound, http.StatusTemporaryRedirect, http.StatusUnauthorized, http.StatusForbidden} {
 		url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/api/health" {
@@ -96,6 +100,7 @@ func TestRefusalsAreNotLoggedIn(t *testing.T) {
 }
 
 func TestOtherAnswersAreErrors(t *testing.T) {
+	t.Parallel()
 	cases := map[string]http.HandlerFunc{
 		"server error": func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "boom", http.StatusInternalServerError)
@@ -115,6 +120,7 @@ func TestOtherAnswersAreErrors(t *testing.T) {
 // A snippet of an unexpected answer is printed without control or format
 // characters.
 func TestSnippetIsCleaned(t *testing.T) {
+	t.Parallel()
 	_, err := Fetch(context.Background(), serve(t, func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "not\x1b[2J json\u202e")
 	}), Options{})
@@ -124,6 +130,7 @@ func TestSnippetIsCleaned(t *testing.T) {
 }
 
 func TestClosedPortIsUnreachable(t *testing.T) {
+	t.Parallel()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -136,6 +143,7 @@ func TestClosedPortIsUnreachable(t *testing.T) {
 }
 
 func TestSlowServerIsUnreachable(t *testing.T) {
+	t.Parallel()
 	release := make(chan struct{})
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -152,6 +160,7 @@ func TestSlowServerIsUnreachable(t *testing.T) {
 }
 
 func TestCancelledIsNotUnreachable(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {})
@@ -162,12 +171,14 @@ func TestCancelledIsNotUnreachable(t *testing.T) {
 }
 
 func TestBadEndpoint(t *testing.T) {
+	t.Parallel()
 	if _, err := Fetch(context.Background(), "not a url", Options{}); err == nil {
 		t.Fatal("Fetch succeeded with a bad endpoint")
 	}
 }
 
 func TestCookiesSent(t *testing.T) {
+	t.Parallel()
 	var got string
 	srvURL := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		got = r.Header.Get("Cookie")
@@ -200,6 +211,7 @@ func TestCookiesSent(t *testing.T) {
 }
 
 func TestMissingCookieFileSendsNone(t *testing.T) {
+	t.Parallel()
 	var got string
 	srvURL := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		got = r.Header.Get("Cookie")
@@ -215,6 +227,7 @@ func TestMissingCookieFileSendsNone(t *testing.T) {
 }
 
 func TestMatchCookies(t *testing.T) {
+	t.Parallel()
 	now := time.Unix(1_000_000, 0)
 	target, _ := url.Parse("https://sky.lab.example.org/api/health")
 	cookies := []cookie{
@@ -242,6 +255,7 @@ func TestMatchCookies(t *testing.T) {
 // TestLiveServerBody parses the body a SkyPilot API server returns to a
 // logged-in health request with both version headers.
 func TestLiveServerBody(t *testing.T) {
+	t.Parallel()
 	const body = `{"status":"healthy","api_version":"56","version":"0.13.0","version_on_disk":"0.13.0","commit":"b1431e5","basic_auth_enabled":false,"user":{"id":"13ce5100","name":"ada@example.org","password":null,"created_at":null,"user_type":"sso","preferred_workspace":null},"service_account_token_enabled":true,"ingress_basic_auth_enabled":false,"latest_version":"0.14.3","external_proxy_auth_enabled":true,"telemetry_enabled":true,"restrict_config_to_admins":true}`
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-SkyPilot-Version", "0.13.0")
@@ -282,6 +296,7 @@ func writeCookies(t *testing.T, lines ...string) string {
 }
 
 func TestRemoveCookies(t *testing.T) {
+	t.Parallel()
 	path := writeCookies(t, cookieLines...)
 	n, err := RemoveCookies(path, "https://sky.example.org")
 	if err != nil {
@@ -315,6 +330,7 @@ func TestRemoveCookies(t *testing.T) {
 }
 
 func TestRemoveCookiesKeepsTheFileWhenTheLastCookieGoes(t *testing.T) {
+	t.Parallel()
 	path := writeCookies(t, cookieLines[0], cookieLines[3])
 	if n, err := RemoveCookies(path, "https://sky.example.org/"); err != nil || n != 1 {
 		t.Fatalf("RemoveCookies = %d, %v", n, err)
@@ -329,6 +345,7 @@ func TestRemoveCookiesKeepsTheFileWhenTheLastCookieGoes(t *testing.T) {
 }
 
 func TestRemoveCookiesWithNoCookieForTheServer(t *testing.T) {
+	t.Parallel()
 	path := writeCookies(t, cookieLines[0], cookieLines[6])
 	before, _ := os.Stat(path)
 	if n, err := RemoveCookies(path, "https://sky.example.org"); err != nil || n != 0 {
@@ -341,6 +358,7 @@ func TestRemoveCookiesWithNoCookieForTheServer(t *testing.T) {
 }
 
 func TestRemoveCookiesWithNoFile(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "none.txt")
 	if n, err := RemoveCookies(path, "https://sky.example.org"); err != nil || n != 0 {
 		t.Fatalf("RemoveCookies = %d, %v", n, err)
@@ -351,6 +369,7 @@ func TestRemoveCookiesWithNoFile(t *testing.T) {
 }
 
 func TestRemoveCookiesWhenTheFileCannotBeRewritten(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root writes to a read-only directory")
 	}
@@ -371,6 +390,7 @@ func TestRemoveCookiesWhenTheFileCannotBeRewritten(t *testing.T) {
 }
 
 func TestRemoveCookiesRefusesAnEndpointWithNoHost(t *testing.T) {
+	t.Parallel()
 	if _, err := RemoveCookies(writeCookies(t, cookieLines...), "not a url"); err == nil {
 		t.Fatal("no error")
 	}
@@ -379,6 +399,7 @@ func TestRemoveCookiesRefusesAnEndpointWithNoHost(t *testing.T) {
 // The cookie file is SkyPilot's: a link to it stays a link, and the file it
 // points to keeps the mode the user gave it.
 func TestRemoveCookiesFollowsASymbolicLink(t *testing.T) {
+	t.Parallel()
 	target := writeCookies(t, cookieLines[0], cookieLines[3], cookieLines[6])
 	if err := os.Chmod(target, 0o640); err != nil {
 		t.Fatal(err)
