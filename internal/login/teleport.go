@@ -140,10 +140,18 @@ func (l *login) pointClient(ctx context.Context, p configfile.Pathway, opts Opti
 }
 
 // tunnelUp reports whether the tunnel serves and the server reports the
-// user's identity through it, with the server's health when it does.
+// user's identity through it, with the server's health when it does. A
+// tunnel that serves is recorded, so that logout and a switch of pathway
+// stop it. When another process holds the tunnel's port, login stops.
 func (l *login) tunnelUp(ctx context.Context, tn *tunnel.Tunnel, endpoint string, opts apiserver.Options) (apiserver.Health, bool, error) {
-	st, err := tn.Status(ctx)
-	if err != nil {
+	st, err := tn.Check(ctx)
+	var busy *tunnel.PortBusyError
+	switch {
+	case errors.As(err, &busy):
+		return apiserver.Health{}, false, startFailure(err)
+	case err != nil && ctx.Err() != nil:
+		return apiserver.Health{}, false, ctx.Err()
+	case err != nil:
 		return apiserver.Health{}, false, fmt.Errorf("check the Teleport tunnel: %w", err)
 	}
 	if !st.Healthy {

@@ -66,11 +66,14 @@ type logout struct {
 	findTsh func() (string, error)
 	// tshLogout ends the Teleport session for a proxy.
 	tshLogout func(ctx context.Context, tshPath, proxy string) error
+	// newTunnel returns the tunnel to the Teleport application app through
+	// the Teleport proxy proxy, recorded in stateDir.
+	newTunnel func(stateDir, proxy, app string) *tunnel.Tunnel
 }
 
 // Logout runs axon logout: it logs the SkyPilot client out, removes the
-// API server's cookies from SkyPilot's cookie file, stops the recorded
-// tunnel, ends the Teleport session of the connected pathway, and
+// API server's cookies from SkyPilot's cookie file, stops the connected
+// pathway's tunnel and the recorded one, ends the Teleport session of the connected pathway, and
 // removes the records of the connection. It keeps the config files and the
 // active pathway. It works by axon's own records alone, never by a config
 // file.
@@ -88,6 +91,10 @@ func Logout(ctx context.Context, opts LogoutOptions) error {
 		environ:    os.Environ,
 		findTsh:    tsh.Find,
 		tshLogout:  tsh.Logout,
+		newTunnel: func(stateDir, proxy, app string) *tunnel.Tunnel {
+			// Stopping needs no tsh: only a start runs it.
+			return tunnel.New(stateDir, "", proxy, app)
+		},
 	}
 	return lo.run(ctx, opts)
 }
@@ -129,6 +136,17 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 	if err != nil {
 		fail("check the Teleport tunnel", err)
 	}
+	// The connected pathway's tunnel, which runs with no record when it was
+	// started by hand or its record was lost.
+	var pathwayTunnel *tunnel.Tunnel
+	if hasRecord && rec.Kind == string(configfile.KindTeleport) && rec.TeleportProxy != "" && rec.SkyApp != "" {
+		pathwayTunnel = lo.newTunnel(stateDir, rec.TeleportProxy, rec.SkyApp)
+		up, err := pathwayTunnelRunning(stateDir, pathwayTunnel)
+		if err != nil {
+			fail("check the Teleport tunnel", err)
+		}
+		running = running || up
+	}
 	if !failed && !hasRecord && !oldRecord && !hasEmail && !running {
 		fmt.Fprintln(opts.Out, lineNothing)
 		return nil
@@ -151,10 +169,11 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 		}
 	}
 
-	// 3. The tunnel, by its own record.
+	// 3. The tunnel: the connected pathway's, recorded or not, and the
+	// one the record names.
 	if running {
 		fmt.Fprintf(opts.Out, "sky: stopping the Teleport tunnel on port %d\n", tunnel.Port)
-		if err := tunnel.StopRecorded(stateDir); err != nil {
+		if err := stopTunnels(stateDir, pathwayTunnel); err != nil {
 			fail("stop the Teleport tunnel", err)
 		}
 	}
@@ -262,6 +281,26 @@ func tunnelRunning(stateDir string) (bool, error) {
 		return false, nil
 	}
 	return tunnel.RecordedRunning(stateDir)
+}
+
+// pathwayTunnelRunning reports whether tn runs, recorded or not, and creates
+// no directory.
+func pathwayTunnelRunning(stateDir string, tn *tunnel.Tunnel) (bool, error) {
+	if _, err := os.Stat(stateDir); errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	return tn.Running()
+}
+
+// stopTunnels stops tn, when it is not nil, and then the tunnel recorded in
+// stateDir.
+func stopTunnels(stateDir string, tn *tunnel.Tunnel) error {
+	if tn != nil {
+		if err := tn.Stop(); err != nil {
+			return err
+		}
+	}
+	return tunnel.StopRecorded(stateDir)
 }
 
 // skyConfigPath returns SkyPilot's user configuration file as the client

@@ -50,7 +50,7 @@ func (l *login) disconnect(opts Options) error {
 	if running {
 		fmt.Fprintf(opts.Out, "sky: stopping the Teleport tunnel on port %d\n", tunnel.Port)
 		if err := tunnel.StopRecorded(stateDir); err != nil {
-			return err
+			return fmt.Errorf("stop the Teleport tunnel: %w", err)
 		}
 	}
 	return l.dir.RemoveEmail()
