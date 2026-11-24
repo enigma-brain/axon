@@ -25,10 +25,16 @@ type Options struct {
 	Dir axondir.Dir
 	// Out receives the listing.
 	Out io.Writer
-	// Location is the time zone stored times are printed in. Nil means
-	// local time.
-	Location *time.Location
 }
+
+// deps are what a listing depends on outside its options. Run uses
+// defaults(); tests build their own.
+type deps struct {
+	// location is the time zone stored times are printed in.
+	location *time.Location
+}
+
+func defaults() deps { return deps{location: time.Local} }
 
 // UnreadableError reports that some of what is stored could not be read.
 // The listing has already named each one and its reason.
@@ -48,11 +54,10 @@ func (e *UnreadableError) Error() string {
 // is in use. It returns an *UnreadableError, after printing everything it
 // could read, when a stored file, its record or the file naming the
 // pathway in use cannot be read.
-func Run(opts Options) error {
-	loc := opts.Location
-	if loc == nil {
-		loc = time.Local
-	}
+func Run(opts Options) error { return defaults().run(opts) }
+
+func (d deps) run(opts Options) error {
+	loc := d.location
 	w := &writer{w: opts.Out}
 	store := configfile.NewStore(opts.Dir)
 

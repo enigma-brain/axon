@@ -91,7 +91,7 @@ func add(t *testing.T, s configfile.Store, data, source string) {
 func list(t *testing.T, dir axondir.Dir) (string, error) {
 	t.Helper()
 	var out bytes.Buffer
-	err := Run(Options{Dir: dir, Out: &out, Location: time.UTC})
+	err := deps{location: time.UTC}.run(Options{Dir: dir, Out: &out})
 	text := out.String()
 	for i, line := range strings.Split(text, "\n") {
 		// A line may be longer only when its last word alone would not
