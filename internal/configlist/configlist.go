@@ -72,9 +72,8 @@ func Run(opts Options) error {
 		if activeErr != nil {
 			w.line("")
 			w.line(clean(activeErr.Error()))
-			return &UnreadableError{Count: unreadable}
 		}
-		return nil
+		return w.result(unreadable)
 	}
 
 	var inUse *orgfile.Pathway
@@ -138,13 +137,7 @@ func Run(opts Options) error {
 		w.wrapped("  cannot be read: "+clean(p.Err.Error()), "  ")
 	}
 
-	if w.err != nil {
-		return w.err
-	}
-	if unreadable > 0 {
-		return &UnreadableError{Count: unreadable}
-	}
-	return nil
+	return w.result(unreadable)
 }
 
 // server describes where a pathway reaches its server, after its kind.
@@ -178,6 +171,18 @@ func clean(s string) string {
 type writer struct {
 	w   io.Writer
 	err error
+}
+
+// result returns the error Run ends with: the first write error, else an
+// *UnreadableError when unreadable is not zero, else nil.
+func (w *writer) result(unreadable int) error {
+	if w.err != nil {
+		return w.err
+	}
+	if unreadable > 0 {
+		return &UnreadableError{Count: unreadable}
+	}
+	return nil
 }
 
 // width is the width the listing is wrapped to.

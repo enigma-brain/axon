@@ -344,7 +344,9 @@ func TestUnreadablePathwayInUse(t *testing.T) {
 	if err == nil {
 		t.Fatal("no error")
 	}
-	if !strings.HasPrefix(text, "The pathway in use is not known: read "+dir.ConfigPath()+":\n") {
+	// Where the line wraps depends on the length of the temporary path, so
+	// compare the words.
+	if !strings.HasPrefix(strings.Join(strings.Fields(text), " "), "The pathway in use is not known: read "+dir.ConfigPath()+":") {
 		t.Errorf("listing:\n%s", text)
 	}
 	if !strings.Contains(text, "    Campus  --pathway campus\n") {
@@ -421,4 +423,20 @@ func snapshot(t *testing.T, root string) []string {
 		t.Fatal(err)
 	}
 	return out
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("broken pipe") }
+
+func TestWriteErrorIsReturned(t *testing.T) {
+	empty, _ := newDir(t)
+	stored, s := newDir(t)
+	add(t, s, campus, "https://example.org/campus.toml")
+	for name, dir := range map[string]axondir.Dir{"nothing stored": empty, "one file": stored} {
+		err := Run(Options{Dir: dir, Out: failingWriter{}})
+		if err == nil || err.Error() != "broken pipe" {
+			t.Errorf("%s: err = %v, want the write error", name, err)
+		}
+	}
 }
