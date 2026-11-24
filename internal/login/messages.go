@@ -26,6 +26,7 @@ const (
 	msgNotHostPort = "%q is not a host or host:port."
 	msgNotApp      = "%q is not a Teleport application name."
 	msgNameEmpty   = "The name needs at least one letter or digit."
+	msgNameUnsafe  = "The name must not hold control characters or Unicode format characters."
 
 	// The address.
 	msgChecking = "Checking %s\n"
@@ -143,4 +144,23 @@ const (
 	// A revision number.
 	msgRevisionN  = "revision %d"
 	msgNoRevision = "no revision"
+)
+
+// A config file, fetched again or added with --config, that changes where
+// the pathway in use goes.
+const (
+	// The address and the pathway's identifier.
+	msgDestinationChanged = "The config file at %s changes where the pathway %q goes:\n"
+	// The pathway's identifier.
+	msgDestinationChangedAdded = "The config file changes where the pathway %q goes:\n"
+	// Where the pathway goes, before and after.
+	msgDestinationNow  = "  now: %s\n"
+	msgDestinationNew  = "  new: %s\n"
+	msgDestinationGone = "  new: no longer in the file\n"
+
+	msgDestinationPrompt = "Switch to the fetched config file? [y/N, Enter for no]: "
+	// The stored file's path.
+	msgDestinationKept = "Kept the stored copy of %s.\n"
+	// The address and the pathway's identifier.
+	msgDestinationWarning = "axon: the config file at %s changes where the pathway %q goes, and there is no terminal to ask whether to switch. Using the stored file. Run `axon login --replace` to switch.\n"
 )

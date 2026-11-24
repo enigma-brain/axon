@@ -8,6 +8,7 @@ import (
 
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
+	"github.com/enigma-brain/axon/internal/termtext"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
@@ -40,7 +41,7 @@ func Host(endpoint string) string {
 func Unreachable(p configfile.Pathway, endpoint string) string {
 	msg := fmt.Sprintf("Can't reach %s.", Host(endpoint))
 	if p.UnreachableHint != "" {
-		msg += " " + p.UnreachableHint
+		msg += " " + termtext.Clean(p.UnreachableHint)
 	}
 	return msg
 }

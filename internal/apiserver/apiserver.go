@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/enigma-brain/axon/internal/termtext"
 )
 
 // APIVersion is the SkyPilot API version of the default client, sent with
@@ -144,9 +146,10 @@ func Fetch(ctx context.Context, endpoint string, opts Options) (Health, error) {
 	return h, nil
 }
 
-// snippet returns the start of an answer's body, on one line, for a message.
+// snippet returns the start of an answer's body, on one line and without
+// control or format characters, for a message.
 func snippet(body []byte) string {
-	s := strings.Join(strings.Fields(string(body)), " ")
+	s := termtext.Clean(strings.Join(strings.Fields(string(body)), " "))
 	if len(s) > 200 {
 		s = s[:200] + "..."
 	}

@@ -268,9 +268,11 @@ your organization which field it names. Messages seen most:
 | `pathway: the file must have at least one [[pathway]]` | The file holds no pathway. |
 | `pathway "<id>": name: is required and must be text` | The pathway has no `name` (or no `description`, which gives the same message for that field). |
 | `pathway "<id>": kind: must be "direct" or "teleport"` | The pathway's `kind` is missing or unknown. |
-| `pathway "<id>": sky.endpoint: must be an https address` | A direct pathway's address is missing or does not start with `https://`. |
+| `pathway "<id>": sky.endpoint: must be an https address, without a user name, password, query string or fragment` | A direct pathway's address is missing, does not start with `https://`, or carries a user name, a password, a query string such as `?token=...`, or a fragment. |
+| `pathway "<id>": <field>: must not hold control characters or Unicode format characters` | The field holds a character that can act on a terminal: a control character, such as a line break, a tab or an escape, or a Unicode format character, such as a bidirectional override or a zero-width space. It is often pasted in unseen. The field is one of `name`, `description`, `unreachable_hint`, `sky.app` and `sky.endpoint`. |
+| `pathway "<id>": sky.app: must be a Teleport application name: not starting with "-", and without white space` | A Teleport pathway's application name starts with `-` or holds a space. |
 | `pathway "<id>": teleport.proxy: must be a hostname, optionally with a port` | A Teleport pathway's proxy is missing or is not a host. |
-| `<field>: not a field of a config file` | The file holds a field that the format does not have, such as a misspelling. |
+| `"<field>": not a field of a config file` | The file holds a field that the format does not have, such as a misspelling. The field is quoted, and a character in it that can act on a terminal is shown escaped, such as `\x1b`. |
 | `revision: must be a whole number, 0 or more` | The file's `revision` is not a whole number. |
 | `not valid TOML: <reason> (line <n>)` | The file is not valid TOML. |
 
@@ -350,6 +352,28 @@ with an empty file; the third
 means `axon` could not read what it recorded about the file's source. Either way `axon`
 carries on with the file it has. Nothing needs doing now; when the reason is a refusal,
 tell your organization.
+
+### The config file at the address moves your pathway
+
+```text
+The config file at <address> changes where the pathway "<id>" goes:
+  now: <kind>, <where>
+  new: <kind>, <where>
+Switch to the fetched config file? [y/N, Enter for no]:
+axon: the config file at <address> changes where the pathway "<id>" goes, and there is no terminal to ask whether to switch. Using the stored file. Run `axon login --replace` to switch.
+```
+
+At login, the file fetched again from its address gives your pathway another
+kind, address, Teleport proxy or application than the stored copy, or, with
+`new: no longer in the file`, drops the pathway. `axon` asks before it stores
+the file; no, the default, keeps the stored copy and logs in with it, and says
+`Kept the stored copy of <path>.`. The last line means there was no terminal
+to ask on.
+
+When your organization told you its server moved, answer yes, or run
+`axon login --replace`. When it did not, answer no and ask your organization:
+a file at the address that sends you to an unexpected server is a sign that
+someone else changed it.
 
 ## Choosing a pathway
 

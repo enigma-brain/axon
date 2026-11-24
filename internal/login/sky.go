@@ -10,6 +10,7 @@ import (
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/skyclient"
+	"github.com/enigma-brain/axon/internal/termtext"
 )
 
 // client is axon's own SkyPilot client, as login uses it.
@@ -102,11 +103,11 @@ func (l *login) connectSky(ctx context.Context, p configfile.Pathway, opts Optio
 	case health.ServerVersion != version:
 		from, to, err := l.client.Ensure(ctx, health.ServerVersion, opts.Out)
 		if errors.Is(err, skyclient.ErrUnavailable) {
-			return fmt.Errorf("update the SkyPilot client from %s to %s: %w", version, health.ServerVersion, err)
+			return fmt.Errorf("update the SkyPilot client from %s to %s: %w", version, termtext.Clean(health.ServerVersion), err)
 		}
 		if err != nil {
 			return fmt.Errorf("update the SkyPilot client from %s to %s: %w. Check your network and run `axon login` again.",
-				version, health.ServerVersion, err)
+				version, termtext.Clean(health.ServerVersion), err)
 		}
 		fmt.Fprintf(opts.Out, "sky: SkyPilot client %s -> %s, the server's version\n", from, to)
 		version = to
@@ -122,7 +123,7 @@ func (l *login) connectSky(ctx context.Context, p configfile.Pathway, opts Optio
 		}
 	}
 
-	fmt.Fprintf(opts.Out, "sky: connected as %s (SkyPilot %s)\n", health.User, version)
+	fmt.Fprintf(opts.Out, "sky: connected as %s (SkyPilot %s)\n", termtext.Clean(health.User), termtext.Clean(version))
 	return nil
 }
 

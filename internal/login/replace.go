@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/enigma-brain/axon/internal/configfile"
+	"github.com/enigma-brain/axon/internal/termtext"
 )
 
 // errNoAnswer reports a question that got no answer: its input ended, as
@@ -122,9 +123,9 @@ func clashQuestion(store configfile.Store, c configfile.Clash, several bool) str
 	case c.SameName:
 		reason = msgClashName
 	case c.Pathway.Kind == configfile.KindTeleport:
-		reason = fmt.Sprintf(msgClashTeleport, c.Pathway.Teleport.Proxy, c.Pathway.Sky.App)
+		reason = fmt.Sprintf(msgClashTeleport, termtext.Clean(c.Pathway.Teleport.Proxy), termtext.Clean(c.Pathway.Sky.App))
 	default:
-		reason = fmt.Sprintf(msgClashDirect, c.Pathway.Sky.Endpoint)
+		reason = fmt.Sprintf(msgClashDirect, termtext.Clean(c.Pathway.Sky.Endpoint))
 	}
 	s := fmt.Sprintf(msgClashStored, c.Pathway.Name, reason)
 	if several {
@@ -137,7 +138,7 @@ func clashQuestion(store configfile.Store, c configfile.Clash, several bool) str
 	}
 	names := make([]string, len(c.Stored.Pathways))
 	for i, p := range c.Stored.Pathways {
-		names[i] = p.Name
+		names[i] = termtext.Clean(p.Name)
 	}
 	return s + fmt.Sprintf(msgClashRemovesFile, store.Path(c.Stored.ID), nameList(names))
 }

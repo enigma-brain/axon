@@ -17,6 +17,9 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/enigma-brain/axon/internal/termtext"
+	"github.com/enigma-brain/axon/internal/tsh"
 )
 
 // Kind is the kind of a pathway, which decides how a user logs in and how
@@ -157,9 +160,9 @@ func Parse(data []byte) (File, error) {
 	if _, err := toml.NewDecoder(bytes.NewReader(data)).Decode(&generic); err != nil {
 		var perr toml.ParseError
 		if errors.As(err, &perr) {
-			return File{}, refuse(perr.LastKey, "not valid TOML: %s (line %d)", perr.Message, perr.Position.Line)
+			return File{}, refuse(keyName(perr.LastKey), "not valid TOML: %s (line %d)", termtext.Clean(perr.Message), perr.Position.Line)
 		}
-		return File{}, refuse("", "not valid TOML: %v", err)
+		return File{}, refuse("", "not valid TOML: %s", termtext.Clean(err.Error()))
 	}
 	if len(generic) == 0 {
 		return File{}, ErrEmpty
@@ -282,7 +285,8 @@ func checkKeys(generic map[string]any) error {
 }
 
 // unknownKey refuses the first key of table, in sorted order, that is not
-// in allowed, naming it with prefix.
+// in allowed, naming it quoted after prefix, so that its characters cannot
+// act on the terminal.
 func unknownKey(prefix string, table map[string]any, allowed map[string]bool) error {
 	var unknown []string
 	for k := range table {
@@ -294,7 +298,16 @@ func unknownKey(prefix string, table map[string]any, allowed map[string]bool) er
 		return nil
 	}
 	sort.Strings(unknown)
-	return refuse(prefix+unknown[0], "not a field of a config file")
+	return refuse(prefix+strconv.Quote(unknown[0]), "not a field of a config file")
+}
+
+// keyName returns a key as a message names it: as it is, or quoted when it
+// holds a character that could act on the terminal.
+func keyName(key string) string {
+	if termtext.HasUnsafe(key) {
+		return strconv.Quote(key)
+	}
+	return key
 }
 
 // checkPathway checks the pathway at index i of the file.
@@ -327,6 +340,9 @@ func checkPathway(i int, rp rawPathway) (Pathway, error) {
 		if !ok {
 			return Pathway{}, refuse(field("unreachable_hint"), "must be text")
 		}
+		if termtext.HasUnsafe(hint) {
+			return Pathway{}, refuse(field("unreachable_hint"), msgUnsafe)
+		}
 		p.UnreachableHint = hint
 	}
 
@@ -343,8 +359,11 @@ func checkPathway(i int, rp rawPathway) (Pathway, error) {
 			return Pathway{}, refuse(field("sky.app"), "not allowed on a direct pathway")
 		}
 		endpoint, ok := sky.Endpoint.(string)
+		if ok && unsafeAddress(endpoint) {
+			return Pathway{}, refuse(field("sky.endpoint"), msgUnsafe)
+		}
 		if !ok || !isHTTPSAddress(endpoint) {
-			return Pathway{}, refuse(field("sky.endpoint"), "must be an https address")
+			return Pathway{}, refuse(field("sky.endpoint"), "must be an https address, without a user name, password, query string or fragment")
 		}
 		p.Sky.Endpoint = endpoint
 	case KindTeleport:
@@ -363,24 +382,52 @@ func checkPathway(i int, rp rawPathway) (Pathway, error) {
 		if p.Sky.App, err = requiredText(field("sky.app"), sky.App); err != nil {
 			return Pathway{}, err
 		}
+		if tsh.CheckApp(p.Sky.App) != nil {
+			return Pathway{}, refuse(field("sky.app"), "must be a Teleport application name: not starting with \"-\", and without white space")
+		}
 	}
 	return p, nil
 }
 
+// msgUnsafe is the check a text field fails when it holds a character
+// that could act on the terminal.
+const msgUnsafe = "must not hold control characters or Unicode format characters"
+
 // requiredText returns v as a string, refusing it when it is missing, not
-// text, or blank.
+// text, blank, or holds a control or format character.
 func requiredText(field string, v any) (string, error) {
 	s, ok := v.(string)
 	if !ok || strings.TrimSpace(s) == "" {
 		return "", refuse(field, "is required and must be text")
 	}
+	if termtext.HasUnsafe(s) {
+		return "", refuse(field, msgUnsafe)
+	}
 	return s, nil
 }
 
-// isHTTPSAddress reports whether s is an absolute https URL with a host.
+// unsafeAddress reports whether the address s holds a control or format
+// character, written out or percent-encoded in its host or path, which
+// url.Parse decodes and a message can print.
+func unsafeAddress(s string) bool {
+	if termtext.HasUnsafe(s) {
+		return true
+	}
+	u, err := url.Parse(s)
+	return err == nil && (termtext.HasUnsafe(u.Host) || termtext.HasUnsafe(u.Path))
+}
+
+// UnsafeAddress reports whether the address s holds a control or format
+// character, written out or percent-encoded in its host or path.
+func UnsafeAddress(s string) bool { return unsafeAddress(s) }
+
+// isHTTPSAddress reports whether s is an absolute https URL with a host and
+// without user information, a query string or a fragment, any of which can
+// carry a secret that messages would then print.
 func isHTTPSAddress(s string) bool {
 	u, err := url.Parse(s)
-	return err == nil && u.Scheme == "https" && u.Host != "" && u.Opaque == ""
+	return err == nil && u.Scheme == "https" && u.Host != "" && u.Opaque == "" &&
+		u.User == nil && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && !strings.Contains(s, "#")
 }
 
 // IsHostPort reports whether s is a Teleport proxy address a config file
