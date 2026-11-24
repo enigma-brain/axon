@@ -103,9 +103,9 @@ func TestAPutKeepsTheFileItSetAside(t *testing.T) {
 			_, err := os.Lstat(aside)
 			seen = err == nil
 		}
-		return axondir.ReplaceFile(p, data)
+		return writeFile(p, data)
 	}
-	t.Cleanup(func() { replaceFile = axondir.ReplaceFile })
+	t.Cleanup(func() { replaceFile = writeFile })
 	if _, err := s.Put(added, PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{old}}); err != nil {
 		t.Fatal(err)
 	}

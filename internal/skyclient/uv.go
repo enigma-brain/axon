@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/enigma-brain/axon/internal/axondir"
 )
 
 // uvVersion is the version of uv that installs Python and the client.
@@ -117,52 +119,8 @@ func extractUV(r io.Reader, path string) error {
 		if hdr.Typeflag != tar.TypeReg || filepath.Base(hdr.Name) != "uv" {
 			continue
 		}
-		return replaceFile(path, tr, 0o700)
+		return axondir.ReplaceFile(path, tr, 0o700)
 	}
-}
-
-// replaceFile replaces path with the content of r, with mode perm. It writes
-// a temporary file, flushes it to disk and renames it, so a reader never sees
-// a partial file and a crash leaves either the old file or the new one.
-func replaceFile(path string, r io.Reader, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := io.Copy(tmp, r); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
-		return err
-	}
-	syncDir(dir)
-	return nil
-}
-
-// syncDir flushes dir's entries to disk, so a rename into it survives a
-// crash. Not every file system supports it, so a failure is ignored: the
-// rename itself has succeeded.
-func syncDir(dir string) {
-	d, err := os.Open(dir)
-	if err != nil {
-		return
-	}
-	d.Sync()
-	d.Close()
 }
 
 // uvEnv returns the environment uv runs with: the caller's, without anything

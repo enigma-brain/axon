@@ -17,6 +17,7 @@
 package tunnel
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -34,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/termtext"
 	"github.com/enigma-brain/axon/internal/tsh"
 )
@@ -778,20 +780,7 @@ func writeRecord(stateDir string, rec record) error {
 	if err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
-	tmp, err := os.CreateTemp(stateDir, "."+recordFile+".*")
-	if err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	defer os.Remove(tmp.Name())
-	_, werr := tmp.Write(append(data, '\n'))
-	cerr := tmp.Close()
-	if err := errors.Join(werr, cerr); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	return nil
+	return axondir.ReplaceFile(path, bytes.NewReader(append(data, '\n')), 0o600)
 }
 
 // removeRecord deletes the record in stateDir, when there is one.

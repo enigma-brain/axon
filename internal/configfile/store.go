@@ -770,8 +770,13 @@ var (
 	removeFile  = os.Remove
 	renameFile  = os.Rename
 	linkFile    = os.Link
-	replaceFile = axondir.ReplaceFile
+	replaceFile = writeFile
 )
+
+// writeFile replaces path with data, readable by the user only.
+func writeFile(path string, data []byte) error {
+	return axondir.ReplaceFile(path, bytes.NewReader(data), 0o600)
+}
 
 func (s Store) recordPath(id string) string {
 	return filepath.Join(s.dir.RecordsPath(), id+fileExt)

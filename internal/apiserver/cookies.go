@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/enigma-brain/axon/internal/axondir"
 )
 
 // cookie is one line of a Netscape-format cookie file.
@@ -127,47 +129,14 @@ func RemoveCookies(path, endpoint string) (int, error) {
 	if removed == 0 {
 		return 0, nil
 	}
-	if err := replaceFile(path, kept.Bytes()); err != nil {
-		return 0, fmt.Errorf("rewrite the SkyPilot cookie file %s: %w", path, err)
+	// The cookie file is SkyPilot's: the user may have set its mode or made
+	// it a link, and both are kept.
+	if err := axondir.ReplaceFile(path, &kept, 0o600, axondir.KeepMode(), axondir.FollowLink()); err != nil {
+		// The message names the path itself, so ReplaceFile's cause is
+		// given without its own.
+		return 0, fmt.Errorf("rewrite the SkyPilot cookie file %s: %w", path, errors.Unwrap(err))
 	}
 	return removed, nil
-}
-
-// replaceFile replaces the file at path with data, keeping its permissions.
-// It writes a temporary file beside it, syncs it, and renames that over it.
-// A path that is a symbolic link is followed, so the link stays and the
-// file it points to is replaced.
-func replaceFile(path string, data []byte) error {
-	path, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return err
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer os.Remove(name) // A no-op once the rename succeeds.
-	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, path)
 }
 
 // matchCookies returns the cookies a browser would send to target at now: the

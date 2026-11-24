@@ -396,7 +396,7 @@ func TestRemoveCookiesWhenTheFileCannotBeRewritten(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chmod(dir, 0o700) })
 	_, err := RemoveCookies(path, "https://sky.example.org")
-	if err == nil || !strings.Contains(err.Error(), "rewrite the SkyPilot cookie file "+path) {
+	if err == nil || !strings.Contains(err.Error(), "rewrite the SkyPilot cookie file "+path+": open ") {
 		t.Fatalf("err = %v", err)
 	}
 	data, _ := os.ReadFile(path)
@@ -411,8 +411,13 @@ func TestRemoveCookiesRefusesAnEndpointWithNoHost(t *testing.T) {
 	}
 }
 
+// The cookie file is SkyPilot's: a link to it stays a link, and the file it
+// points to keeps the mode the user gave it.
 func TestRemoveCookiesFollowsASymbolicLink(t *testing.T) {
 	target := writeCookies(t, cookieLines[0], cookieLines[3], cookieLines[6])
+	if err := os.Chmod(target, 0o640); err != nil {
+		t.Fatal(err)
+	}
 	link := filepath.Join(t.TempDir(), "cookies.txt")
 	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
@@ -429,5 +434,12 @@ func TestRemoveCookiesFollowsASymbolicLink(t *testing.T) {
 	}
 	if want := cookieLines[0] + "\n" + cookieLines[6] + "\n"; string(data) != want {
 		t.Errorf("target:\n%s\nwant:\n%s", data, want)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o640 {
+		t.Errorf("target's mode after the rewrite = %v, want 0640", info.Mode().Perm())
 	}
 }

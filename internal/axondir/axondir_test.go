@@ -1,11 +1,15 @@
 package axondir
 
 import (
+	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
+	"testing/iotest"
 )
 
 func newDir(t *testing.T) (Dir, string) {
@@ -181,7 +185,7 @@ func TestReplaceFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f")
 	for _, content := range []string{"first\n", "second\n"} {
-		if err := ReplaceFile(path, []byte(content)); err != nil {
+		if err := ReplaceFile(path, strings.NewReader(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		got, err := os.ReadFile(path)
@@ -198,6 +202,106 @@ func TestReplaceFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(entries) != 1 {
+		t.Errorf("directory holds %d entries, want only the file", len(entries))
+	}
+}
+
+func TestReplaceFileMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "f")
+	for _, mode := range []fs.FileMode{0o755, 0o600} {
+		if err := ReplaceFile(path, strings.NewReader("x"), mode); err != nil {
+			t.Fatal(err)
+		}
+		assertMode(t, path, mode)
+	}
+}
+
+// KeepMode keeps the permissions of the file replaced, and FollowLink
+// replaces the file a link points to and keeps the link.
+func TestReplaceFileKeepModeFollowLink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	link := filepath.Join(dir, "link")
+	if err := os.WriteFile(target, []byte("old"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := ReplaceFile(link, strings.NewReader("new"), 0o600, KeepMode(), FollowLink()); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Lstat(link); err != nil || info.Mode()&fs.ModeSymlink == 0 {
+		t.Fatalf("link after the write: %v, %v; want a symbolic link", info, err)
+	}
+	if got, err := os.ReadFile(target); err != nil || string(got) != "new" {
+		t.Errorf("target = %q, %v; want new", got, err)
+	}
+	assertMode(t, target, 0o640)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("directory holds %d entries, want the link and its target", len(entries))
+	}
+}
+
+// Without FollowLink a link at the path is itself replaced, and without
+// KeepMode the mode given is used.
+func TestReplaceFileReplacesALink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	link := filepath.Join(dir, "link")
+	if err := os.WriteFile(target, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := ReplaceFile(link, strings.NewReader("new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Lstat(link); err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("link after the write: %v, %v; want a regular file", info, err)
+	}
+	if got, _ := os.ReadFile(target); string(got) != "old" {
+		t.Errorf("target = %q, want it unchanged", got)
+	}
+	assertMode(t, link, 0o600)
+}
+
+// KeepMode needs the file to exist.
+func TestReplaceFileKeepModeMissing(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f")
+	if err := ReplaceFile(path, strings.NewReader("x"), 0o600, KeepMode()); err == nil {
+		t.Fatal("ReplaceFile with KeepMode of a missing file succeeded")
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Errorf("directory holds %d entries, want none", len(entries))
+	}
+}
+
+// A reader that fails leaves the file as it was and no temporary file.
+func TestReplaceFileReadFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f")
+	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := io.MultiReader(strings.NewReader("partial"), iotest.ErrReader(errors.New("injected failure")))
+	err := ReplaceFile(path, r, 0o600)
+	if err == nil || !strings.Contains(err.Error(), "injected failure") || !strings.Contains(err.Error(), path) {
+		t.Fatalf("ReplaceFile = %v, want the failure, naming the path", err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != "old" {
+		t.Errorf("file = %q, want it unchanged", got)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
 		t.Errorf("directory holds %d entries, want only the file", len(entries))
 	}
 }
@@ -222,7 +326,7 @@ func TestSyncDirOnAFilesystemWithoutDirectorySync(t *testing.T) {
 		if err := SyncDir(dir); (err != nil) != tc.fail {
 			t.Errorf("sync answering %v: SyncDir = %v", tc.err, err)
 		}
-		if err := ReplaceFile(filepath.Join(dir, "f"), []byte("x")); (err != nil) != tc.fail {
+		if err := ReplaceFile(filepath.Join(dir, "f"), strings.NewReader("x"), 0o600); (err != nil) != tc.fail {
 			t.Errorf("sync answering %v: ReplaceFile = %v", tc.err, err)
 		}
 	}
