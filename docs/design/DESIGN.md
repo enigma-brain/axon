@@ -641,9 +641,9 @@ version.
 2. When the existing session is good, the remaining steps are skipped.
 3. `axon` runs `sky api login -e <sky.endpoint>`, which opens the
    server's login page in a browser and waits for it to complete.
-4. When the login ends with the status `needs_auth`, `axon` removes
-   `~/.sky/cookies.txt` and runs the login once more. The file holds only
-   cookies for the API server.
+4. When the login ends with the status `needs_auth`, `axon` removes from
+   SkyPilot's cookie file every cookie for the endpoint, as `axon logout`
+   does, and runs the login once more.
 
 `sky api login` opens the login page in the user's default browser, where
 the user signs in and clicks "Authorize". `axon` chooses no browser of its
@@ -728,13 +728,16 @@ laptop. The install needs no
 Python, no `uv` and no `sudo` on the laptop beforehand.
 
 `axon` runs this client by absolute path and ignores any `sky` on `PATH`.
+It runs the client without the variables that point Python elsewhere, so
+the client always runs with the Python and packages it was installed with.
 
 The first install downloads a few hundred megabytes. Before it downloads
 anything, `axon` says where the client installs and that the system's Python
 and packages are left alone. It prints one line per step, not the installer's
 own output, and the line shows that a long step is working. When the install
 fails, `axon` says which step failed, and the error carries the installer's
-own message.
+own message. The download of `uv` is ended when it stalls and refused when
+it is over a size limit; a download that keeps moving is never cut off.
 
 The `axon` binary carries a default client version, used for the first
 install. At each login, after the server is reachable, `axon` reads the

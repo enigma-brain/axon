@@ -129,7 +129,7 @@ app = "skypilot"
 
 // stopped is how a login that reached the sky group's connection ends
 // inside the fence.
-const stopped = "axon: connect sky: check the SkyPilot client: "
+const stopped = "axon: connect sky: install the SkyPilot client: "
 
 // stores writes data as the stored config file id under home.
 func stores(t *testing.T, home, id, data string) {

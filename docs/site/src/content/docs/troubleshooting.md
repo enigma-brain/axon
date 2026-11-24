@@ -457,11 +457,12 @@ The server did not accept the login after `axon` cleared the stale session. Run
 ### SkyPilot's cookie file could not be removed
 
 ```text
-remove <path>: <reason>. Remove it by hand and run `axon login` again.
+remove the cookies of <endpoint> from <path>: <reason>. Remove that file by hand and run `axon login` again.
 ```
 
-`axon` could not remove SkyPilot's cookie file, `~/.sky/cookies.txt`, or the file
-`SKYPILOT_API_COOKIE_FILE` names. Remove it yourself, then log in again.
+`axon` could not remove the API server's cookies from SkyPilot's cookie file,
+`~/.sky/cookies.txt`, or the file `SKYPILOT_API_COOKIE_FILE` names. Remove the
+file yourself, then log in again.
 
 ### The SkyPilot login failed
 
@@ -576,6 +577,27 @@ install the SkyPilot client: <reason>. Check your network and run `axon login` a
 The client's install failed. The reason says which step failed, `uv`, Python or the
 client, and ends with the installer's own message. Check your network and run `axon login`
 again.
+
+### The download of uv stopped
+
+```text
+install the SkyPilot client: download uv <version>: the download stopped because no data arrived for 30 seconds. Check your network and run `axon login` again.
+```
+
+`axon` downloads its own `uv` before it installs the client, and ends the
+download when no data arrives for 30 seconds. A slow download that keeps moving
+is not cut off. Check your network, then run `axon login` again; the download
+starts over.
+
+### The download of uv was too large
+
+```text
+install the SkyPilot client: download uv <version>: the download was refused because it is larger than 64 MiB. Check your network and run `axon login` again.
+```
+
+`uv`'s archive is far smaller than that, so what answered was not the archive,
+which happens behind a proxy or captive portal that answers in its place.
+Check your network, then run `axon login` again.
 
 ### The SkyPilot client could not be updated
 
