@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -238,39 +237,6 @@ func TestMatchCookies(t *testing.T) {
 	want := "exact dotted subdomains api-path secure live"
 	if got := strings.Join(names, " "); got != want {
 		t.Errorf("matched %q, want %q", got, want)
-	}
-}
-
-func TestCookieFile(t *testing.T) {
-	env := func(v string) func(string) string {
-		return func(name string) string {
-			if name == "SKYPILOT_API_COOKIE_FILE" {
-				return v
-			}
-			return ""
-		}
-	}
-	cwd, _ := os.Getwd()
-	old := lookupUser
-	lookupUser = func(name string) (*user.User, error) {
-		if name == "ada" {
-			return &user.User{HomeDir: "/home/ada"}, nil
-		}
-		return nil, user.UnknownUserError(name)
-	}
-	t.Cleanup(func() { lookupUser = old })
-	for v, want := range map[string]string{
-		"":                 "/home/u/.sky/cookies.txt",
-		"~/jar.txt":        "/home/u/jar.txt",
-		"/tmp/cookies.txt": "/tmp/cookies.txt",
-		"rel/cookies.txt":  filepath.Join(cwd, "rel/cookies.txt"),
-		"~ada/.sky/c.txt":  "/home/ada/.sky/c.txt",
-		"~ada":             "/home/ada",
-		"~nobody/c.txt":    filepath.Join(cwd, "~nobody/c.txt"),
-	} {
-		if got := CookieFile("/home/u", env(v)); got != want {
-			t.Errorf("SKYPILOT_API_COOKIE_FILE=%q: got %q, want %q", v, got, want)
-		}
 	}
 }
 

@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -58,18 +57,9 @@ type Options struct {
 // login holds what one run of axon login works with. Run fills it with the
 // real directory, client and server; tests replace each part.
 type login struct {
-	dir    axondir.Dir
-	client client
-	health func(ctx context.Context, endpoint string, opts apiserver.Options) (apiserver.Health, error)
-	// cookieFile is SkyPilot's cookie file. The sky commands login runs
-	// inherit the environment that chose it, so they use the same file.
-	cookieFile string
-	// endpoint returns the API server endpoint of a pathway.
-	endpoint func(configfile.Pathway) string
-	// loginWait bounds the browser login.
-	loginWait time.Duration
-	// environ is the environment the commands login runs start from.
-	environ func() []string
+	dir axondir.Dir
+	// sky is what login does with SkyPilot.
+	sky sky.Connector
 	// readConfig reads a config file from its source.
 	readConfig func(ctx context.Context, src configfile.Source, stdin io.Reader) ([]byte, error)
 	// openTerminal opens the terminal, where questions are asked when
@@ -86,13 +76,9 @@ type login struct {
 	probeProxy func(ctx context.Context, proxy string) error
 }
 
-// Run runs axon login.
-func Run(ctx context.Context, opts Options) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("find the home directory: %w", err)
-	}
-	return newLogin(home, os.Getenv).run(ctx, opts)
+// Run runs axon login for the user whose axon directory is dir.
+func Run(ctx context.Context, dir axondir.Dir, opts Options) error {
+	return newLogin(dir.Home(), os.Getenv).run(ctx, opts)
 }
 
 // newLogin returns the login for the user whose home directory is home, with
@@ -101,18 +87,12 @@ func newLogin(home string, getenv func(string) string) *login {
 	dir := axondir.New(home)
 	return &login{
 		dir:          dir,
-		client:       skyClient{dir: dir},
-		health:       apiserver.Fetch,
-		cookieFile:   apiserver.CookieFile(home, getenv),
-		endpoint:     sky.Endpoint,
-		loginWait:    loginWait,
-		environ:      os.Environ,
+		sky:          sky.NewConnector(dir, getenv),
 		readConfig:   configfile.Read,
 		openTerminal: func() (io.ReadCloser, error) { return os.Open("/dev/tty") },
 		teleport: teleport{
 			ensure:    tsh.Ensure,
 			newTunnel: tunnel.New,
-			skyConfig: skyConfigPath(home, getenv),
 		},
 		isTerminal: isTerminal,
 		probeSky:   probeSky,
@@ -250,7 +230,11 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	// A direct pathway has no session apart from each service's own.
 
 	// 5. Connect each command group.
-	if err := l.connectSky(ctx, p, opts); err != nil {
+	streams := sky.Options{In: opts.In, Out: opts.Out, Err: opts.Err}
+	teleport := func(ctx context.Context, clientVersion string) (apiserver.Health, error) {
+		return l.connectTeleport(ctx, p, opts, clientVersion)
+	}
+	if err := l.sky.Connect(ctx, p, streams, teleport); err != nil {
 		return fmt.Errorf("connect sky: %w", err)
 	}
 	return nil
@@ -292,7 +276,7 @@ func (l *login) noConfig(opts Options) error {
 // flag stops and names the flag, and one without is answered no. closeIn
 // releases the terminal.
 func (l *login) addConfig(ctx context.Context, opts Options) (f configfile.File, in io.Reader, closeIn func(), err error) {
-	src, err := configfile.ParseSource(opts.Config)
+	src, err := configfile.ParseSource(opts.Config, l.dir.Home())
 	if err != nil {
 		return configfile.File{}, nil, nil, err
 	}

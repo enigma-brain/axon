@@ -36,11 +36,8 @@ type logoutRun struct {
 // client and the fake tsh at tshPath; an empty tshPath is no tsh on PATH.
 func newLogout(h *harness, tshPath string) *logout {
 	return &logout{
-		dir:        axondir.New(h.home),
-		client:     h.client,
-		skyConfig:  h.l.teleport.skyConfig,
-		cookieFile: h.cookieFile,
-		environ:    h.l.environ,
+		dir: axondir.New(h.home),
+		sky: h.l.sky,
 		findTsh: func() (string, error) {
 			if tshPath == "" {
 				return "", tsh.ErrNotFound
@@ -63,7 +60,7 @@ func (r *logoutRun) run() *logoutRun {
 // sky api login does.
 func writeSkyConfig(t *testing.T, h *harness, endpoint string) {
 	t.Helper()
-	path := h.l.teleport.skyConfig
+	path := h.l.sky.SettingsFile
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -518,26 +515,6 @@ func TestLogoutContinuesWhenTheEmailCannotBeRead(t *testing.T) {
 	}
 	if _, ok, _ := connected.Read(axondir.New(h.home)); !ok {
 		t.Error("the record was removed after a failed step")
-	}
-}
-
-func TestSkyConfigPath(t *testing.T) {
-	env := func(v string) func(string) string {
-		return func(k string) string {
-			if k == "SKYPILOT_GLOBAL_CONFIG" {
-				return v
-			}
-			return ""
-		}
-	}
-	for v, want := range map[string]string{
-		"":                "/home/ada/.sky/config.yaml",
-		"/etc/sky.yaml":   "/etc/sky.yaml",
-		"~/conf/sky.yaml": "/home/ada/conf/sky.yaml",
-	} {
-		if got := skyConfigPath("/home/ada", env(v)); got != want {
-			t.Errorf("SKYPILOT_GLOBAL_CONFIG=%q: %q, want %q", v, got, want)
-		}
 	}
 }
 

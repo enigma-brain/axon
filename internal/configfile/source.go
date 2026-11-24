@@ -54,9 +54,9 @@ const stdinValue = "-"
 // ParseSource returns the source s names: "-" for standard input, an
 // address when s has a scheme, and a file path otherwise. An address is
 // refused unless its scheme is https, it has a host, and it carries no user
-// name or password. A path's leading "~/" is the home directory, and the
-// path is made absolute.
-func ParseSource(s string) (Source, error) {
+// name or password. A path's leading "~/" is home, and the path is made
+// absolute.
+func ParseSource(s, home string) (Source, error) {
 	switch {
 	case s == "":
 		return Source{}, errors.New("the config file's source is empty")
@@ -82,10 +82,6 @@ func ParseSource(s string) (Source, error) {
 	}
 	path := s
 	if rest, ok := strings.CutPrefix(path, "~/"); ok {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return Source{}, fmt.Errorf("find the home directory for %s: %w", s, err)
-		}
 		path = filepath.Join(home, rest)
 	}
 	abs, err := filepath.Abs(path)

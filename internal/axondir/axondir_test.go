@@ -29,15 +29,14 @@ func assertMode(t *testing.T, path string, want fs.FileMode) {
 	}
 }
 
-func TestDefaultUsesHome(t *testing.T) {
+func TestNewIsUnderHome(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
-	d, err := Default()
-	if err != nil {
-		t.Fatal(err)
-	}
+	d := New(home)
 	if want := filepath.Join(home, ".axon"); d.Root() != want {
 		t.Errorf("Root() = %q, want %q", d.Root(), want)
+	}
+	if d.Home() != home {
+		t.Errorf("Home() = %q, want %q", d.Home(), home)
 	}
 }
 

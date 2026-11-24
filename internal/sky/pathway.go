@@ -36,9 +36,9 @@ func hostOf(endpoint string) string {
 	return endpoint
 }
 
-// Unreachable returns the message for a host that does not answer, followed
+// unreachable returns the message for a host that does not answer, followed
 // by the pathway's hint when it has one.
-func Unreachable(p configfile.Pathway, endpoint string) string {
+func unreachable(p configfile.Pathway, endpoint string) string {
 	msg := fmt.Sprintf("Can't reach %s.", hostOf(endpoint))
 	if p.UnreachableHint != "" {
 		msg += " " + termtext.Clean(p.UnreachableHint)

@@ -33,9 +33,13 @@ const (
 	healthPath           = "/api/health"
 	headerAPIVersion     = "X-SkyPilot-API-Version"
 	headerVersion        = "X-SkyPilot-Version"
-	statusNeedsAuth      = "needs_auth"
 	maxHealthBodyInBytes = 1 << 20
 )
+
+// NeedsAuth is the status SkyPilot gives when the server sees no login: the
+// health endpoint's status, and the one sky api login ends with when the
+// cookie file holds an expired session that is sent ahead of the new one.
+const NeedsAuth = "needs_auth"
 
 // Health is what the API server's health endpoint tells axon.
 type Health struct {
@@ -140,7 +144,7 @@ func Fetch(ctx context.Context, endpoint string, opts Options) (Health, error) {
 	if hr.User != nil {
 		h.User = strings.TrimSpace(hr.User.Name)
 	}
-	if hr.Status == statusNeedsAuth || h.User == "" {
+	if hr.Status == NeedsAuth || h.User == "" {
 		return Health{ServerVersion: h.ServerVersion}, ErrNotLoggedIn
 	}
 	return h, nil

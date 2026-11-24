@@ -553,7 +553,7 @@ instead of the latest. CI runs it on Linux when `internal/update/` or
 | `main.go` | The entry point. Sends the error that ends a command through `internal/fail`. |
 | `install.sh` | The install script that the install line runs. |
 | `.goreleaser.yaml` | How a release is built. |
-| `internal/cli` | The command tree: `login`, `logout`, `config`, `sky` and `update`. |
+| `internal/cli` | The command tree: `login`, `logout`, `config`, `sky` and `update`, and the home directory and `~/.axon`, found once before a command runs. |
 | `internal/configlist` | `axon config list`: printing the stored config files, their pathways and the pathway in use. |
 | `internal/update` | `axon update`: finding a release, verifying its archive, and replacing the running binary. |
 | `internal/download` | Downloading a release archive: the one client, its redirect rule, the stall and size limits, the SHA-256 check, taking one program out of a `.tar.gz`, and printing an address without what can hold a token. `axon update` and the SkyPilot client install use it. |
@@ -561,9 +561,9 @@ instead of the latest. CI runs it on Linux when `internal/update/` or
 | `internal/configfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/configs/`. |
 | `internal/axondir` | `~/.axon`: the names of its directories, the settings file, `tools/`, `state/`, the store's lock, renaming what `v0.3.0` and earlier kept under other names, and `ReplaceFile`, through which `axon` replaces every file it writes. |
 | `internal/connected` | The record of the connected pathway and its settings, in `~/.axon/state/pathway.toml`. |
-| `internal/login` | `axon login` and `axon logout` (`logout.go`): adding a file, choosing the pathway, disconnecting the one left, the stages, the sky group's connect steps, and each kind's login in `direct.go` and `teleport.go`. |
-| `internal/sky` | The `axon sky` command group: its refusals, its connection check, and each pathway kind's endpoint. |
-| `internal/apiserver` | The SkyPilot API server's health request, with SkyPilot's cookies and the client's version headers. |
+| `internal/login` | `axon login` and `axon logout` (`logout.go`): adding a file, making and choosing the pathway, the prompts, disconnecting the one left, the stages, the Teleport session and tunnel in `teleport.go`, and logout's order of steps. |
+| `internal/sky` | Everything specific to SkyPilot. The `axon sky` command group: its refusals, its connection check, and each pathway kind's endpoint. The steps login and logout run with SkyPilot, through `Connector`: installing and syncing the client, the browser login on a direct pathway in `direct.go`, pointing the client at the tunnel in `point.go`, and `sky api logout` in `logout.go`. SkyPilot's files and variables, and the one environment the client runs with. |
+| `internal/apiserver` | The SkyPilot API server's health request, with SkyPilot's cookies and the client's version headers, and removing a server's cookies. |
 | `internal/skyclient` | `axon`'s own SkyPilot client. |
 | `internal/tsh` | Teleport's client: finding it on `PATH`, login, application login, certificate check, and the one rule for a proxy address. |
 | `internal/tunnel` | The Teleport tunnel to the API server. |

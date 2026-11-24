@@ -41,8 +41,9 @@ type probes struct {
 	endpoint func(configfile.Pathway) string
 	// health makes one request to the health endpoint.
 	health func(ctx context.Context, endpoint string, opts apiserver.Options) (apiserver.Health, error)
-	// cookieFile returns SkyPilot's cookie file.
-	cookieFile func() (string, error)
+	// cookieFile returns SkyPilot's cookie file for the user whose home
+	// directory is home.
+	cookieFile func(home string) string
 	// clientVersion returns the installed client's version; false when none
 	// is installed.
 	clientVersion func(axondir.Dir) (string, bool, error)
@@ -64,12 +65,8 @@ type probes struct {
 var realProbes = probes{
 	endpoint: Endpoint,
 	health:   apiserver.Fetch,
-	cookieFile: func() (string, error) {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("find the home directory: %w", err)
-		}
-		return apiserver.CookieFile(home, os.Getenv), nil
+	cookieFile: func(home string) string {
+		return CookieFile(home, os.Getenv)
 	},
 	clientVersion: skyclient.Version,
 	findTsh:       tsh.Find,
@@ -144,9 +141,7 @@ func (p probes) run(ctx context.Context, dir axondir.Dir, pw configfile.Pathway,
 	// SkyPilot's cookies go only to a direct pathway's endpoint.
 	var cookies string
 	if pw.Kind == configfile.KindDirect {
-		if cookies, err = p.cookieFile(); err != nil {
-			return "", err
-		}
+		cookies = p.cookieFile(dir.Home())
 	}
 
 	if pw.Kind == configfile.KindTeleport {
@@ -182,7 +177,7 @@ func failure(ctx context.Context, p configfile.Pathway, endpoint string, err err
 	case errors.Is(err, apiserver.ErrNotLoggedIn):
 		return errSessionExpired
 	case p.Kind == configfile.KindDirect && errors.Is(err, apiserver.ErrUnreachable):
-		return errors.New(Unreachable(p, endpoint))
+		return errors.New(unreachable(p, endpoint))
 	default:
 		return errNotAnswering
 	}

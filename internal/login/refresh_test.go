@@ -114,7 +114,7 @@ func (s *configServer) total() int {
 // address of path.
 func (h *harness) storeFrom(path, data string) {
 	h.t.Helper()
-	src, err := configfile.ParseSource("https://example.org" + path)
+	src, err := configfile.ParseSource("https://example.org"+path, "")
 	if err != nil {
 		h.t.Fatal(err)
 	}

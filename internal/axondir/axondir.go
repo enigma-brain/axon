@@ -42,6 +42,7 @@ const (
 
 // Dir is the axon directory under one home directory.
 type Dir struct {
+	home string
 	root string
 }
 
@@ -50,19 +51,13 @@ type settings struct {
 	Pathway string `toml:"pathway"`
 }
 
-// Default returns the axon directory under the user's home directory.
-func Default() (Dir, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return Dir{}, fmt.Errorf("find the home directory: %w", err)
-	}
-	return New(home), nil
-}
-
 // New returns the axon directory under home. It creates nothing.
 func New(home string) Dir {
-	return Dir{root: filepath.Join(home, ".axon")}
+	return Dir{home: home, root: filepath.Join(home, ".axon")}
 }
+
+// Home returns the home directory the axon directory is under.
+func (d Dir) Home() string { return d.home }
 
 // Root returns the path of the axon directory.
 func (d Dir) Root() string { return d.root }

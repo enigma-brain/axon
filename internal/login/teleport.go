@@ -4,24 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
-	"os"
-	"os/exec"
-	"strings"
-	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/configfile"
-	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
-
-// skyLoginWait bounds sky api login on a teleport pathway. It opens no
-// browser and asks nothing, so it ends quickly or not at all.
-const skyLoginWait = time.Minute
 
 // errNoIdentity reports a server that answers through the tunnel without
 // the user's Teleport identity. sky api login would open a browser against
@@ -37,9 +25,6 @@ type teleport struct {
 	// newTunnel returns the tunnel to the Teleport application app through
 	// the Teleport proxy proxy, run with tshPath and recorded in stateDir.
 	newTunnel func(stateDir, tshPath, proxy, app string) *tunnel.Tunnel
-	// skyConfig is SkyPilot's user configuration file, where sky api login
-	// stores the endpoint.
-	skyConfig string
 	// path is the tsh the session stage found, used by the steps after it.
 	path string
 }
@@ -71,7 +56,7 @@ func (l *login) establishTeleportSession(ctx context.Context, p configfile.Pathw
 // server's health as reported through the tunnel, which carries the user's
 // identity. The last step, pointClient, runs later.
 func (l *login) connectTeleport(ctx context.Context, p configfile.Pathway, opts Options, clientVersion string) (apiserver.Health, error) {
-	endpoint := l.endpoint(p)
+	endpoint := l.sky.Endpoint(p)
 	proxy, app := p.Teleport.Proxy, p.Sky.App
 	stateDir, err := l.dir.StateDir()
 	if err != nil {
@@ -108,7 +93,7 @@ func (l *login) connectTeleport(ctx context.Context, p configfile.Pathway, opts 
 			}
 			return apiserver.Health{}, startFailure(err)
 		}
-		h, err = l.health(ctx, endpoint, healthOpts)
+		h, err = l.sky.Health(ctx, endpoint, healthOpts)
 		switch {
 		case err == nil:
 		case ctx.Err() != nil:
@@ -121,23 +106,6 @@ func (l *login) connectTeleport(ctx context.Context, p configfile.Pathway, opts 
 	}
 
 	return h, nil
-}
-
-// pointClient runs a teleport pathway's last step: sky api login
-// against the tunnel's endpoint, when the endpoint the client has stored
-// differs. connectSky runs it after the identity check and the version
-// sync, which on this pathway need no SkyPilot login, so sky is a client at
-// the server's version.
-func (l *login) pointClient(ctx context.Context, p configfile.Pathway, opts Options, skyPath string) error {
-	endpoint := l.endpoint(p)
-	stored, err := storedEndpoint(l.teleport.skyConfig)
-	if err != nil {
-		return err
-	}
-	if stored == endpoint {
-		return nil
-	}
-	return l.skyLogin(ctx, opts, skyPath, endpoint)
 }
 
 // tunnelUp reports whether the tunnel serves and the server reports the
@@ -158,7 +126,7 @@ func (l *login) tunnelUp(ctx context.Context, tn *tunnel.Tunnel, endpoint string
 	if !st.Healthy {
 		return apiserver.Health{}, false, ctx.Err()
 	}
-	h, err := l.health(ctx, endpoint, opts)
+	h, err := l.sky.Health(ctx, endpoint, opts)
 	if err != nil {
 		// Whatever the reason, the tunnel is restarted; a cancelled login
 		// stops instead.
@@ -187,55 +155,4 @@ func startFailure(err error) error {
 	default:
 		return fmt.Errorf("%w\nRun `axon login` again.", err)
 	}
-}
-
-// storedEndpoint returns the API server endpoint SkyPilot's client has
-// stored in its configuration file; empty when the file or the key is
-// missing.
-func storedEndpoint(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("read SkyPilot's configuration: %w", err)
-	}
-	var config struct {
-		APIServer struct {
-			Endpoint string `yaml:"endpoint"`
-		} `yaml:"api_server"`
-	}
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return "", fmt.Errorf("read SkyPilot's configuration %s: %w. Fix or remove the file and run `axon login` again.", path, err)
-	}
-	return strings.TrimSpace(config.APIServer.Endpoint), nil
-}
-
-// skyLogin runs sky api login against endpoint, which stores the endpoint
-// in SkyPilot's configuration. The server already reports the user's
-// identity, so it opens no browser.
-func (l *login) skyLogin(ctx context.Context, opts Options, skyPath, endpoint string) error {
-	parent := ctx
-	ctx, cancel := context.WithTimeout(parent, skyLoginWait)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, skyPath, "api", "login", "-e", endpoint)
-	cmd.Env = skyEnv(l.environ())
-	interrupt.Stop(ctx, cmd, skyWaitDelay)
-	cmd.Stdout = opts.Out
-	cmd.Stderr = opts.Err
-
-	fmt.Fprintf(opts.Out, "sky: pointing the SkyPilot client at %s\n", endpoint)
-	runErr := cmd.Run()
-	// The caller's own cancellation or deadline comes first; the message
-	// about the wait is only for the wait login sets here.
-	if err := parent.Err(); err != nil {
-		return err
-	}
-	if ctx.Err() != nil {
-		return fmt.Errorf("the SkyPilot login did not finish within %s. Run `axon login` again.", formatWait(skyLoginWait))
-	}
-	if runErr != nil {
-		return fmt.Errorf("the SkyPilot login failed (%v). Run `axon login` again.", runErr)
-	}
-	return nil
 }

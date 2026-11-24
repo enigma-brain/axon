@@ -7,16 +7,12 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
-	"github.com/enigma-brain/axon/internal/interrupt"
+	"github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -40,9 +36,6 @@ const (
 // errLogoutFailed ends a logout in which a step failed.
 var errLogoutFailed = errors.New("logout did not finish. Run `axon logout` again.")
 
-// skyLogoutWait bounds sky api logout, which changes local files only.
-const skyLogoutWait = time.Minute
-
 // LogoutOptions are the outputs of one logout.
 type LogoutOptions struct {
 	// Out is where the line of each step is written.
@@ -54,16 +47,9 @@ type LogoutOptions struct {
 // logout holds what one run of axon logout works with. Logout fills it
 // with the real directory and tools; tests replace each part.
 type logout struct {
-	dir    axondir.Dir
-	client client
-	// skyConfig is SkyPilot's user configuration file, where sky api
-	// login stores the endpoint.
-	skyConfig string
-	// cookieFile is SkyPilot's cookie file, where the client keeps the
-	// API server's session cookie.
-	cookieFile string
-	// environ is the environment sky api logout starts from.
-	environ func() []string
+	dir axondir.Dir
+	// sky is what logout does with SkyPilot.
+	sky sky.Connector
 	// findTsh returns the path of the tsh on PATH.
 	findTsh func() (string, error)
 	// tshLogout ends the Teleport session for a proxy.
@@ -78,21 +64,13 @@ type logout struct {
 // pathway's tunnel and the recorded one, ends the Teleport session of the connected pathway, and
 // removes the records of the connection. It keeps the config files and the
 // active pathway. It works by axon's own records alone, never by a config
-// file.
-func Logout(ctx context.Context, opts LogoutOptions) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("find the home directory: %w", err)
-	}
-	dir := axondir.New(home)
+// file. dir is the user's axon directory.
+func Logout(ctx context.Context, dir axondir.Dir, opts LogoutOptions) error {
 	lo := &logout{
-		dir:        dir,
-		client:     skyClient{dir: dir},
-		skyConfig:  skyConfigPath(home, os.Getenv),
-		cookieFile: apiserver.CookieFile(home, os.Getenv),
-		environ:    os.Environ,
-		findTsh:    tsh.Find,
-		tshLogout:  tsh.Logout,
+		dir:       dir,
+		sky:       sky.NewConnector(dir, os.Getenv),
+		findTsh:   tsh.Find,
+		tshLogout: tsh.Logout,
 		newTunnel: func(stateDir, proxy, app string) *tunnel.Tunnel {
 			// Stopping needs no tsh: only a start runs it.
 			return tunnel.New(stateDir, "", proxy, app)
@@ -166,7 +144,7 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 	// 2. The API server's cookies, which sky api logout leaves in the
 	// cookie file. Only a direct pathway records an endpoint.
 	if hasRecord && rec.SkyEndpoint != "" {
-		n, err := apiserver.RemoveCookies(lo.cookieFile, rec.SkyEndpoint)
+		n, err := apiserver.RemoveCookies(lo.sky.CookieFile, rec.SkyEndpoint)
 		switch {
 		case err != nil:
 			fail("remove the saved SkyPilot login", err)
@@ -213,46 +191,21 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 	return nil
 }
 
-// skyLogout runs sky api logout with axon's own client, unless the client
-// is not installed or stores no endpoint, in which case it says why it
-// skipped. It never installs the client.
+// skyLogout logs the SkyPilot client out and writes the line for what it
+// did.
 func (lo *logout) skyLogout(ctx context.Context, opts LogoutOptions) error {
-	_, installed, err := lo.client.Version()
+	outcome, err := lo.sky.Logout(ctx)
 	if err != nil {
 		return err
 	}
-	if !installed {
+	switch outcome {
+	case sky.NoClient:
 		fmt.Fprintln(opts.Out, lineSkyNoClient)
-		return nil
-	}
-	// With no stored endpoint, sky api logout takes the endpoint for a
-	// server on the laptop and fails.
-	endpoint, err := storedEndpoint(lo.skyConfig)
-	if err != nil {
-		return err
-	}
-	if endpoint == "" {
+	case sky.NoLogin:
 		fmt.Fprintln(opts.Out, lineSkyNoLogin)
-		return nil
+	default:
+		fmt.Fprintln(opts.Out, lineSkyLoggedOut)
 	}
-	skyPath, err := lo.client.Path()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(ctx, skyLogoutWait)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, skyPath, "api", "logout")
-	// sky api logout refuses to run while the endpoint variable is set.
-	cmd.Env = skyEnv(lo.environ())
-	interrupt.Stop(ctx, cmd, skyWaitDelay)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		if msg := strings.TrimSpace(string(out)); msg != "" {
-			return fmt.Errorf("sky api logout: %w: %s", err, msg)
-		}
-		return fmt.Errorf("sky api logout: %w", err)
-	}
-	fmt.Fprintln(opts.Out, lineSkyLoggedOut)
 	return nil
 }
 
@@ -311,17 +264,4 @@ func stopTunnels(w io.Writer, stateDir string, tn *tunnel.Tunnel) error {
 		}
 	}
 	return tunnel.StopRecorded(stateDir)
-}
-
-// skyConfigPath returns SkyPilot's user configuration file as the client
-// resolves it: the file SKYPILOT_GLOBAL_CONFIG names, when it is set, and
-// ~/.sky/config.yaml otherwise.
-func skyConfigPath(home string, getenv func(string) string) string {
-	if path := getenv("SKYPILOT_GLOBAL_CONFIG"); path != "" {
-		if path == "~" || strings.HasPrefix(path, "~/") {
-			return filepath.Join(home, strings.TrimPrefix(path, "~"))
-		}
-		return path
-	}
-	return filepath.Join(home, ".sky", "config.yaml")
 }
