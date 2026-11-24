@@ -8,7 +8,7 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/skyclient"
 )
 
@@ -39,7 +39,7 @@ func (c skyClient) Path() (string, error) { return skyclient.Path(c.dir) }
 // is installed, connect and log it in by the pathway's steps, verify the
 // identity the server reports and record the email, and sync the client's
 // version with the server's.
-func (l *login) connectSky(ctx context.Context, p orgfile.Pathway, opts Options) error {
+func (l *login) connectSky(ctx context.Context, p configfile.Pathway, opts Options) error {
 	// 1. The client is installed.
 	version, installed, err := l.client.Version()
 	if err != nil {
@@ -54,7 +54,7 @@ func (l *login) connectSky(ctx context.Context, p orgfile.Pathway, opts Options)
 		}
 		return fmt.Errorf("install the SkyPilot client: %w. Check your network and run `axon login` again.", err)
 	}
-	sky, err := l.client.Path()
+	skyPath, err := l.client.Path()
 	if err != nil {
 		return fmt.Errorf("find the SkyPilot client: %w. Run `axon login` again.", err)
 	}
@@ -63,9 +63,9 @@ func (l *login) connectSky(ctx context.Context, p orgfile.Pathway, opts Options)
 	endpoint := l.endpoint(p)
 	var health apiserver.Health
 	switch p.Kind {
-	case orgfile.KindDirect:
-		health, err = l.connectDirect(ctx, p, opts, sky, version)
-	case orgfile.KindTeleport:
+	case configfile.KindDirect:
+		health, err = l.connectDirect(ctx, p, opts, skyPath, version)
+	case configfile.KindTeleport:
 		// On this kind Teleport supplies the identity, so the identity
 		// check and the version sync below need no SkyPilot login: sky api
 		// login runs after them, with the client at the server's version.
@@ -83,7 +83,7 @@ func (l *login) connectSky(ctx context.Context, p orgfile.Pathway, opts Options)
 		// through the tunnel the request needs no login, and whatever holds
 		// the local port is not known to be the tunnel.
 		var cookies string
-		if p.Kind == orgfile.KindDirect {
+		if p.Kind == configfile.KindDirect {
 			cookies = l.cookieFile
 		}
 		health, err = l.health(ctx, endpoint, apiserver.Options{ClientVersion: version, CookieFile: cookies})
@@ -113,11 +113,11 @@ func (l *login) connectSky(ctx context.Context, p orgfile.Pathway, opts Options)
 	}
 
 	// A teleport pathway's last step, with the synced client.
-	if p.Kind == orgfile.KindTeleport {
-		if sky, err = l.client.Path(); err != nil {
+	if p.Kind == configfile.KindTeleport {
+		if skyPath, err = l.client.Path(); err != nil {
 			return fmt.Errorf("find the SkyPilot client: %w. Run `axon login` again.", err)
 		}
-		if err := l.pointClient(ctx, p, opts, sky); err != nil {
+		if err := l.pointClient(ctx, p, opts, skyPath); err != nil {
 			return err
 		}
 	}

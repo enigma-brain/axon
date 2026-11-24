@@ -14,8 +14,8 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/enigma-brain/axon/internal/apiserver"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/netreason"
-	"github.com/enigma-brain/axon/internal/orgfile"
 	"github.com/enigma-brain/axon/internal/tsh"
 )
 
@@ -28,7 +28,7 @@ const maxFileID = 32
 
 // handMade is the answers a hand-made pathway is made from.
 type handMade struct {
-	kind orgfile.Kind
+	kind configfile.Kind
 	// endpoint is the API server's https address, on a direct pathway.
 	endpoint string
 	// proxy and app are the Teleport proxy and application, on a teleport
@@ -40,7 +40,7 @@ type handMade struct {
 // address is what the default name and the messages call the pathway's
 // server: the endpoint's host, or the proxy.
 func (h handMade) address() string {
-	if h.kind == orgfile.KindTeleport {
+	if h.kind == configfile.KindTeleport {
 		return h.proxy
 	}
 	u, err := url.Parse(h.endpoint)
@@ -117,7 +117,7 @@ func cleanProxy(s string) (string, error) {
 	} else {
 		proxy = strings.TrimSuffix(proxy, ".")
 	}
-	if tsh.CheckProxy(proxy) != nil || !orgfile.IsHostPort(proxy) {
+	if tsh.CheckProxy(proxy) != nil || !configfile.IsHostPort(proxy) {
 		return "", fmt.Errorf(msgNotHostPort, s)
 	}
 	return proxy, nil
@@ -198,7 +198,7 @@ func skyProbeResult(ctx context.Context, err error) error {
 // fitting where the answers came from: the prompt, or the flags.
 func (l *login) probe(ctx context.Context, h handMade, fromFlags bool, out io.Writer) error {
 	var err error
-	if h.kind == orgfile.KindTeleport {
+	if h.kind == configfile.KindTeleport {
 		fmt.Fprintf(out, msgChecking, h.proxy)
 		err = l.probeProxy(ctx, h.proxy)
 	} else {
@@ -221,9 +221,9 @@ func (l *login) probe(ctx context.Context, h handMade, fromFlags bool, out io.Wr
 		reason = netreason.Short(unreachable.Err)
 	}
 	switch {
-	case h.kind == orgfile.KindTeleport && fromFlags:
+	case h.kind == configfile.KindTeleport && fromFlags:
 		return fmt.Errorf(msgFlagProxyUnreachable, h.proxy, reason)
-	case h.kind == orgfile.KindTeleport:
+	case h.kind == configfile.KindTeleport:
 		return fmt.Errorf(strings.TrimSuffix(msgProxyUnreachable, "\n"), h.proxy, reason)
 	case notSkyPilot && fromFlags:
 		return fmt.Errorf(msgFlagSkyNotSkyPilot, h.endpoint, reason)
@@ -237,42 +237,42 @@ func (l *login) probe(ctx context.Context, h handMade, fromFlags bool, out io.Wr
 }
 
 // makeFromFlags makes the pathway the flags give, once its server answers.
-func (l *login) makeFromFlags(ctx context.Context, opts Options) (orgfile.File, error) {
+func (l *login) makeFromFlags(ctx context.Context, opts Options) (configfile.File, error) {
 	bad := func(flag string, err error) error { return fmt.Errorf(msgBadFlag, flag, err) }
 	var h handMade
 	var err error
 	if opts.SkyEndpoint != "" {
-		h.kind = orgfile.KindDirect
+		h.kind = configfile.KindDirect
 		if h.endpoint, err = cleanEndpoint(opts.SkyEndpoint); err != nil {
-			return orgfile.File{}, bad("sky-endpoint", err)
+			return configfile.File{}, bad("sky-endpoint", err)
 		}
 	} else {
-		h.kind = orgfile.KindTeleport
+		h.kind = configfile.KindTeleport
 		if h.proxy, err = cleanProxy(opts.TeleportProxy); err != nil {
-			return orgfile.File{}, bad("teleport-proxy", err)
+			return configfile.File{}, bad("teleport-proxy", err)
 		}
 		h.app = defaultApp
 		if opts.SkyApp != "" {
 			if h.app, err = cleanApp(opts.SkyApp); err != nil {
-				return orgfile.File{}, bad("sky-app", err)
+				return configfile.File{}, bad("sky-app", err)
 			}
 		}
 	}
 	h.name = h.address()
 	if opts.Name != "" {
 		if h.name, err = cleanName(opts.Name); err != nil {
-			return orgfile.File{}, bad("name", err)
+			return configfile.File{}, bad("name", err)
 		}
 	}
 	if err := l.probe(ctx, h, true, opts.Out); err != nil {
-		return orgfile.File{}, err
+		return configfile.File{}, err
 	}
 	return l.storeHandMade(h, opts)
 }
 
 // makeAtPrompt asks for a pathway and makes it, asking for an address
 // again until its server answers.
-func (l *login) makeAtPrompt(ctx context.Context, opts Options) (orgfile.File, error) {
+func (l *login) makeAtPrompt(ctx context.Context, opts Options) (configfile.File, error) {
 	in, out := opts.In, opts.Out
 	fmt.Fprint(out, msgPromptIntro)
 	var h handMade
@@ -280,13 +280,13 @@ func (l *login) makeAtPrompt(ctx context.Context, opts Options) (orgfile.File, e
 		fmt.Fprint(out, msgKindQuestion)
 		answer, err := askLine(in, out, msgKindPrompt)
 		if err != nil {
-			return orgfile.File{}, err
+			return configfile.File{}, err
 		}
 		switch answer {
 		case "1":
-			h.kind = orgfile.KindDirect
+			h.kind = configfile.KindDirect
 		case "2":
-			h.kind = orgfile.KindTeleport
+			h.kind = configfile.KindTeleport
 		default:
 			fmt.Fprintf(out, msgNotAKind, answer)
 		}
@@ -294,32 +294,32 @@ func (l *login) makeAtPrompt(ctx context.Context, opts Options) (orgfile.File, e
 
 	for {
 		var err error
-		if h.kind == orgfile.KindDirect {
+		if h.kind == configfile.KindDirect {
 			h.endpoint, err = askValid(in, out, msgEndpointPrompt, "", cleanEndpoint)
 		} else {
 			h.proxy, err = askValid(in, out, msgProxyPrompt, "", cleanProxy)
 		}
 		if err != nil {
-			return orgfile.File{}, err
+			return configfile.File{}, err
 		}
 		err = l.probe(ctx, h, false, out)
 		if err == nil {
 			break
 		}
 		if ctx.Err() != nil {
-			return orgfile.File{}, ctx.Err()
+			return configfile.File{}, ctx.Err()
 		}
 		fmt.Fprintln(out, err)
 	}
-	if h.kind == orgfile.KindTeleport {
+	if h.kind == configfile.KindTeleport {
 		var err error
 		if h.app, err = askValid(in, out, fmt.Sprintf(msgAppPrompt, defaultApp), defaultApp, cleanApp); err != nil {
-			return orgfile.File{}, err
+			return configfile.File{}, err
 		}
 	}
 	var err error
 	if h.name, err = askValid(in, out, fmt.Sprintf(msgNamePrompt, h.address()), h.address(), cleanName); err != nil {
-		return orgfile.File{}, err
+		return configfile.File{}, err
 	}
 	return l.storeHandMade(h, opts)
 }
@@ -365,35 +365,35 @@ func askValid(in io.Reader, out io.Writer, prompt, def string, clean func(string
 // storeHandMade writes h as a config file and stores it as hand-made,
 // asking first about each stored pathway it clashes with. When the user
 // keeps a stored pathway of the same name, it asks for another name.
-func (l *login) storeHandMade(h handMade, opts Options) (orgfile.File, error) {
-	store := orgfile.NewStore(l.dir)
+func (l *login) storeHandMade(h handMade, opts Options) (configfile.File, error) {
+	store := configfile.NewStore(l.dir)
 	for {
 		id := identifier(h.name)
 		fid, err := fileID(store, id, nil)
 		if err != nil {
-			return orgfile.File{}, err
+			return configfile.File{}, err
 		}
 		data, err := handMadeFile(fid, id, h)
 		if err != nil {
-			return orgfile.File{}, err
+			return configfile.File{}, err
 		}
 		change, err := store.Inspect(data, true)
 		if err != nil {
-			return orgfile.File{}, err
+			return configfile.File{}, err
 		}
 		outcome, err := resolveClashes(store, change, opts.Replace, opts.In, opts.Out)
 		var noTerminal *errClashNoTerminal
 		if errors.As(err, &noTerminal) {
 			c := noTerminal.clash
-			return orgfile.File{}, fmt.Errorf(msgPathwayClashNoTerminal, c.Pathway.Name, store.Path(c.Stored.ID))
+			return configfile.File{}, fmt.Errorf(msgPathwayClashNoTerminal, c.Pathway.Name, store.Path(c.Stored.ID))
 		}
 		if err != nil {
-			return orgfile.File{}, err
+			return configfile.File{}, err
 		}
 		if outcome.declined != nil {
 			fmt.Fprint(opts.Out, msgChooseName)
 			if h.name, err = askValid(opts.In, opts.Out, fmt.Sprintf(msgNamePrompt, h.address()), h.address(), cleanName); err != nil {
-				return orgfile.File{}, err
+				return configfile.File{}, err
 			}
 			continue
 		}
@@ -401,17 +401,17 @@ func (l *login) storeHandMade(h handMade, opts Options) (orgfile.File, error) {
 		// With the files to remove known, the file takes the plain
 		// identifier when its holder is one of them.
 		if fid, err = fileID(store, id, outcome.remove); err != nil {
-			return orgfile.File{}, err
+			return configfile.File{}, err
 		}
 		if data, err = handMadeFile(fid, id, h); err != nil {
-			return orgfile.File{}, err
+			return configfile.File{}, err
 		}
 		if err := l.leaveRemoved(outcome.remove, opts); err != nil {
-			return orgfile.File{}, err
+			return configfile.File{}, err
 		}
-		f, err := store.Put(data, orgfile.PutOptions{Origin: orgfile.HandMade, Remove: outcome.remove})
+		f, err := store.Put(data, configfile.PutOptions{Origin: configfile.HandMade, Remove: outcome.remove})
 		if err != nil {
-			return orgfile.File{}, err
+			return configfile.File{}, err
 		}
 		reportRemoved(store, change, outcome.remove, opts.Out)
 		fmt.Fprintf(opts.Out, msgStoredPathway, h.name, store.Path(f.ID))
@@ -423,7 +423,7 @@ func (l *login) storeHandMade(h handMade, opts Options) (orgfile.File, error) {
 // is id: id itself, cut to the longest a file identifier can be and
 // starting with a letter, with -2, -3 and so on added while a stored file
 // other than one in remove has it.
-func fileID(store orgfile.Store, id string, remove []orgfile.File) (string, error) {
+func fileID(store configfile.Store, id string, remove []configfile.File) (string, error) {
 	base := id
 	if base[0] >= '0' && base[0] <= '9' {
 		base = "p-" + base
@@ -489,7 +489,7 @@ type handMadeSky struct {
 // one pathway has the identifier id.
 func handMadeFile(fileID, id string, h handMade) ([]byte, error) {
 	p := handMadePathway{ID: id, Kind: string(h.kind), Name: h.name}
-	if h.kind == orgfile.KindTeleport {
+	if h.kind == configfile.KindTeleport {
 		p.Description = fmt.Sprintf(descTeleport, h.proxy, h.app)
 		p.Teleport = &handMadeTeleport{Proxy: h.proxy}
 		p.Sky.App = h.app
@@ -498,7 +498,7 @@ func handMadeFile(fileID, id string, h handMade) ([]byte, error) {
 		p.Sky.Endpoint = h.endpoint
 	}
 	var buf bytes.Buffer
-	err := toml.NewEncoder(&buf).Encode(handMadeTOML{Format: orgfile.Format, ID: fileID, Pathway: []handMadePathway{p}})
+	err := toml.NewEncoder(&buf).Encode(handMadeTOML{Format: configfile.Format, ID: fileID, Pathway: []handMadePathway{p}})
 	if err != nil {
 		return nil, fmt.Errorf("write the pathway's file: %w", err)
 	}

@@ -1,4 +1,4 @@
-package orgfile
+package configfile
 
 import (
 	"errors"
@@ -95,14 +95,14 @@ func TestHandMadeRecordHasNoSource(t *testing.T) {
 	}
 }
 
-// directOrg returns a file fileID with one direct pathway.
-func directOrg(fileID, id, name, endpoint string) string {
+// directConfig returns a file fileID with one direct pathway.
+func directConfig(fileID, id, name, endpoint string) string {
 	return "format = 2\nid = \"" + fileID + "\"\n\n[[pathway]]\nid = \"" + id + "\"\nkind = \"direct\"\nname = \"" + name +
 		"\"\ndescription = \"D\"\n[pathway.sky]\nendpoint = \"" + endpoint + "\"\n"
 }
 
-// teleportOrg returns a file fileID with one teleport pathway.
-func teleportOrg(fileID, id, name, proxy, app string) string {
+// teleportConfig returns a file fileID with one teleport pathway.
+func teleportConfig(fileID, id, name, proxy, app string) string {
 	return "format = 2\nid = \"" + fileID + "\"\n\n[[pathway]]\nid = \"" + id + "\"\nkind = \"teleport\"\nname = \"" + name +
 		"\"\ndescription = \"D\"\n[pathway.teleport]\nproxy = \"" + proxy + "\"\n[pathway.sky]\napp = \"" + app + "\"\n"
 }
@@ -112,13 +112,13 @@ func TestInspectClashes(t *testing.T) {
 		name, stored, added string
 		want                []bool // SameName of each clash
 	}{
-		{"same name, any case", directOrg("a", "one", "Campus", "https://a.example.org"), directOrg("b", "two", "campus ", "https://b.example.org"), []bool{true}},
-		{"same identifier", directOrg("a", "one", "A", "https://a.example.org"), directOrg("b", "one", "B", "https://b.example.org"), []bool{true}},
-		{"same endpoint", directOrg("a", "one", "A", "https://Sky.example.org/"), directOrg("b", "two", "B", "https://sky.example.org"), []bool{false}},
-		{"same proxy and app", teleportOrg("a", "one", "A", "tp.example.org", "skypilot"), teleportOrg("b", "two", "B", "TP.example.org:443", "skypilot"), []bool{false}},
-		{"another app", teleportOrg("a", "one", "A", "tp.example.org", "skypilot"), teleportOrg("b", "two", "B", "tp.example.org", "other"), nil},
-		{"another port", teleportOrg("a", "one", "A", "tp.example.org", "skypilot"), teleportOrg("b", "two", "B", "tp.example.org:3080", "skypilot"), nil},
-		{"same id is an update", directOrg("a", "one", "A", "https://a.example.org"), directOrg("a", "one", "A", "https://a.example.org"), nil},
+		{"same name, any case", directConfig("a", "one", "Campus", "https://a.example.org"), directConfig("b", "two", "campus ", "https://b.example.org"), []bool{true}},
+		{"same identifier", directConfig("a", "one", "A", "https://a.example.org"), directConfig("b", "one", "B", "https://b.example.org"), []bool{true}},
+		{"same endpoint", directConfig("a", "one", "A", "https://Sky.example.org/"), directConfig("b", "two", "B", "https://sky.example.org"), []bool{false}},
+		{"same proxy and app", teleportConfig("a", "one", "A", "tp.example.org", "skypilot"), teleportConfig("b", "two", "B", "TP.example.org:443", "skypilot"), []bool{false}},
+		{"another app", teleportConfig("a", "one", "A", "tp.example.org", "skypilot"), teleportConfig("b", "two", "B", "tp.example.org", "other"), nil},
+		{"another port", teleportConfig("a", "one", "A", "tp.example.org", "skypilot"), teleportConfig("b", "two", "B", "tp.example.org:3080", "skypilot"), nil},
+		{"same id is an update", directConfig("a", "one", "A", "https://a.example.org"), directConfig("a", "one", "A", "https://a.example.org"), nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, _ := newStore(t)
@@ -140,9 +140,9 @@ func TestInspectClashes(t *testing.T) {
 
 func TestPutRemovesAndStores(t *testing.T) {
 	s, home := newStore(t)
-	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
-	add(t, s, directOrg("keep", "keep", "Keep", "https://k.example.org"), "-")
-	added := directOrg("b", "two", "Campus", "https://b.example.org")
+	add(t, s, directConfig("a", "one", "Campus", "https://a.example.org"), "-")
+	add(t, s, directConfig("keep", "keep", "Keep", "https://k.example.org"), "-")
+	added := directConfig("b", "two", "Campus", "https://b.example.org")
 
 	if _, err := s.Put([]byte(added), PutOptions{Origin: FromSource(mustSource(t, "-"))}); !errors.As(err, new(*ClashError)) {
 		t.Fatalf("Put without removing = %v, want a clash", err)
@@ -165,8 +165,8 @@ func TestPutRemovesAndStores(t *testing.T) {
 
 func TestPutKeepsBothOnAServerClash(t *testing.T) {
 	s, _ := newStore(t)
-	add(t, s, directOrg("a", "one", "A", "https://sky.example.org"), "-")
-	add(t, s, directOrg("b", "two", "B", "https://sky.example.org"), "-")
+	add(t, s, directConfig("a", "one", "A", "https://sky.example.org"), "-")
+	add(t, s, directConfig("b", "two", "B", "https://sky.example.org"), "-")
 	files, _, _ := s.List()
 	if len(files) != 2 {
 		t.Errorf("stored %v, want both", pathwayIDs(files))
@@ -199,26 +199,26 @@ func TestLowerRevision(t *testing.T) {
 
 func TestRefreshWithANameClashIsRefused(t *testing.T) {
 	s, _ := newStore(t)
-	add(t, s, directOrg("org", "a", "A", "https://a.example.org"), refreshAddress)
-	add(t, s, directOrg("other", "b", "B", "https://b.example.org"), "-")
-	if _, _, err := s.Refresh("org", []byte(directOrg("org", "a", "b", "https://a.example.org")), mustSource(t, refreshAddress), false); !errors.As(err, new(*ClashError)) {
+	add(t, s, directConfig("example", "a", "A", "https://a.example.org"), refreshAddress)
+	add(t, s, directConfig("other", "b", "B", "https://b.example.org"), "-")
+	if _, _, err := s.Refresh("example", []byte(directConfig("example", "a", "b", "https://a.example.org")), mustSource(t, refreshAddress), false); !errors.As(err, new(*ClashError)) {
 		t.Errorf("Refresh with a name clash = %v", err)
 	}
-	if _, _, err := s.Refresh("org", []byte(directOrg("org", "a", "A", "https://b.example.org")), mustSource(t, refreshAddress), false); err != nil {
+	if _, _, err := s.Refresh("example", []byte(directConfig("example", "a", "A", "https://b.example.org")), mustSource(t, refreshAddress), false); err != nil {
 		t.Errorf("Refresh with a server clash = %v", err)
 	}
 }
 
 func TestSameIDAsAHandMadeFileClashes(t *testing.T) {
 	s, _ := newStore(t)
-	if _, err := s.Put([]byte(directOrg("lab", "mine", "Mine", "https://m.example.org")), PutOptions{Origin: HandMade}); err != nil {
+	if _, err := s.Put([]byte(directConfig("lab", "mine", "Mine", "https://m.example.org")), PutOptions{Origin: HandMade}); err != nil {
 		t.Fatal(err)
 	}
-	c, err := s.Inspect([]byte(directOrg("lab", "theirs", "Theirs", "https://t.example.org")), false)
+	c, err := s.Inspect([]byte(directConfig("lab", "theirs", "Theirs", "https://t.example.org")), false)
 	if err != nil || c.Previous != nil || len(c.Clashes) != 1 || !c.Clashes[0].SameFileID || !c.Clashes[0].StoredHandMade {
 		t.Fatalf("Inspect = %+v, %v", c, err)
 	}
-	if _, err := s.Add([]byte(directOrg("lab", "theirs", "Theirs", "https://t.example.org")), mustSource(t, "-")); !errors.As(err, new(*ClashError)) {
+	if _, err := s.Add([]byte(directConfig("lab", "theirs", "Theirs", "https://t.example.org")), mustSource(t, "-")); !errors.As(err, new(*ClashError)) {
 		t.Errorf("Add over a hand-made file = %v", err)
 	}
 }
@@ -227,8 +227,8 @@ func TestSameIDAsAHandMadeFileClashes(t *testing.T) {
 // and nothing is stored.
 func TestPutRefusesToRemoveAFileThatChanged(t *testing.T) {
 	s, home := newStore(t)
-	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
-	added := directOrg("b", "two", "Campus", "https://b.example.org")
+	add(t, s, directConfig("a", "one", "Campus", "https://a.example.org"), "-")
+	added := directConfig("b", "two", "Campus", "https://b.example.org")
 	c, err := s.Inspect([]byte(added), false)
 	if err != nil {
 		t.Fatal(err)
@@ -250,8 +250,8 @@ func TestPutRefusesToRemoveAFileThatChanged(t *testing.T) {
 // and the stored file to remove for it, as Inspect gives it.
 func clashing(t *testing.T, s Store) ([]byte, File) {
 	t.Helper()
-	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
-	added := []byte(directOrg("b", "two", "Campus", "https://b.example.org"))
+	add(t, s, directConfig("a", "one", "Campus", "https://a.example.org"), "-")
+	added := []byte(directConfig("b", "two", "Campus", "https://b.example.org"))
 	c, err := s.Inspect(added, false)
 	if err != nil || len(c.Clashes) != 1 {
 		t.Fatalf("Inspect = %+v, %v", c, err)
@@ -343,7 +343,7 @@ func TestRollbackContinuesAfterAStepFails(t *testing.T) {
 // a later add or replacement.
 func TestALeftoverRemovingFileIsIgnored(t *testing.T) {
 	s, home := newStore(t)
-	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
+	add(t, s, directConfig("a", "one", "Campus", "https://a.example.org"), "-")
 	for _, p := range []string{s.Path("a"), filepath.Join(home, ".axon", "state", "configs", "a.toml")} {
 		data, _ := os.ReadFile(p)
 		if err := os.WriteFile(p+removingExt, data, 0o600); err != nil {
@@ -356,9 +356,9 @@ func TestALeftoverRemovingFileIsIgnored(t *testing.T) {
 	if err != nil || len(problems) != 0 || len(files) != 1 {
 		t.Fatalf("List = %v, %v, %v", pathwayIDs(files), problems, err)
 	}
-	add(t, s, directOrg("c", "three", "C", "https://c.example.org"), "-")
+	add(t, s, directConfig("c", "three", "C", "https://c.example.org"), "-")
 	// A replacement sets the file aside again over the leftover.
-	added := []byte(directOrg("b", "two", "Campus", "https://b.example.org"))
+	added := []byte(directConfig("b", "two", "Campus", "https://b.example.org"))
 	c, err := s.Inspect(added, false)
 	if err != nil {
 		t.Fatal(err)

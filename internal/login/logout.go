@@ -14,8 +14,8 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
-	"github.com/enigma-brain/axon/internal/orgfile"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -161,7 +161,7 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 
 	// 4. The Teleport session of the connected pathway.
 	switch {
-	case hasRecord && rec.Kind == string(orgfile.KindTeleport) && rec.TeleportProxy != "":
+	case hasRecord && rec.Kind == string(configfile.KindTeleport) && rec.TeleportProxy != "":
 		if err := lo.teleportLogout(ctx, opts, rec.TeleportProxy); err != nil {
 			fail("log out of Teleport", err)
 		}
@@ -207,13 +207,13 @@ func (lo *logout) skyLogout(ctx context.Context, opts LogoutOptions) error {
 		fmt.Fprintln(opts.Out, lineSkyNoLogin)
 		return nil
 	}
-	sky, err := lo.client.Path()
+	skyPath, err := lo.client.Path()
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, skyLogoutWait)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, sky, "api", "logout")
+	cmd := exec.CommandContext(ctx, skyPath, "api", "logout")
 	// sky api logout refuses to run while the endpoint variable is set.
 	cmd.Env = withoutVars(lo.environ(), endpointVar)
 	cmd.WaitDelay = skyWaitDelay

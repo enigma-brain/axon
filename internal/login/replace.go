@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 )
 
 // errNoAnswer reports a question that got no answer: its input ended, as
@@ -45,20 +45,20 @@ func askYesNo(in io.Reader, out io.Writer, question string) (bool, error) {
 // clashOutcome is what the questions about a change's clashes decided.
 type clashOutcome struct {
 	// remove holds the stored files to remove, as the question showed them.
-	remove []orgfile.File
+	remove []configfile.File
 	// declined is the first name clash whose replacement was declined, or
 	// nil when every name clash is to be replaced.
-	declined *orgfile.Clash
+	declined *configfile.Clash
 }
 
 // errClashNoTerminal is the stop on a clash with no answer to read.
-type errClashNoTerminal struct{ clash orgfile.Clash }
+type errClashNoTerminal struct{ clash configfile.Clash }
 
 // resolveClashes asks, once per stored file, whether to replace each stored
 // file a pathway of change clashes with. With replace, every answer is yes
 // and nothing is asked. Removal is not done here: the caller passes the
-// outcome's remove to orgfile.Store.Put.
-func resolveClashes(store orgfile.Store, change orgfile.Change, replace bool, in io.Reader, out io.Writer) (clashOutcome, error) {
+// outcome's remove to configfile.Store.Put.
+func resolveClashes(store configfile.Store, change configfile.Change, replace bool, in io.Reader, out io.Writer) (clashOutcome, error) {
 	var outcome clashOutcome
 	several := len(change.File.Pathways) > 1
 	for _, group := range groupClashes(change.Clashes) {
@@ -99,8 +99,8 @@ func resolveClashes(store orgfile.Store, change orgfile.Change, replace bool, in
 func (e *errClashNoTerminal) Error() string { return "a clash with no terminal to ask on" }
 
 // groupClashes groups clashes by stored file, keeping their order.
-func groupClashes(clashes []orgfile.Clash) [][]orgfile.Clash {
-	var groups [][]orgfile.Clash
+func groupClashes(clashes []configfile.Clash) [][]configfile.Clash {
+	var groups [][]configfile.Clash
 	index := map[string]int{}
 	for _, c := range clashes {
 		i, ok := index[c.Stored.ID]
@@ -116,12 +116,12 @@ func groupClashes(clashes []orgfile.Clash) [][]orgfile.Clash {
 
 // clashQuestion is the text before the question about one clash: what
 // clashes and what replacing it removes.
-func clashQuestion(store orgfile.Store, c orgfile.Clash, several bool) string {
+func clashQuestion(store configfile.Store, c configfile.Clash, several bool) string {
 	var reason string
 	switch {
 	case c.SameName:
 		reason = msgClashName
-	case c.Pathway.Kind == orgfile.KindTeleport:
+	case c.Pathway.Kind == configfile.KindTeleport:
 		reason = fmt.Sprintf(msgClashTeleport, c.Pathway.Teleport.Proxy, c.Pathway.Sky.App)
 	default:
 		reason = fmt.Sprintf(msgClashDirect, c.Pathway.Sky.Endpoint)
@@ -151,7 +151,7 @@ func nameList(names []string) string {
 }
 
 // reportRemoved writes one line for each stored file a change removed.
-func reportRemoved(store orgfile.Store, change orgfile.Change, removed []orgfile.File, out io.Writer) {
+func reportRemoved(store configfile.Store, change configfile.Change, removed []configfile.File, out io.Writer) {
 	gone := map[string]bool{}
 	for _, f := range removed {
 		gone[f.ID] = true
@@ -171,7 +171,7 @@ func reportRemoved(store orgfile.Store, change orgfile.Change, removed []orgfile
 
 // leaveRemoved leaves the active pathway, as a switch of pathway does,
 // when it is in a stored file about to be removed.
-func (l *login) leaveRemoved(removed []orgfile.File, opts Options) error {
+func (l *login) leaveRemoved(removed []configfile.File, opts Options) error {
 	if len(removed) == 0 {
 		return nil
 	}
@@ -196,7 +196,7 @@ func (l *login) leaveRemoved(removed []orgfile.File, opts Options) error {
 }
 
 // revisionText is "revision N", or "no revision" for a file without one.
-func revisionText(f orgfile.File) string {
+func revisionText(f configfile.File) string {
 	if !f.HasRevision {
 		return msgNoRevision
 	}
@@ -205,7 +205,7 @@ func revisionText(f orgfile.File) string {
 
 // reportStored writes the line for a stored config file: stored, or
 // updated from previous when previous is not nil.
-func reportStored(out io.Writer, path string, f orgfile.File, previous *orgfile.File) {
+func reportStored(out io.Writer, path string, f configfile.File, previous *configfile.File) {
 	switch {
 	case previous == nil && f.HasRevision:
 		fmt.Fprintf(out, msgStoredFileRevision, path, f.Revision)

@@ -101,13 +101,13 @@ func TestLogoutTeleport(t *testing.T) {
 	if r.err != nil {
 		t.Fatalf("logout: %v\n%s", r.err, r.errOut.String())
 	}
-	orgs := filepath.Join(h.home, ".axon", "configs")
+	configs := filepath.Join(h.home, ".axon", "configs")
 	wantLines(t, r.out.String(),
 		lineSkyLoggedOut,
 		"sky: stopping the Teleport tunnel on port 46581",
 		"teleport: logged out of teleport.example.org",
 		lineRemoved,
-		"Kept the config files in "+orgs+"; run `axon login` to log in again",
+		"Kept the config files in "+configs+"; run `axon login` to log in again",
 	)
 	if h.skyRuns() != runs+1 || lastSkyArgs(t, h.harness) != "api logout" {
 		t.Errorf("sky ran %d more times, last with %q; want api logout once", h.skyRuns()-runs, lastSkyArgs(t, h.harness))
@@ -131,7 +131,7 @@ func TestLogoutTeleport(t *testing.T) {
 	if h.active() != "remote" {
 		t.Errorf("active pathway = %q, want it kept", h.active())
 	}
-	if _, err := os.Stat(filepath.Join(orgs, "example.toml")); err != nil {
+	if _, err := os.Stat(filepath.Join(configs, "example.toml")); err != nil {
 		t.Errorf("the config file is gone: %v", err)
 	}
 }

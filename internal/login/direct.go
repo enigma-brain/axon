@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/enigma-brain/axon/internal/apiserver"
-	"github.com/enigma-brain/axon/internal/orgfile"
-	skygroup "github.com/enigma-brain/axon/internal/sky"
+	"github.com/enigma-brain/axon/internal/configfile"
+	"github.com/enigma-brain/axon/internal/sky"
 )
 
 // needsAuth is the status sky api login ends with when the server still sees
@@ -33,25 +33,25 @@ const skyWaitDelay = 2 * time.Second
 // connectDirect connects the sky group on a direct pathway. It returns the
 // server's health when the existing session is good; after a browser login it
 // returns an empty Health and the identity check that follows asks the server.
-func (l *login) connectDirect(ctx context.Context, p orgfile.Pathway, opts Options, sky, clientVersion string) (apiserver.Health, error) {
+func (l *login) connectDirect(ctx context.Context, p configfile.Pathway, opts Options, skyPath, clientVersion string) (apiserver.Health, error) {
 	endpoint := l.endpoint(p)
 	h, err := l.health(ctx, endpoint, apiserver.Options{ClientVersion: clientVersion, CookieFile: l.cookieFile})
 	switch {
 	case err == nil:
 		return h, nil
 	case errors.Is(err, apiserver.ErrUnreachable):
-		return apiserver.Health{}, errors.New(skygroup.Unreachable(p, endpoint))
+		return apiserver.Health{}, errors.New(sky.Unreachable(p, endpoint))
 	case !errors.Is(err, apiserver.ErrNotLoggedIn):
 		return apiserver.Health{}, fmt.Errorf("check the SkyPilot API server: %w. Run `axon login` again.", err)
 	}
 
-	sawNeedsAuth, err := l.browserLogin(ctx, opts, sky, endpoint)
+	sawNeedsAuth, err := l.browserLogin(ctx, opts, skyPath, endpoint)
 	if err == nil && sawNeedsAuth {
 		fmt.Fprintf(opts.Out, "sky: the login ended with %s; removing %s and logging in once more\n", needsAuth, l.cookieFile)
 		if err := os.Remove(l.cookieFile); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return apiserver.Health{}, fmt.Errorf("remove %s: %w. Remove it by hand and run `axon login` again.", l.cookieFile, err)
 		}
-		sawNeedsAuth, err = l.browserLogin(ctx, opts, sky, endpoint)
+		sawNeedsAuth, err = l.browserLogin(ctx, opts, skyPath, endpoint)
 		if err == nil && sawNeedsAuth {
 			err = fmt.Errorf("the SkyPilot login ended with %s twice. Run `axon login` again.", needsAuth)
 		}
@@ -62,7 +62,7 @@ func (l *login) connectDirect(ctx context.Context, p orgfile.Pathway, opts Optio
 // browserLogin runs sky api login against endpoint, which opens the login page
 // in the user's default browser, and waits for it up to loginWait. It reports whether sky's
 // output named the status needs_auth.
-func (l *login) browserLogin(ctx context.Context, opts Options, sky, endpoint string) (sawNeedsAuth bool, err error) {
+func (l *login) browserLogin(ctx context.Context, opts Options, skyPath, endpoint string) (sawNeedsAuth bool, err error) {
 	env := withoutVars(l.environ(), endpointVar)
 	// sky's output goes through a pipe; unbuffered, it reaches the terminal
 	// as sky writes it.
@@ -70,7 +70,7 @@ func (l *login) browserLogin(ctx context.Context, opts Options, sky, endpoint st
 
 	ctx, cancel := context.WithTimeout(ctx, l.loginWait)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, sky, "api", "login", "-e", endpoint)
+	cmd := exec.CommandContext(ctx, skyPath, "api", "login", "-e", endpoint)
 	cmd.Env = env
 	cmd.WaitDelay = skyWaitDelay
 	var seen scanWriter

@@ -17,9 +17,9 @@ import (
 	"testing"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/fail"
-	"github.com/enigma-brain/axon/internal/orgfile"
 	"github.com/enigma-brain/axon/internal/skyclient"
 )
 
@@ -44,9 +44,9 @@ func clearSkyPilotEnv(t *testing.T) {
 	}
 }
 
-// exampleOrg is the config file the tests store: a direct pathway,
+// exampleConfig is the config file the tests store: a direct pathway,
 // campus, and a teleport pathway, remote. Every detail is made up.
-const exampleOrg = `format = 2
+const exampleConfig = `format = 2
 id = "example"
 
 [[pathway]]
@@ -72,29 +72,29 @@ proxy = "teleport.example.org"
 app = "skypilot"
 `
 
-// pathways are the identifiers of exampleOrg's pathways, with the endpoint
+// pathways are the identifiers of exampleConfig's pathways, with the endpoint
 // the client uses on each.
 var pathways = map[string]string{
 	"campus": "https://sky.example.org",
 	"remote": "http://localhost:46581",
 }
 
-// storeOrg stores exampleOrg under home.
-func storeOrg(t *testing.T, home string) {
+// storeConfig stores exampleConfig under home.
+func storeConfig(t *testing.T, home string) {
 	t.Helper()
-	src, err := orgfile.ParseSource("-")
+	src, err := configfile.ParseSource("-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := orgfile.NewStore(axondir.New(home)).Add([]byte(exampleOrg), src); err != nil {
+	if _, err := configfile.NewStore(axondir.New(home)).Add([]byte(exampleConfig), src); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // pathwayOf returns the stored pathway id.
-func pathwayOf(t *testing.T, id string) orgfile.Pathway {
+func pathwayOf(t *testing.T, id string) configfile.Pathway {
 	t.Helper()
-	f, err := orgfile.Parse([]byte(exampleOrg))
+	f, err := configfile.Parse([]byte(exampleConfig))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,16 +104,16 @@ func pathwayOf(t *testing.T, id string) orgfile.Pathway {
 		}
 	}
 	t.Fatalf("no pathway %q", id)
-	return orgfile.Pathway{}
+	return configfile.Pathway{}
 }
 
-// login sets HOME to a new directory, stores exampleOrg, and records a
+// login sets HOME to a new directory, stores exampleConfig, and records a
 // login on the pathway id.
 func login(t *testing.T, id string, email string) axondir.Dir {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	storeOrg(t, home)
+	storeConfig(t, home)
 	dir := axondir.New(home)
 	if err := dir.SetPathway(id); err != nil {
 		t.Fatal(err)
@@ -384,7 +384,7 @@ func TestNoLogin(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
-			storeOrg(t, home)
+			storeConfig(t, home)
 			if err := setup(axondir.New(home)); err != nil {
 				t.Fatal(err)
 			}
@@ -462,7 +462,7 @@ exit 7
 func TestReplacesProcessWithSky(t *testing.T) {
 	sky := writeFakeSky(t)
 	home := t.TempDir()
-	storeOrg(t, home)
+	storeConfig(t, home)
 	dir := axondir.New(home)
 	if err := dir.SetPathway("remote"); err != nil {
 		t.Fatal(err)
@@ -507,10 +507,10 @@ func TestNoLoginStopsBeforeSky(t *testing.T) {
 
 // axon sky uses the stored config file and never fetches it, even
 // when its recorded source is an address.
-func TestSkyNeverFetchesTheOrganizationFile(t *testing.T) {
+func TestSkyNeverFetchesTheConfigFile(t *testing.T) {
 	var conns atomic.Int32
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, exampleOrg)
+		io.WriteString(w, exampleConfig)
 	}))
 	srv.Config.ConnState = func(_ net.Conn, s http.ConnState) {
 		if s == http.StateNew {
@@ -521,11 +521,11 @@ func TestSkyNeverFetchesTheOrganizationFile(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	dir := login(t, "campus", "ada@example.org")
-	src, err := orgfile.ParseSource(srv.URL + "/axon.toml")
+	src, err := configfile.ParseSource(srv.URL + "/axon.toml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := orgfile.NewStore(dir).Add([]byte(exampleOrg), src); err != nil {
+	if _, err := configfile.NewStore(dir).Add([]byte(exampleConfig), src); err != nil {
 		t.Fatal(err)
 	}
 	calls := capture(t)

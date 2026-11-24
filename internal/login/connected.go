@@ -6,8 +6,8 @@ import (
 	"io/fs"
 	"os"
 
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
-	"github.com/enigma-brain/axon/internal/orgfile"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
@@ -20,7 +20,7 @@ import (
 // Disconnecting the sky group stops the tunnel by its own record and removes the
 // recorded email, so axon sky asks for a login until the new pathway's
 // login records one.
-func (l *login) disconnectUnless(p orgfile.Pathway, opts Options) error {
+func (l *login) disconnectUnless(p configfile.Pathway, opts Options) error {
 	same, err := connected.Is(l.dir, p)
 	if err != nil {
 		return err

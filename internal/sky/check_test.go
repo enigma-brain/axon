@@ -18,9 +18,9 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/fail"
-	"github.com/enigma-brain/axon/internal/orgfile"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -129,7 +129,7 @@ func connectedProbes() probes {
 // goes to the stand-in API server at url, through the real apiserver.Fetch.
 func helperProbes(url string) probes {
 	p := connectedProbes()
-	p.endpoint = func(orgfile.Pathway) string { return url }
+	p.endpoint = func(configfile.Pathway) string { return url }
 	p.health = apiserver.Fetch
 	return p
 }
@@ -506,7 +506,7 @@ func mustRead(t *testing.T, name string) string {
 func TestStopExitsNonZeroWithTheMessage(t *testing.T) {
 	sky := writeFakeSky(t)
 	home := t.TempDir()
-	storeOrg(t, home)
+	storeConfig(t, home)
 	dir := axondir.New(home)
 	if err := dir.SetPathway("campus"); err != nil {
 		t.Fatal(err)

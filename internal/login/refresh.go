@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 )
 
 // refresh fetches the file that holds p again, when its recorded source is
@@ -23,11 +23,11 @@ import (
 //   - when the fetched file no longer has p, with --pathway an error that
 //     lists the stored pathways, and otherwise a pathway chosen again from
 //     the stored files, with no further fetch.
-func (l *login) refresh(ctx context.Context, p orgfile.Pathway, added *orgfile.File, opts Options) (orgfile.Pathway, error) {
+func (l *login) refresh(ctx context.Context, p configfile.Pathway, added *configfile.File, opts Options) (configfile.Pathway, error) {
 	if added != nil && added.ID == p.File {
 		return p, nil
 	}
-	store := orgfile.NewStore(l.dir)
+	store := configfile.NewStore(l.dir)
 	path := store.Path(p.File)
 	src, ok, err := store.Source(p.File)
 	if err != nil {
@@ -39,22 +39,22 @@ func (l *login) refresh(ctx context.Context, p orgfile.Pathway, added *orgfile.F
 	}
 
 	// The stored copy, as it was, for the line that reports the update.
-	var previous *orgfile.File
+	var previous *configfile.File
 	if prev, err := os.ReadFile(path); err == nil {
-		if pf, err := orgfile.Parse(prev); err == nil {
+		if pf, err := configfile.Parse(prev); err == nil {
 			previous = &pf
 		}
 	}
 
-	data, err := l.readOrg(ctx, src, nil)
+	data, err := l.readConfig(ctx, src, nil)
 	var (
-		f       orgfile.File
+		f       configfile.File
 		changed bool
 	)
 	if err == nil {
 		f, changed, err = store.Refresh(p.File, data, src, opts.Replace)
 	}
-	var lower *orgfile.LowerRevisionError
+	var lower *configfile.LowerRevisionError
 	if errors.As(err, &lower) {
 		fmt.Fprintf(opts.Out, msgLowerRevision, path, lower.Stored, lower.New)
 		yes, askErr := askYesNo(opts.In, opts.Out, fmt.Sprintf(msgLowerPrompt, lower.New))
@@ -63,14 +63,14 @@ func (l *login) refresh(ctx context.Context, p orgfile.Pathway, added *orgfile.F
 			fmt.Fprintf(opts.Err, msgLowerRevisionWarning, src, lower.New, lower.Stored)
 			return p, nil
 		case askErr != nil:
-			return orgfile.Pathway{}, askErr
+			return configfile.Pathway{}, askErr
 		case !yes:
 			fmt.Fprintf(opts.Out, msgKeptRevision, lower.Stored)
 			return p, nil
 		}
 		f, changed, err = store.Refresh(p.File, data, src, true)
 	}
-	if errors.Is(err, orgfile.ErrEmpty) {
+	if errors.Is(err, configfile.ErrEmpty) {
 		fmt.Fprintf(opts.Err, msgRefreshEmpty, path, src)
 		return p, nil
 	}
@@ -96,18 +96,18 @@ func (l *login) refresh(ctx context.Context, p orgfile.Pathway, added *orgfile.F
 	// they were first read, so they are not reported again.
 	files, err := l.storedFiles(io.Discard)
 	if err != nil {
-		return orgfile.Pathway{}, err
+		return configfile.Pathway{}, err
 	}
-	var all []orgfile.Pathway
+	var all []configfile.Pathway
 	for _, f := range files {
 		all = append(all, f.Pathways...)
 	}
 	if len(all) == 0 {
 		// The stored files were removed while this login ran.
-		return orgfile.Pathway{}, errNoOrg
+		return configfile.Pathway{}, errNoConfig
 	}
 	if opts.Pathway != "" {
-		return orgfile.Pathway{}, fmt.Errorf("the pathway %q is no longer in its config file. The stored pathways are %s.", p.ID, idList(all))
+		return configfile.Pathway{}, fmt.Errorf("the pathway %q is no longer in its config file. The stored pathways are %s.", p.ID, idList(all))
 	}
 	gone := fmt.Sprintf("The pathway %q is no longer in its config file.", p.ID)
 	if len(all) == 1 {

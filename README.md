@@ -554,7 +554,7 @@ instead of the latest. CI runs it on Linux when `internal/update/` or
 | `internal/configlist` | `axon config list`: printing the stored config files, their pathways and the pathway in use. |
 | `internal/update` | `axon update`: finding a release, verifying its archive, and replacing the running binary. |
 | `internal/fail` | Prints failures to standard error, prefixed `axon:`, and exits non-zero. |
-| `internal/orgfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/configs/`. |
+| `internal/configfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/configs/`. |
 | `internal/axondir` | `~/.axon`: every name in it, the settings file, `tools/`, `state/`, the store's lock, and renaming what `v0.3.0` and earlier kept under other names. |
 | `internal/connected` | The record of the connected pathway and its settings, in `~/.axon/state/pathway.toml`. |
 | `internal/login` | `axon login` and `axon logout` (`logout.go`): adding a file, choosing the pathway, disconnecting the one left, the stages, the sky group's connect steps, and each kind's login in `direct.go` and `teleport.go`. `browser.go` holds the length of the browser wait. |

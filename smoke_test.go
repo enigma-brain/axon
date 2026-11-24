@@ -51,8 +51,8 @@ func TestSmokeLogin(t *testing.T) {
 		bin = build(t, "0.0.0-smoke")
 	}
 	home := t.TempDir()
-	orgPath := filepath.Join(t.TempDir(), "example-smoke.toml")
-	if err := os.WriteFile(orgPath, []byte(smokeFile), 0o600); err != nil {
+	configPath := filepath.Join(t.TempDir(), "example-smoke.toml")
+	if err := os.WriteFile(configPath, []byte(smokeFile), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,7 +73,7 @@ func TestSmokeLogin(t *testing.T) {
 	}
 	t.Logf("%s", strings.TrimSpace(out))
 
-	stdout, stderr, err := run("login", "--config", orgPath)
+	stdout, stderr, err := run("login", "--config", configPath)
 	t.Logf("axon login stdout:\n%s", stdout)
 	t.Logf("axon login stderr:\n%s", stderr)
 	wantFailure(t, "axon login", err)

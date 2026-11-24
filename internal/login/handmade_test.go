@@ -15,7 +15,7 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/tsh"
 )
 
@@ -39,9 +39,9 @@ func (h *harness) stopAtTsh() {
 	}
 }
 
-func (h *harness) handMadeRecord(id string) orgfile.Record {
+func (h *harness) handMadeRecord(id string) configfile.Record {
 	h.t.Helper()
-	rec, ok, err := orgfile.NewStore(axondir.New(h.home)).Record(id)
+	rec, ok, err := configfile.NewStore(axondir.New(h.home)).Record(id)
 	if err != nil || !ok {
 		h.t.Fatalf("record of %s: %v, %v", id, ok, err)
 	}
@@ -73,12 +73,12 @@ func TestPromptMakesADirectPathway(t *testing.T) {
 	if h.active() != "sky-example-org" {
 		t.Errorf("active pathway = %q", h.active())
 	}
-	f, err := orgfile.Parse([]byte(h.stored("sky-example-org")))
+	f, err := configfile.Parse([]byte(h.stored("sky-example-org")))
 	if err != nil {
 		t.Fatal(err)
 	}
 	p := f.Pathways[0]
-	if p.Kind != orgfile.KindDirect || p.Sky.Endpoint != "https://sky.example.org" || p.Name != "sky.example.org" ||
+	if p.Kind != configfile.KindDirect || p.Sky.Endpoint != "https://sky.example.org" || p.Name != "sky.example.org" ||
 		p.Description != "Made on this laptop. Direct to https://sky.example.org." || f.HasRevision {
 		t.Errorf("stored pathway = %+v", f)
 	}
@@ -108,7 +108,7 @@ func TestPromptMakesATeleportPathway(t *testing.T) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
 	}
-	f, err := orgfile.Parse([]byte(h.stored("remote-lab")))
+	f, err := configfile.Parse([]byte(h.stored("remote-lab")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestPromptProxyThatDoesNotAnswer(t *testing.T) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
 	}
-	if _, err := orgfile.Parse([]byte(h.stored("tp-example-org"))); err != nil {
+	if _, err := configfile.Parse([]byte(h.stored("tp-example-org"))); err != nil {
 		t.Error(err)
 	}
 }
@@ -247,7 +247,7 @@ func TestFlagsMakeADirectPathway(t *testing.T) {
 	if h.active() != "second-site" {
 		t.Errorf("active pathway = %q", h.active())
 	}
-	f, err := orgfile.Parse([]byte(h.stored("second-site")))
+	f, err := configfile.Parse([]byte(h.stored("second-site")))
 	if err != nil || f.Pathways[0].Sky.Endpoint != "https://sky2.example.org" {
 		t.Errorf("stored = %+v, %v", f, err)
 	}
@@ -262,7 +262,7 @@ func TestFlagsMakeATeleportPathway(t *testing.T) {
 	h.servers(nil)
 	h.stopAtTsh()
 	h.login(Options{TeleportProxy: "tp.example.org:3080", SkyApp: "sky"})
-	f, err := orgfile.Parse([]byte(h.stored("tp-example-org-3080")))
+	f, err := configfile.Parse([]byte(h.stored("tp-example-org-3080")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +276,7 @@ func TestFlagsMakeATeleportPathway(t *testing.T) {
 	h2.servers(nil)
 	h2.stopAtTsh()
 	h2.login(Options{TeleportProxy: "tp.example.org"})
-	if f, err := orgfile.Parse([]byte(h2.stored("tp-example-org"))); err != nil || f.Pathways[0].Sky.App != "skypilot" {
+	if f, err := configfile.Parse([]byte(h2.stored("tp-example-org"))); err != nil || f.Pathways[0].Sky.App != "skypilot" {
 		t.Errorf("stored = %+v, %v", f, err)
 	}
 }
@@ -367,7 +367,7 @@ func TestIdentifier(t *testing.T) {
 
 func TestFileID(t *testing.T) {
 	home := t.TempDir()
-	store := orgfile.NewStore(axondir.New(home))
+	store := configfile.NewStore(axondir.New(home))
 	must := func(id string, err error) string {
 		t.Helper()
 		if err != nil {
@@ -391,7 +391,7 @@ func TestFileID(t *testing.T) {
 	if got := must(fileID(store, "lab", nil)); got != "lab-2" {
 		t.Errorf("fileID of a taken id = %q", got)
 	}
-	if got := must(fileID(store, "lab", []orgfile.File{{ID: "lab"}})); got != "lab" {
+	if got := must(fileID(store, "lab", []configfile.File{{ID: "lab"}})); got != "lab" {
 		t.Errorf("fileID of an id being removed = %q", got)
 	}
 }
@@ -400,7 +400,7 @@ func TestFileID(t *testing.T) {
 // one suffix after another.
 func TestFileIDReturnsAnError(t *testing.T) {
 	home := t.TempDir()
-	store := orgfile.NewStore(axondir.New(home))
+	store := configfile.NewStore(axondir.New(home))
 	// A file in place of ~/.axon makes every path below it fail with
 	// "not a directory".
 	if err := os.WriteFile(filepath.Join(home, ".axon"), nil, 0o600); err != nil {
@@ -540,7 +540,7 @@ func TestConfigProxyCantBeReached(t *testing.T) {
 	}
 
 	// The pathway's unreachable_hint, when it has one, is the next step.
-	h.store(strings.Replace(exampleOrg, `description = "Works from anywhere."`,
+	h.store(strings.Replace(exampleConfig, `description = "Works from anywhere."`,
 		"description = \"Works from anywhere.\"\nunreachable_hint = \"Connect to the VPN and retry.\"", 1))
 	err = h.run("remote")
 	want = "establish the Teleport session: can't reach the Teleport proxy at " + testProxy + ": no such host. Connect to the VPN and retry."

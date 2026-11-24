@@ -18,7 +18,7 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/skyclient"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -90,9 +90,9 @@ func (c *fakeClient) Path() (string, error) {
 	return c.sky, nil
 }
 
-// exampleOrg is the config file the harness stores: a direct
+// exampleConfig is the config file the harness stores: a direct
 // pathway, campus, and a teleport pathway, remote. Every detail is made up.
-const exampleOrg = `format = 2
+const exampleConfig = `format = 2
 id = "example"
 
 [[pathway]]
@@ -162,8 +162,8 @@ func newHarness(t *testing.T) *harness {
 		client:     h.client,
 		health:     apiserver.Fetch,
 		cookieFile: h.cookieFile,
-		endpoint: func(p orgfile.Pathway) string {
-			if p.Kind == orgfile.KindTeleport {
+		endpoint: func(p configfile.Pathway) string {
+			if p.Kind == configfile.KindTeleport {
 				return "http://localhost:" + strconv.Itoa(testPort)
 			}
 			return h.directURL
@@ -176,7 +176,7 @@ func newHarness(t *testing.T) *harness {
 				"BROWSER=chromium",
 			}
 		},
-		readOrg: orgfile.Read,
+		readConfig: configfile.Read,
 		// The tests never reach the real terminal.
 		openTerminal: func() (io.ReadCloser, error) { return nil, errors.New("no terminal in tests") },
 		teleport: teleport{
@@ -186,18 +186,18 @@ func newHarness(t *testing.T) *harness {
 			skyConfig: filepath.Join(h.home, ".sky", "config.yaml"),
 		},
 	}
-	h.store(exampleOrg)
+	h.store(exampleConfig)
 	return h
 }
 
 // store adds data as a config file.
 func (h *harness) store(data string) {
 	h.t.Helper()
-	src, err := orgfile.ParseSource("-")
+	src, err := configfile.ParseSource("-")
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	if _, err := orgfile.NewStore(axondir.New(h.home)).Add([]byte(data), src); err != nil {
+	if _, err := configfile.NewStore(axondir.New(h.home)).Add([]byte(data), src); err != nil {
 		h.t.Fatal(err)
 	}
 }
@@ -555,7 +555,7 @@ func TestFormatWait(t *testing.T) {
 func TestLoginPutsBackAnInterruptedUpdate(t *testing.T) {
 	h := newHarness(t)
 	h.script("ok")
-	path := orgfile.NewStore(axondir.New(h.home)).Path("example")
+	path := configfile.NewStore(axondir.New(h.home)).Path("example")
 	if err := os.Rename(path, path+".previous"); err != nil {
 		t.Fatal(err)
 	}
@@ -565,7 +565,7 @@ func TestLoginPutsBackAnInterruptedUpdate(t *testing.T) {
 	if want := fmt.Sprintf(msgPutBack, path); !strings.Contains(h.out.String(), want) {
 		t.Errorf("output does not say the file was put back:\n%s", h.out.String())
 	}
-	if got, _ := os.ReadFile(path); string(got) != exampleOrg {
+	if got, _ := os.ReadFile(path); string(got) != exampleConfig {
 		t.Errorf("stored file = %q, want the previous copy", got)
 	}
 	if _, err := os.Stat(path + ".previous"); !os.IsNotExist(err) {

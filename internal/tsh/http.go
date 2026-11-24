@@ -9,8 +9,8 @@ import (
 )
 
 // stallTimeout bounds how long a request waits for its response, and then
-// for each further piece of its body. A download that keeps moving is never
-// cut off, however long it takes; one that stops is.
+// for each further piece of its body. A response whose body keeps arriving is
+// never cut off, however long it takes; one that stops is.
 var stallTimeout = 30 * time.Second
 
 // get requests url and returns the response when its status is OK. The
