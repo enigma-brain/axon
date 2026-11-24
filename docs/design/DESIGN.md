@@ -879,6 +879,32 @@ in messages about a `teleport` pathway. The general parts of `axon`, which
 are the stages of login, the pathway prompt, the organization's
 configuration and the form of a failure, name neither.
 
+### Interrupts
+
+SIGINT, which Ctrl-C sends, and SIGTERM interrupt the running command
+[{D!}](decisions/interrupts.md). The command stops at the step it is in and
+undoes what that step left half made: a download leaves no file, `axon
+update` leaves the `axon` that ran in place, the SkyPilot client stays at the
+version it was, the stored config files are as they were or as they were
+becoming, by the recovery that follows an update that stopped part way, and
+a Teleport tunnel that login started either runs and is recorded or does not
+run. A question `axon` asks ends at once, and nothing it would have stored
+is stored. `axon` then prints the one line `axon: interrupted` and ends by
+the signal it received, so the shell reports the command as interrupted. A
+command that finished its work before it acted on the signal has printed its
+result and ends as it would have.
+
+A program `axon` runs and waits for, such as the browser login of `sky` and
+Teleport's `tsh login`, shares the terminal and receives SIGINT from it, so
+`axon` sends it nothing more and waits for it to end. SIGTERM reaches `axon`
+alone, and `axon` passes it on. A program that has not ended after a few
+seconds, ten for a `tsh` that runs on the terminal, is killed. The Teleport
+tunnel runs in a session of its own and is not interrupted with `axon`.
+
+A second interrupt while `axon` stops ends it at once.
+
+SIGHUP, SIGQUIT and terminal suspend keep their default effect.
+
 ## Release and install
 
 `axon`'s repository is public. `axon` is released as an archive for each
