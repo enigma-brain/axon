@@ -136,9 +136,6 @@ func TestClosedPortIsUnreachable(t *testing.T) {
 }
 
 func TestSlowServerIsUnreachable(t *testing.T) {
-	old := timeout
-	timeout = 50 * time.Millisecond
-	t.Cleanup(func() { timeout = old })
 	release := make(chan struct{})
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -147,7 +144,9 @@ func TestSlowServerIsUnreachable(t *testing.T) {
 		}
 	})
 	defer close(release)
-	if _, err := Fetch(context.Background(), url, Options{}); !errors.Is(err, ErrUnreachable) {
+	d := defaults()
+	d.timeout = 50 * time.Millisecond
+	if _, err := d.fetch(context.Background(), url, Options{}); !errors.Is(err, ErrUnreachable) {
 		t.Fatalf("err = %v, want ErrUnreachable", err)
 	}
 }
