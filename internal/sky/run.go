@@ -49,19 +49,24 @@ func run(path string, args, env []string) error {
 	return nil
 }
 
-// helpEnviron returns the environment sky's help runs with: the one a
-// forwarded command gets when a login is recorded, and the process's own
-// otherwise.
-func helpEnviron(dir axondir.Dir) []string {
-	p, err := activePathway(dir)
-	if err != nil {
-		return os.Environ()
+// deadEndpoint is the endpoint sky's help runs against. Nothing can listen
+// on port 0, so a connection to it fails at once without leaving the
+// computer, and it is not one of the addresses where SkyPilot starts a
+// local API server. Should sky run a command where help was expected, it
+// reaches no server.
+const deadEndpoint = "http://127.0.0.1:0"
+
+// helpEnviron returns base with the SkyPilot endpoint set to deadEndpoint,
+// replacing any value base holds. Every other entry is kept.
+func helpEnviron(base []string) []string {
+	env := make([]string, 0, len(base)+1)
+	for _, kv := range base {
+		if strings.HasPrefix(kv, endpointVar+"=") {
+			continue
+		}
+		env = append(env, kv)
 	}
-	email, ok, err := dir.Email()
-	if err != nil || !ok {
-		return os.Environ()
-	}
-	return environ(os.Environ(), Endpoint(p), email)
+	return append(env, endpointVar+"="+deadEndpoint)
 }
 
 // environ returns base with the SkyPilot endpoint and user set to endpoint
