@@ -173,7 +173,9 @@ func (d Dir) ensure(sub string) (string, error) {
 
 // ReplaceFile replaces path with data, readable by the user only. It writes
 // a temporary file in the same directory and renames it over path, so a
-// reader never sees a partial file. The directory must exist.
+// reader never sees a partial file. It syncs the file before the rename and
+// the directory after it, so a replacement that returns is on disk. The
+// directory must exist.
 func ReplaceFile(path string, data []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
 	if err != nil {
@@ -188,11 +190,32 @@ func ReplaceFile(path string, data []byte) error {
 		tmp.Close()
 		return fmt.Errorf("write %s: %w", path, err)
 	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write %s: %w", path, err)
+	}
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	if err := os.Rename(tmp.Name(), path); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
+	if err := SyncDir(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
 	return nil
+}
+
+// SyncDir syncs the directory dir, so that the names in it, as a rename
+// left them, are on disk.
+func SyncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	if err := d.Sync(); err != nil {
+		d.Close()
+		return err
+	}
+	return d.Close()
 }

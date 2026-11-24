@@ -502,18 +502,8 @@ func keepPrevious(path string) error {
 	return nil
 }
 
-// syncDir syncs the directory dir, so the names in it are on disk.
-var syncDir = func(dir string) error {
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	if err := d.Sync(); err != nil {
-		d.Close()
-		return err
-	}
-	return d.Close()
-}
+// syncDir syncs a directory. Tests replace it to make a step fail.
+var syncDir = axondir.SyncDir
 
 // copyFile copies the regular file from to a new file to, with the same
 // permissions, and syncs the copy to disk.
