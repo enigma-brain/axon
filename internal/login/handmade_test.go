@@ -3,14 +3,20 @@ package login
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
+	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/tsh"
 )
 
 // servers makes the harness's server checks answer from fakes: every API
@@ -419,5 +425,131 @@ func TestCleanProxy(t *testing.T) {
 		if _, err := cleanProxy(bad); err == nil {
 			t.Errorf("cleanProxy(%q) accepted it", bad)
 		}
+	}
+}
+
+// netFailure is the error a request to address fails with when its dial
+// fails with cause, wrapped as Go wraps it. Nothing is contacted.
+func netFailure(address string, cause error) error {
+	return &url.Error{Op: "Get", URL: address, Err: &net.OpError{Op: "dial", Net: "tcp", Err: cause}}
+}
+
+// serversFailing makes the API server at https://host and the proxy at host
+// fail with err, which the API server's check reads as probeSky reads the
+// health request's error. Nothing is contacted.
+func (h *harness) serversFailing(host string, err error) {
+	h.l.probeSky = func(ctx context.Context, endpoint string) error {
+		if endpoint != "https://"+host {
+			return nil
+		}
+		return skyProbeResult(ctx, err)
+	}
+	h.l.probeProxy = func(_ context.Context, proxy string) error {
+		if proxy != host {
+			return nil
+		}
+		return err
+	}
+}
+
+// The reason in a can't-reach message is the short one, at the prompt and
+// from the flags, for an API server and a Teleport proxy.
+func TestCantReachReasonIsShort(t *testing.T) {
+	const host = "sky.wrong.example"
+	noHost := &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+	refused := os.NewSyscallError("connect", syscall.ECONNREFUSED)
+	// As apiserver.Fetch and tsh.Ping report the failure.
+	sky := func(cause error) error {
+		return fmt.Errorf("%w: %w", apiserver.ErrUnreachable, netFailure("https://"+host+"/api/health", cause))
+	}
+	proxy := func(cause error) error {
+		return &tsh.UnreachableError{Proxy: host, Err: netFailure("https://"+host+"/webapi/ping", cause)}
+	}
+	deadline := fmt.Errorf("%w: %w", apiserver.ErrUnreachable,
+		&url.Error{Op: "Get", URL: "https://" + host + "/api/health", Err: context.DeadlineExceeded})
+
+	for _, tc := range []struct {
+		name   string
+		down   error
+		reason string
+	}{
+		{"name that does not resolve", sky(noHost), "no such host"},
+		{"refused connection", sky(refused), "connection refused"},
+		{"timeout after connecting", deadline, "timed out"},
+		{"dial timeout", sky(os.ErrDeadlineExceeded), "timed out"},
+		{"proxy name that does not resolve", proxy(noHost), "no such host"},
+		{"proxy refused connection", proxy(refused), "connection refused"},
+		{"proxy timeout", proxy(os.ErrDeadlineExceeded), "timed out"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			isProxy := strings.HasPrefix(tc.name, "proxy")
+			server, flags, kind := "the SkyPilot API server at https://"+host, Options{SkyEndpoint: host}, "1"
+			if isProxy {
+				server, flags, kind = "the Teleport proxy at "+host, Options{TeleportProxy: host}, "2"
+			}
+
+			h := newHarness(t)
+			h.noFiles()
+			h.serversFailing(host, tc.down)
+			want := "make the pathway: can't reach " + server + ": " + tc.reason + ". Check the address and run `axon login` again."
+			if err := h.login(flags); err == nil || err.Error() != want {
+				t.Errorf("flags: err = %v, want %q", err, want)
+			}
+
+			h = newHarness(t)
+			h.noFiles()
+			h.terminal()
+			h.serversFailing(host, tc.down)
+			h.login(Options{In: strings.NewReader(kind + "\n" + host + "\n")})
+			want = "Can't reach " + server + ": " + tc.reason + ". Check the address and try again.\n"
+			if out := h.out.String(); !strings.Contains(out, want) {
+				t.Errorf("prompt: output lacks %q:\n%s", want, out)
+			}
+		})
+	}
+}
+
+// probeSky, the check the prompt and the flags make, gives the short reason
+// for a port where nothing listens.
+func TestProbeSkyRefused(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	l.Close()
+	err = probeSky(context.Background(), "http://"+addr)
+	var pe *probeError
+	if !errors.As(err, &pe) || pe.notSkyPilot || pe.reason != "connection refused" {
+		t.Fatalf("probeSky = %#v, want the reason %q", err, "connection refused")
+	}
+}
+
+// A config file's Teleport pathway whose proxy can't be reached names the
+// proxy and the short reason.
+func TestConfigProxyCantBeReached(t *testing.T) {
+	h := newHarness(t)
+	h.l.teleport.ensure = func(_ context.Context, proxy string) (string, error) {
+		return "", &tsh.UnreachableError{Proxy: proxy, Err: netFailure("https://"+proxy+"/webapi/ping",
+			&net.DNSError{Err: "no such host", Name: proxy, IsNotFound: true})}
+	}
+	err := h.run("remote")
+	want := "establish the Teleport session: can't reach the Teleport proxy at " + testProxy + ": no such host"
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
+	}
+}
+
+// A proxy that answers, but not with its version, keeps its full reason.
+func TestProxyThatAnswersKeepsItsReason(t *testing.T) {
+	const host = "tp.example.org"
+	answered := fmt.Errorf("read the Teleport proxy's version at https://%s/webapi/ping: %w", host,
+		errors.New("GET https://"+host+"/webapi/ping: 404 Not Found"))
+	h := newHarness(t)
+	h.noFiles()
+	h.servers(map[string]error{host: answered})
+	want := "make the pathway: can't reach the Teleport proxy at " + host + ": " + answered.Error() + ". Check the address and run `axon login` again."
+	if err := h.login(Options{TeleportProxy: host}); err == nil || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
 	}
 }

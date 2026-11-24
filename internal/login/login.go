@@ -285,6 +285,13 @@ func (l *login) addOrg(ctx context.Context, opts Options) (f orgfile.File, in io
 
 	store := orgfile.NewStore(l.dir)
 	change, err := store.Inspect(data, false)
+	if errors.Is(err, orgfile.ErrEmpty) {
+		name := src.String()
+		if name == "-" {
+			name = msgStdin
+		}
+		return fail(fmt.Errorf(msgConfigEmpty, name))
+	}
 	if err != nil {
 		return fail(err)
 	}

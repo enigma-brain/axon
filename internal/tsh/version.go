@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/enigma-brain/axon/internal/netreason"
 )
 
 // pingURL returns where the proxy at proxy, a host or host:port, reports
@@ -31,7 +34,13 @@ func proxyVersion(ctx context.Context, proxy string) (string, error) {
 	}
 	resp, err := get(ctx, ping)
 	if err != nil {
-		return fail(err)
+		// An answer that is not OK, or a request the caller cancelled, is
+		// not a proxy that can't be reached.
+		var answered *statusError
+		if errors.As(err, &answered) || ctx.Err() != nil {
+			return fail(err)
+		}
+		return "", &UnreachableError{Proxy: proxy, Err: err}
 	}
 	defer resp.Body.Close()
 	var reply struct {
@@ -45,6 +54,21 @@ func proxyVersion(ctx context.Context, proxy string) (string, error) {
 	}
 	return reply.ServerVersion, nil
 }
+
+// UnreachableError is a Teleport proxy that gave no answer. Its message
+// names the proxy and the short reason, such as "no such host".
+type UnreachableError struct {
+	// Proxy is the proxy's address, a host or host:port.
+	Proxy string
+	// Err is the failure of the request.
+	Err error
+}
+
+func (e *UnreachableError) Error() string {
+	return fmt.Sprintf("can't reach the Teleport proxy at %s: %s", e.Proxy, netreason.Short(e.Err))
+}
+
+func (e *UnreachableError) Unwrap() error { return e.Err }
 
 // clientVersion reads the version of the tsh at path. The command makes no
 // network request. Under Teleport's managed client updates it reports the

@@ -551,3 +551,46 @@ func equalMaps(a, b map[string]string) bool {
 	}
 	return true
 }
+
+// Empty input to --config names its source, and nothing is stored.
+func TestConfigEmpty(t *testing.T) {
+	empty := filepath.Join(t.TempDir(), "empty.toml")
+	if err := os.WriteFile(empty, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	comments := filepath.Join(t.TempDir(), "comments.toml")
+	if err := os.WriteFile(comments, []byte("# axon config\n\n   \n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	const address = "https://config.example.org/axon.toml"
+	for _, tc := range []struct {
+		name string
+		opts Options
+		want string
+	}{
+		{"empty standard input", Options{Config: "-", In: strings.NewReader("")}, "add the config file: standard input is empty."},
+		{"blank standard input", Options{Config: "-", In: strings.NewReader("\n  \n")}, "add the config file: standard input is empty."},
+		{"empty file", Options{Config: empty}, "add the config file: " + empty + " is empty."},
+		{"comments only", Options{Config: comments}, "add the config file: " + comments + " is empty."},
+		{"empty address", Options{Config: address}, "add the config file: " + address + " is empty."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.noFiles()
+			// An address is answered by a fake; nothing is fetched.
+			h.l.readOrg = func(ctx context.Context, src orgfile.Source, stdin io.Reader) ([]byte, error) {
+				if src.IsAddress() {
+					return nil, nil
+				}
+				return orgfile.Read(ctx, src, stdin)
+			}
+			err := h.login(tc.opts)
+			if err == nil || err.Error() != tc.want {
+				t.Fatalf("err = %v, want %q", err, tc.want)
+			}
+			if entries, _ := os.ReadDir(filepath.Join(h.home, ".axon", "orgs")); len(entries) != 0 {
+				t.Errorf("stored %v", entries)
+			}
+		})
+	}
+}
