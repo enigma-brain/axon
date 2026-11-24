@@ -68,6 +68,7 @@ func (h *harness) storedIDs() []string {
 }
 
 func TestConfigNameClashYes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.logIn()
 	if err := h.login(Options{Config: writeConfig(t, otherCampus), In: strings.NewReader("y\n")}); err != nil {
@@ -92,6 +93,7 @@ func TestConfigNameClashYes(t *testing.T) {
 }
 
 func TestConfigNameClashNo(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	before := testkit.Snapshot(t, filepath.Join(h.home, ".axon"))
 	err := h.login(Options{Config: writeConfig(t, otherCampus), In: strings.NewReader("\n")})
@@ -106,6 +108,7 @@ func TestConfigNameClashNo(t *testing.T) {
 }
 
 func TestConfigClashWithoutATerminal(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	err := h.login(Options{Config: writeConfig(t, otherCampus)})
 	want := `add the config file: its pathway "campus" clashes with the stored pathway "Campus" in ` +
@@ -117,6 +120,7 @@ func TestConfigClashWithoutATerminal(t *testing.T) {
 }
 
 func TestConfigClashWithReplace(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.logIn()
 	if err := h.login(Options{Config: writeConfig(t, otherCampus), Replace: true}); err != nil {
@@ -131,6 +135,7 @@ func TestConfigClashWithReplace(t *testing.T) {
 }
 
 func TestServerClashNoKeepsBoth(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.logIn()
 	if err := h.login(Options{Config: writeConfig(t, sameServer), In: strings.NewReader("n\n")}); err != nil {
@@ -151,6 +156,7 @@ func TestServerClashNoKeepsBoth(t *testing.T) {
 }
 
 func TestTeleportServerClash(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.servers(nil)
 	err := h.login(Options{TeleportProxy: "TELEPORT.example.org:443", Name: "Elsewhere"})
@@ -168,6 +174,7 @@ func TestTeleportServerClash(t *testing.T) {
 }
 
 func TestHandMadeNameClashAsksForAnotherName(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.servers(nil)
 	h.logIn()
@@ -194,6 +201,7 @@ func TestHandMadeNameClashAsksForAnotherName(t *testing.T) {
 }
 
 func TestHandMadeReplacesAHandMadePathway(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.servers(nil)
 	h.logIn()
@@ -215,6 +223,7 @@ func TestHandMadeReplacesAHandMadePathway(t *testing.T) {
 }
 
 func TestReplacingTheActivePathwayLeavesIt(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	dir := axondir.New(h.home)
 	files, _, _ := configfile.NewStore(dir).List()
@@ -239,6 +248,7 @@ func revised(n string) string {
 }
 
 func TestLowerRevisionAsks(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, answer string
 		replace      bool
@@ -275,6 +285,7 @@ func TestLowerRevisionAsks(t *testing.T) {
 }
 
 func TestLowerRevisionWithoutATerminalKeepsTheStoredCopy(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.store(revised("7"))
 	h.logIn()
@@ -292,6 +303,7 @@ func TestLowerRevisionWithoutATerminalKeepsTheStoredCopy(t *testing.T) {
 }
 
 func TestStoredAndUpdatedLinesNameTheRevision(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	h.logIn()
@@ -312,6 +324,7 @@ func TestStoredAndUpdatedLinesNameTheRevision(t *testing.T) {
 }
 
 func TestRefreshOfALowerRevision(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, answer string
 		wantStored   string
@@ -342,6 +355,7 @@ func TestRefreshOfALowerRevision(t *testing.T) {
 }
 
 func TestRefreshThatNewlyClashesIsLeftOut(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	srv := h.serveConfigs()
@@ -358,6 +372,7 @@ func TestRefreshThatNewlyClashesIsLeftOut(t *testing.T) {
 }
 
 func TestAskYesNo(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]bool{"y\n": true, "YES\n": true, "n\n": false, "\n": false, "maybe\ny\n": true} {
 		var out strings.Builder
 		got, err := askYesNo(context.Background(), strings.NewReader(in), &out, "? ")
@@ -374,6 +389,7 @@ func TestAskYesNo(t *testing.T) {
 // With --config -, standard input is the piped file and the questions go to
 // the terminal: a clash is asked about there, not treated as no terminal.
 func TestPipedConfigAsksTheClashOnTheTerminal(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	tty := &closer{Reader: strings.NewReader("y\n")}
 	h.l.openTerminal = func() (io.ReadCloser, error) { return tty, nil }
@@ -391,6 +407,7 @@ func TestPipedConfigAsksTheClashOnTheTerminal(t *testing.T) {
 
 // The same for a lower revision.
 func TestPipedConfigAsksTheLowerRevisionOnTheTerminal(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.store(revised("7"))
 	tty := &closer{Reader: strings.NewReader("y\n")}
@@ -407,6 +424,7 @@ func TestPipedConfigAsksTheLowerRevisionOnTheTerminal(t *testing.T) {
 // An active pathway that cannot be read stops the replacement before
 // anything is removed.
 func TestReplacingWithAnUnreadableActivePathwayStops(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if err := os.WriteFile(axondir.New(h.home).SettingsPath(), []byte("pathway = [\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -422,6 +440,7 @@ func TestReplacingWithAnUnreadableActivePathwayStops(t *testing.T) {
 
 // A file a stopped replacement left aside does not stop a login.
 func TestLoginWithALeftoverRemovingFile(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	path := filepath.Join(h.home, ".axon", "configs", "example.toml")
 	data, err := os.ReadFile(path)

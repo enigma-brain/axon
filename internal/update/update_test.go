@@ -21,7 +21,7 @@ import (
 )
 
 // The tests serve made-up releases from an httptest server on the loopback
-// address, and point repoURL at it. No test reaches a real server.
+// address, and update from it through deps. No test reaches a real server.
 
 const testPlatform = "linux_amd64"
 
@@ -104,14 +104,22 @@ func (f *fakeRepo) setArchive(version, name string, archive, listed []byte) {
 	f.files[tag+"/checksums.txt"] = []byte(fmt.Sprintf("%s  %s\n0000  axon_%s_other_arch.tar.gz\n", hex.EncodeToString(sum[:]), name, version))
 }
 
-// serve starts repo and points repoURL at it for the test.
-func serve(t *testing.T, repo http.Handler) {
+// serve starts repo and returns the deps of an update from it, on
+// testPlatform.
+func serve(t *testing.T, repo http.Handler) deps {
 	t.Helper()
 	srv := httptest.NewServer(repo)
 	t.Cleanup(srv.Close)
-	old := repoURL
-	repoURL = srv.URL + "/org/axon"
-	t.Cleanup(func() { repoURL = old })
+	return testDeps(srv.URL + "/org/axon")
+}
+
+// testDeps returns the deps of an update from the repository at repo, on
+// testPlatform.
+func testDeps(repo string) deps {
+	d := defaults()
+	d.repoURL = repo
+	d.platform = testPlatform
+	return d
 }
 
 // installed writes a fake axon of version into a new directory and returns
@@ -131,15 +139,15 @@ func installed(t *testing.T, version string) string {
 	return exe
 }
 
-func runUpdate(t *testing.T, current, version, exe string) (string, error) {
+// runUpdate updates exe with d, as the running axon of version current.
+func runUpdate(t *testing.T, d deps, current, version, exe string) (string, error) {
 	t.Helper()
+	d.executable = func() (string, error) { return exe, nil }
 	var out bytes.Buffer
-	err := Run(context.Background(), Options{
-		Current:  current,
-		Version:  version,
-		Exe:      exe,
-		Platform: testPlatform,
-		Out:      &out,
+	err := d.run(context.Background(), Options{
+		Current: current,
+		Version: version,
+		Out:     &out,
 	})
 	return out.String(), err
 }
@@ -207,12 +215,13 @@ func wantErr(t *testing.T, err error, parts ...string) {
 }
 
 func TestUpdateToNewerLatest(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.4.0"}
 	repo.addRelease(t, "0.4.0")
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.3.0")
 
-	out, err := runUpdate(t, "0.3.0", "", exe)
+	out, err := runUpdate(t, d, "0.3.0", "", exe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,12 +232,13 @@ func TestUpdateToNewerLatest(t *testing.T) {
 }
 
 func TestUpdateFromReleaseCandidateToFinal(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.4.0"}
 	repo.addRelease(t, "0.4.0")
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0-rc.1")
 
-	out, err := runUpdate(t, "0.4.0-rc.1", "", exe)
+	out, err := runUpdate(t, d, "0.4.0-rc.1", "", exe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,12 +249,13 @@ func TestUpdateFromReleaseCandidateToFinal(t *testing.T) {
 }
 
 func TestAlreadyLatest(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.4.0"}
 	repo.addRelease(t, "0.4.0")
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 
-	out, err := runUpdate(t, "0.4.0", "", exe)
+	out, err := runUpdate(t, d, "0.4.0", "", exe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,12 +270,13 @@ func TestAlreadyLatest(t *testing.T) {
 }
 
 func TestNewerThanLatest(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.4.0"}
 	repo.addRelease(t, "0.4.0")
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.5.0-rc.1")
 
-	out, err := runUpdate(t, "0.5.0-rc.1", "", exe)
+	out, err := runUpdate(t, d, "0.5.0-rc.1", "", exe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,15 +288,16 @@ func TestNewerThanLatest(t *testing.T) {
 }
 
 func TestNamedVersion(t *testing.T) {
+	t.Parallel()
 	for _, arg := range []string{"0.5.0-rc.1", "v0.5.0-rc.1"} {
 		t.Run(arg, func(t *testing.T) {
 			repo := &fakeRepo{latest: "v0.4.0"}
 			repo.addRelease(t, "0.4.0")
 			repo.addRelease(t, "0.5.0-rc.1")
-			serve(t, repo)
+			d := serve(t, repo)
 			exe := installed(t, "0.4.0")
 
-			if _, err := runUpdate(t, "0.4.0", arg, exe); err != nil {
+			if _, err := runUpdate(t, d, "0.4.0", arg, exe); err != nil {
 				t.Fatal(err)
 			}
 			assertInstalled(t, exe, "0.5.0-rc.1")
@@ -293,23 +306,25 @@ func TestNamedVersion(t *testing.T) {
 }
 
 func TestNamedOlderVersion(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.4.0"}
 	repo.addRelease(t, "0.3.0")
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 
-	if _, err := runUpdate(t, "0.4.0", "0.3.0", exe); err != nil {
+	if _, err := runUpdate(t, d, "0.4.0", "0.3.0", exe); err != nil {
 		t.Fatal(err)
 	}
 	assertInstalled(t, exe, "0.3.0")
 }
 
 func TestNamedVersionAlreadyInstalled(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{}
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 
-	out, err := runUpdate(t, "0.4.0", "v0.4.0", exe)
+	out, err := runUpdate(t, d, "0.4.0", "v0.4.0", exe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,33 +337,36 @@ func TestNamedVersionAlreadyInstalled(t *testing.T) {
 }
 
 func TestNamedVersionNotFound(t *testing.T) {
-	serve(t, &fakeRepo{})
+	t.Parallel()
+	d := serve(t, &fakeRepo{})
 	exe := installed(t, "0.4.0")
 
-	_, err := runUpdate(t, "0.4.0", "9.9.9", exe)
+	_, err := runUpdate(t, d, "0.4.0", "9.9.9", exe)
 	wantErr(t, err, "there is no release v9.9.9 of axon", "axon 0.4.0 is unchanged.")
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 func TestInvalidVersion(t *testing.T) {
-	serve(t, &fakeRepo{})
+	t.Parallel()
+	d := serve(t, &fakeRepo{})
 	exe := installed(t, "0.4.0")
 
 	for _, arg := range []string{"latest", "1.2", "v1.2.3+meta"} {
-		_, err := runUpdate(t, "0.4.0", arg, exe)
+		_, err := runUpdate(t, d, "0.4.0", arg, exe)
 		wantErr(t, err, "is not a release version")
 	}
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 func TestDevelopmentBuild(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.4.0"}
 	repo.addRelease(t, "0.4.0")
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "dev")
 
 	for _, arg := range []string{"", "0.4.0"} {
-		_, err := runUpdate(t, "dev", arg, exe)
+		_, err := runUpdate(t, d, "dev", arg, exe)
 		wantErr(t, err, "development build (dev)", InstallLine)
 	}
 	assertUnchanged(t, exe, "dev")
@@ -358,126 +376,136 @@ func TestDevelopmentBuild(t *testing.T) {
 }
 
 func TestNoRelease(t *testing.T) {
-	serve(t, &fakeRepo{})
+	t.Parallel()
+	d := serve(t, &fakeRepo{})
 	exe := installed(t, "0.4.0")
 
-	_, err := runUpdate(t, "0.4.0", "", exe)
+	_, err := runUpdate(t, d, "0.4.0", "", exe)
 	wantErr(t, err, "no release of axon was found", "--version")
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 func TestChecksumMismatch(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
 	archive := tarGz(t, map[string][]byte{"axon": fakeBinary("0.5.0")})
 	repo.setArchive("0.5.0", name, archive, []byte("something else"))
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 
-	_, err := runUpdate(t, "0.4.0", "", exe)
+	_, err := runUpdate(t, d, "0.4.0", "", exe)
 	wantErr(t, err, "the checksum of "+name+" does not match checksums.txt", "axon 0.4.0 is unchanged.")
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 func TestFailedDownload(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
 	delete(repo.files, "v0.5.0/axon_0.5.0_"+testPlatform+".tar.gz")
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 
-	_, err := runUpdate(t, "0.4.0", "", exe)
+	_, err := runUpdate(t, d, "0.4.0", "", exe)
 	wantErr(t, err, "could not download axon_0.5.0_"+testPlatform+".tar.gz of release v0.5.0", "Check your network connection", "axon 0.4.0 is unchanged.")
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 func TestNoNetwork(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.NotFoundHandler())
 	addr := srv.URL
 	srv.Close()
-	old := repoURL
-	repoURL = addr + "/org/axon"
-	t.Cleanup(func() { repoURL = old })
+	d := testDeps(addr + "/org/axon")
 	exe := installed(t, "0.4.0")
 
-	_, err := runUpdate(t, "0.4.0", "", exe)
+	_, err := runUpdate(t, d, "0.4.0", "", exe)
 	wantErr(t, err, "could not look up the latest release at "+addr+"/org/axon/releases/latest: connection refused. Check your network connection and run `axon update` again.")
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 // A download that gets no answer gives the short reason.
 func TestNoNetworkForDownload(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.NotFoundHandler())
 	addr := srv.URL
 	srv.Close()
-	old := repoURL
-	repoURL = addr + "/org/axon"
-	t.Cleanup(func() { repoURL = old })
+	d := testDeps(addr + "/org/axon")
 	exe := installed(t, "0.4.0")
 
-	_, err := runUpdate(t, "0.4.0", "0.5.0", exe)
+	_, err := runUpdate(t, d, "0.4.0", "0.5.0", exe)
 	wantErr(t, err, "could not download checksums.txt of release v0.5.0: connection refused. axon 0.4.0 is unchanged.")
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 func TestNoArchiveForPlatform(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 
 	var out bytes.Buffer
-	err := Run(context.Background(), Options{Current: "0.4.0", Exe: exe, Platform: "darwin_arm64", Out: &out})
+	d.platform = "darwin_arm64"
+	d.executable = func() (string, error) { return exe, nil }
+	err := d.run(context.Background(), Options{Current: "0.4.0", Out: &out})
 	wantErr(t, err, "release v0.5.0 has no archive for darwin_arm64", "axon 0.4.0 is unchanged.")
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 func TestUnreleasedPlatform(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 
 	var out bytes.Buffer
-	err := Run(context.Background(), Options{Current: "0.4.0", Exe: exe, Platform: "windows_amd64", Out: &out})
+	d.platform = "windows_amd64"
+	d.executable = func() (string, error) { return exe, nil }
+	err := d.run(context.Background(), Options{Current: "0.4.0", Out: &out})
 	wantErr(t, err, "axon is not released for windows_amd64")
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 func TestArchiveWithoutBinary(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
 	archive := tarGz(t, map[string][]byte{"README.md": []byte("no binary")})
 	repo.setArchive("0.5.0", name, archive, archive)
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 
-	_, err := runUpdate(t, "0.4.0", "", exe)
+	_, err := runUpdate(t, d, "0.4.0", "", exe)
 	wantErr(t, err, "holds no axon binary")
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 func TestArchiveEntryPathIsIgnored(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
 	archive := tarGz(t, map[string][]byte{"../../evil/axon": fakeBinary("0.5.0")})
 	repo.setArchive("0.5.0", name, archive, archive)
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 
-	if _, err := runUpdate(t, "0.4.0", "", exe); err != nil {
+	if _, err := runUpdate(t, d, "0.4.0", "", exe); err != nil {
 		t.Fatal(err)
 	}
 	assertInstalled(t, exe, "0.5.0")
 }
 
 func TestUnwritableDirectory(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root can write to any directory")
 	}
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 	dir := filepath.Dir(exe)
 	if err := os.Chmod(dir, 0o555); err != nil {
@@ -485,50 +513,53 @@ func TestUnwritableDirectory(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chmod(dir, 0o755) })
 
-	_, err := runUpdate(t, "0.4.0", "", exe)
+	_, err := runUpdate(t, d, "0.4.0", "", exe)
 	wantErr(t, err, "cannot write to "+dir, "axon 0.4.0 is unchanged.", InstallLine)
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 func TestNewBinaryReportsAnotherVersion(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
 	// This binary runs, and reports another version than its release's.
 	archive := tarGz(t, map[string][]byte{"axon": fakeBinary("0.0.1")})
 	repo.setArchive("0.5.0", name, archive, archive)
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 
-	_, err := runUpdate(t, "0.4.0", "", exe)
+	_, err := runUpdate(t, d, "0.4.0", "", exe)
 	wantErr(t, err, "the downloaded axon 0.5.0 reports \"axon 0.0.1\"", "axon 0.4.0 is unchanged.")
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 func TestNewBinaryCannotRun(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
 	// No interpreter exists at this path, so the binary cannot be run.
 	archive := tarGz(t, map[string][]byte{"axon": []byte("#!/nonexistent/interpreter\n")})
 	repo.setArchive("0.5.0", name, archive, archive)
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 
-	_, err := runUpdate(t, "0.4.0", "", exe)
+	_, err := runUpdate(t, d, "0.4.0", "", exe)
 	wantErr(t, err, "the downloaded axon 0.5.0 does not run in "+filepath.Dir(exe), "allows running programs", "axon 0.4.0 is unchanged.")
 	assertUnchanged(t, exe, "0.4.0")
 }
 
 func TestSymlinkedBinary(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 	link := filepath.Join(t.TempDir(), "axon")
 	if err := os.Symlink(exe, link); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := runUpdate(t, "0.4.0", "", link); err != nil {
+	if _, err := runUpdate(t, d, "0.4.0", "", link); err != nil {
 		t.Fatal(err)
 	}
 	assertInstalled(t, exe, "0.5.0")
@@ -539,13 +570,11 @@ func TestSymlinkedBinary(t *testing.T) {
 
 // A download that stalls ends with the short reason.
 func TestStalledDownload(t *testing.T) {
-	old := stallTimeout
-	stallTimeout = 100 * time.Millisecond
-	t.Cleanup(func() { stallTimeout = old })
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
-	serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	d := serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/"+name) {
 			w.Header().Set("Content-Length", "1000")
 			w.Write([]byte("partial"))
@@ -558,9 +587,10 @@ func TestStalledDownload(t *testing.T) {
 		}
 		repo.ServeHTTP(w, r)
 	}))
+	d.stallTimeout = 100 * time.Millisecond
 	exe := installed(t, "0.4.0")
 
-	_, err := runUpdate(t, "0.4.0", "", exe)
+	_, err := runUpdate(t, d, "0.4.0", "", exe)
 	wantErr(t, err, "could not download "+name+" of release v0.5.0: timed out. axon 0.4.0 is unchanged. Check your network connection and run `axon update` again.")
 	assertUnchanged(t, exe, "0.4.0")
 }
@@ -568,6 +598,7 @@ func TestStalledDownload(t *testing.T) {
 // A binary that cannot be written in full leaves nothing in the directory:
 // neither the reserved name nor a temporary file.
 func TestStagingFailureLeavesNothing(t *testing.T) {
+	t.Parallel()
 	// noise is content gzip cannot shrink, so a cut archive is cut in the
 	// binary's body, after its header.
 	noise := make([]byte, 0, 64<<10)
@@ -585,16 +616,14 @@ func TestStagingFailureLeavesNothing(t *testing.T) {
 		{"cut short", whole[:len(whole)*3/4], 512 << 20, "read the archive"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			old := maxBinary
-			maxBinary = tc.limit
-			t.Cleanup(func() { maxBinary = old })
 			repo := &fakeRepo{latest: "v0.5.0"}
 			name := "axon_0.5.0_" + testPlatform + ".tar.gz"
 			repo.setArchive("0.5.0", name, tc.archive, tc.archive)
-			serve(t, repo)
+			d := serve(t, repo)
+			d.maxBinary = tc.limit
 			exe := installed(t, "0.4.0")
 
-			_, err := runUpdate(t, "0.4.0", "", exe)
+			_, err := runUpdate(t, d, "0.4.0", "", exe)
 			// The failure comes after the staged name was reserved.
 			wantErr(t, err, "could not unpack "+name, "/.axon-update-", tc.want, "axon 0.4.0 is unchanged.")
 			assertUnchanged(t, exe, "0.4.0")
@@ -603,6 +632,7 @@ func TestStagingFailureLeavesNothing(t *testing.T) {
 }
 
 func TestRepoURLMustBeHTTPSOrLoopback(t *testing.T) {
+	t.Parallel()
 	for _, raw := range []string{"http://example.org/org/axon", "ftp://127.0.0.1/x", "file:///tmp/x"} {
 		if _, err := parseRepoURL(raw); err == nil {
 			t.Errorf("parseRepoURL(%q) = nil error", raw)
@@ -616,6 +646,7 @@ func TestRepoURLMustBeHTTPSOrLoopback(t *testing.T) {
 }
 
 func TestChecksumFor(t *testing.T) {
+	t.Parallel()
 	sums := []byte("aaaa  axon_1_linux_amd64.tar.gz\nBBBB *axon_1_darwin_arm64.tar.gz\n")
 	if got, ok := checksumFor(sums, "axon_1_linux_amd64.tar.gz"); !ok || got != "aaaa" {
 		t.Errorf("linux = %q, %v", got, ok)
@@ -632,6 +663,7 @@ func TestChecksumFor(t *testing.T) {
 // address first; the redirects are followed on the same host until one
 // names a tag.
 func TestLatestTagFollowsAMovedRepository(t *testing.T) {
+	t.Parallel()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/old/axon/releases/latest", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/new/axon/releases/latest", http.StatusMovedPermanently)
@@ -652,6 +684,7 @@ func TestLatestTagFollowsAMovedRepository(t *testing.T) {
 // A redirect to another host, and a chain of redirects that names no tag,
 // find no release.
 func TestLatestTagStopsOffTheHostAndAfterTooManyRedirects(t *testing.T) {
+	t.Parallel()
 	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/org/axon/releases/tag/v9.9.9", http.StatusFound)
 	}))
@@ -681,6 +714,7 @@ func TestLatestTagStopsOffTheHostAndAfterTooManyRedirects(t *testing.T) {
 // A server error in answer to the lookup of the latest release is reported
 // with the server's status, without the control characters it holds.
 func TestLatestTagServerErrorIsCleaned(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// net/http writes the status text it knows; hijack to send a raw one.
 		conn, buf, err := w.(http.Hijacker).Hijack()

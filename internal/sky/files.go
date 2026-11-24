@@ -2,7 +2,6 @@ package sky
 
 import (
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 )
@@ -17,7 +16,11 @@ const (
 // the user whose home directory is home: the path in SKYPILOT_API_COOKIE_FILE,
 // as getenv reports it, when that is set, and ~/.sky/cookies.txt otherwise.
 func CookieFile(home string, getenv func(string) string) string {
-	return skyPilotFile(home, getenv(cookieFileVar), filepath.Join(".sky", "cookies.txt"))
+	return defaults().cookieFile(home, getenv)
+}
+
+func (d deps) cookieFile(home string, getenv func(string) string) string {
+	return d.skyPilotFile(home, getenv(cookieFileVar), filepath.Join(".sky", "cookies.txt"))
 }
 
 // SettingsFile returns the path of SkyPilot's user configuration file, where
@@ -25,7 +28,11 @@ func CookieFile(home string, getenv func(string) string) string {
 // home: the path in SKYPILOT_GLOBAL_CONFIG, as getenv reports it, when that
 // is set, and ~/.sky/config.yaml otherwise.
 func SettingsFile(home string, getenv func(string) string) string {
-	return skyPilotFile(home, getenv(settingsFileVar), filepath.Join(".sky", "config.yaml"))
+	return defaults().settingsFile(home, getenv)
+}
+
+func (d deps) settingsFile(home string, getenv func(string) string) string {
+	return d.skyPilotFile(home, getenv(settingsFileVar), filepath.Join(".sky", "config.yaml"))
 }
 
 // skyPilotFile returns the file a SkyPilot variable names, p, or the file at
@@ -34,7 +41,7 @@ func SettingsFile(home string, getenv func(string) string) string {
 // working directory. The rest of p is kept as it is, not cleaned: SkyPilot
 // opens the path as written, and a ".." after a symbolic link leads where
 // the link points.
-func skyPilotFile(home, p, def string) string {
+func (d deps) skyPilotFile(home, p, def string) string {
 	switch {
 	case p == "":
 		return filepath.Join(home, def)
@@ -44,7 +51,7 @@ func skyPilotFile(home, p, def string) string {
 		// "~name" or "~name/rest" is that account's home directory. An
 		// unknown account leaves the path as it is, as SkyPilot does.
 		name, _, _ := strings.Cut(p[1:], "/")
-		if u, err := lookupUser(name); err == nil && u.HomeDir != "" {
+		if u, err := d.lookupUser(name); err == nil && u.HomeDir != "" {
 			return underDir(u.HomeDir, p[1+len(name):])
 		}
 	}
@@ -65,6 +72,3 @@ func underDir(dir, rest string) string {
 	}
 	return strings.TrimRight(dir, "/") + rest
 }
-
-// lookupUser finds an account by name; tests replace it.
-var lookupUser = user.Lookup

@@ -50,6 +50,7 @@ func (h *harness) handMadeRecord(id string) configfile.Record {
 }
 
 func TestPromptMakesADirectPathway(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	h.terminal()
@@ -89,6 +90,7 @@ func TestPromptMakesADirectPathway(t *testing.T) {
 }
 
 func TestPromptMakesATeleportPathway(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	h.terminal()
@@ -121,6 +123,7 @@ func TestPromptMakesATeleportPathway(t *testing.T) {
 }
 
 func TestPromptAsksAgainUntilTheServerAnswers(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	h.terminal()
@@ -153,6 +156,7 @@ func TestPromptAsksAgainUntilTheServerAnswers(t *testing.T) {
 }
 
 func TestPromptProxyThatDoesNotAnswer(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	h.terminal()
@@ -175,6 +179,7 @@ func TestPromptProxyThatDoesNotAnswer(t *testing.T) {
 }
 
 func TestPromptEndOfInput(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	h.terminal()
@@ -193,6 +198,7 @@ func TestPromptEndOfInput(t *testing.T) {
 }
 
 func TestPromptNameWithoutALetterAsksAgain(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	h.terminal()
@@ -207,6 +213,7 @@ func TestPromptNameWithoutALetterAsksAgain(t *testing.T) {
 }
 
 func TestSecondLoginAsksNothing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	h.terminal()
@@ -225,6 +232,7 @@ func TestSecondLoginAsksNothing(t *testing.T) {
 }
 
 func TestStoredFileMeansNoPrompt(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.terminal()
 	h.servers(nil)
@@ -238,6 +246,7 @@ func TestStoredFileMeansNoPrompt(t *testing.T) {
 }
 
 func TestFlagsMakeADirectPathway(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.servers(nil)
 	h.logIn()
@@ -258,6 +267,7 @@ func TestFlagsMakeADirectPathway(t *testing.T) {
 }
 
 func TestFlagsMakeATeleportPathway(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	h.servers(nil)
@@ -283,6 +293,7 @@ func TestFlagsMakeATeleportPathway(t *testing.T) {
 }
 
 func TestFlagsWithAServerThatDoesNotAnswer(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		opts Options
@@ -312,6 +323,7 @@ func TestFlagsWithAServerThatDoesNotAnswer(t *testing.T) {
 }
 
 func TestFlagValuesAreChecked(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		opts Options
 		want string
@@ -330,6 +342,7 @@ func TestFlagValuesAreChecked(t *testing.T) {
 }
 
 func TestContradictingFlags(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		opts Options
 		want string
@@ -353,6 +366,7 @@ func TestContradictingFlags(t *testing.T) {
 }
 
 func TestIdentifier(t *testing.T) {
+	t.Parallel()
 	for name, want := range map[string]string{
 		"Campus":          "campus",
 		"sky.example.org": "sky-example-org",
@@ -367,6 +381,7 @@ func TestIdentifier(t *testing.T) {
 }
 
 func TestFileID(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	store := configfile.NewStore(axondir.New(home))
 	must := func(id string, err error) string {
@@ -400,6 +415,7 @@ func TestFileID(t *testing.T) {
 // An error other than a missing file stops fileID, rather than trying
 // one suffix after another.
 func TestFileIDReturnsAnError(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	store := configfile.NewStore(axondir.New(home))
 	// A file in place of ~/.axon makes every path below it fail with
@@ -413,6 +429,7 @@ func TestFileIDReturnsAnError(t *testing.T) {
 }
 
 func TestCleanProxy(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]string{
 		"teleport.example.org.":         "teleport.example.org",
 		"https://teleport.example.org/": "teleport.example.org",
@@ -432,6 +449,7 @@ func TestCleanProxy(t *testing.T) {
 // A hand-made pathway's answers are refused when they hold a control or
 // format character, which a config file may not hold.
 func TestCleanRefusesUnsafeCharacters(t *testing.T) {
+	t.Parallel()
 	if _, err := cleanName("Lab\u202e"); err == nil || err.Error() != msgNameUnsafe {
 		t.Errorf("cleanName with a format character: %v", err)
 	}
@@ -484,6 +502,7 @@ func (h *harness) serversFailing(host string, err error) {
 // The reason in a can't-reach message is the short one, at the prompt and
 // from the flags, for an API server and a Teleport proxy.
 func TestCantReachReasonIsShort(t *testing.T) {
+	t.Parallel()
 	const host = "sky.wrong.example"
 	noHost := &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
 	refused := os.NewSyscallError("connect", syscall.ECONNREFUSED)
@@ -541,6 +560,7 @@ func TestCantReachReasonIsShort(t *testing.T) {
 // probeSky, the check the prompt and the flags make, gives the short reason
 // for a port where nothing listens.
 func TestProbeSkyRefused(t *testing.T) {
+	t.Parallel()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -580,6 +600,7 @@ func TestConfigProxyCantBeReached(t *testing.T) {
 
 // A proxy that answers, but not with its version, keeps its full reason.
 func TestProxyThatAnswersKeepsItsReason(t *testing.T) {
+	t.Parallel()
 	const host = "tp.example.org"
 	answered := fmt.Errorf("read the Teleport proxy's version at https://%s/webapi/ping: %w", host,
 		errors.New("GET https://"+host+"/webapi/ping: 404 Not Found"))

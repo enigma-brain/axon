@@ -28,7 +28,19 @@ func init() {
 const usesAxonDir = "axon-dir"
 
 // NewRoot returns the axon command, which reports version for --version.
-func NewRoot(version string) *cobra.Command {
+func NewRoot(version string) *cobra.Command { return newRoot(version, defaults()) }
+
+// deps are what the command tree depends on. NewRoot uses defaults();
+// tests build their own.
+type deps struct {
+	// moveOldNames moves what axon v0.3.0 and earlier kept in dir to the
+	// current names, and tells w what it moved.
+	moveOldNames func(w io.Writer, dir axondir.Dir) error
+}
+
+func defaults() deps { return deps{moveOldNames: moveOldNames} }
+
+func newRoot(version string, d deps) *cobra.Command {
 	// dir is the user's axon directory. The root's hook resolves it, with
 	// the home directory, before any command that uses it runs; the
 	// commands read it when they run.
@@ -50,7 +62,7 @@ func NewRoot(version string) *cobra.Command {
 			return fmt.Errorf("find the home directory: %w", err)
 		}
 		dir = axondir.New(home)
-		return moveOldNames(cmd.ErrOrStderr(), dir)
+		return d.moveOldNames(cmd.ErrOrStderr(), dir)
 	}
 	root.SetVersionTemplate("axon {{.Version}}\n")
 	root.CompletionOptions.DisableDefaultCmd = true
@@ -62,8 +74,8 @@ func NewRoot(version string) *cobra.Command {
 
 // moveOldNames moves what axon v0.3.0 and earlier kept in dir to the
 // current names, and tells w what it moved and what it found under both
-// names. Tests replace it.
-var moveOldNames = func(w io.Writer, dir axondir.Dir) error {
+// names.
+func moveOldNames(w io.Writer, dir axondir.Dir) error {
 	moves, err := dir.MoveOldNames()
 	reportMoves(w, dir, moves)
 	if err != nil {

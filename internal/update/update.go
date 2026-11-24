@@ -57,12 +57,30 @@ const (
 	runTimeout = 30 * time.Second
 )
 
-var (
+// deps are what an update depends on outside its options. Run uses
+// defaults(); tests build their own.
+type deps struct {
+	// repoURL is the address of axon's repository.
+	repoURL string
+	// executable returns the path of the binary to replace.
+	executable func() (string, error)
+	// platform is <os>_<arch>.
+	platform string
 	// maxBinary bounds the size of the axon binary inside the archive.
-	maxBinary int64 = 512 << 20
+	maxBinary int64
 	// stallTimeout ends a download when no data arrives for this long.
-	stallTimeout = download.DefaultStall
-)
+	stallTimeout time.Duration
+}
+
+func defaults() deps {
+	return deps{
+		repoURL:      repoURL,
+		executable:   os.Executable,
+		platform:     runtime.GOOS + "_" + runtime.GOARCH,
+		maxBinary:    512 << 20,
+		stallTimeout: download.DefaultStall,
+	}
+}
 
 // Options are the inputs of an update.
 type Options struct {
@@ -71,30 +89,24 @@ type Options struct {
 	// Version names the release to install, with or without its leading v.
 	// Empty means the latest release.
 	Version string
-	// Exe is the path of the binary to replace. Empty means the running
-	// executable.
-	Exe string
-	// Platform is <os>_<arch>. Empty means the platform axon runs on.
-	Platform string
 	// Out receives the lines that report progress and the outcome.
 	Out io.Writer
 }
 
-// Run updates the binary at opts.Exe, or the running executable, to the
+// Run updates the running executable to the
 // release opts.Version names, or to the latest release. On any failure the
 // binary is left as it was.
-func Run(ctx context.Context, opts Options) error {
+func Run(ctx context.Context, opts Options) error { return defaults().run(ctx, opts) }
+
+func (d deps) run(ctx context.Context, opts Options) error {
 	current := opts.Current
 	if !semver.IsValid("v" + current) {
 		return fmt.Errorf("this axon is a development build (%s), and `axon update` updates only a released axon. Install a release with the install line:\n\n    %s", current, InstallLine)
 	}
-	platform := opts.Platform
-	if platform == "" {
-		platform = runtime.GOOS + "_" + runtime.GOARCH
-	}
+	platform := d.platform
 	unchanged := fmt.Sprintf("axon %s is unchanged.", current)
 
-	base, err := parseRepoURL(repoURL)
+	base, err := parseRepoURL(d.repoURL)
 	if err != nil {
 		return err
 	}
@@ -133,11 +145,9 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("axon is not released for %s; it is released for macOS on Apple silicon, macOS on Intel and Linux on x86-64. %s", platform, unchanged)
 	}
 
-	exe := opts.Exe
-	if exe == "" {
-		if exe, err = os.Executable(); err != nil {
-			return fmt.Errorf("could not find the path of the running axon: %v. %s Update it with the install line:\n\n    %s", err, unchanged, InstallLine)
-		}
+	exe, err := d.executable()
+	if err != nil {
+		return fmt.Errorf("could not find the path of the running axon: %v. %s Update it with the install line:\n\n    %s", err, unchanged, InstallLine)
 	}
 	// Replace the file a symlink points to, not the symlink, so the
 	// rename stays within the file's own directory.
@@ -155,7 +165,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	var sums bytes.Buffer
-	err = fetch(ctx, release.JoinPath("checksums.txt"), &sums, maxChecksums, "")
+	err = d.fetch(ctx, release.JoinPath("checksums.txt"), &sums, maxChecksums, "")
 	var status *download.StatusError
 	if errors.As(err, &status) && status.Code == http.StatusNotFound {
 		if opts.Version != "" {
@@ -172,7 +182,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	var archive bytes.Buffer
-	err = fetch(ctx, release.JoinPath(name), &archive, maxArchive, want)
+	err = d.fetch(ctx, release.JoinPath(name), &archive, maxArchive, want)
 	var mismatch *download.ChecksumError
 	if errors.As(err, &mismatch) {
 		return fmt.Errorf("the checksum of %s does not match checksums.txt of release %s (expected %s, got %s). Nothing was changed: %s Run `axon update` again, and report the release if it fails the same way.", name, tag, mismatch.Want, mismatch.Got, unchanged)
@@ -182,7 +192,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	dir := filepath.Dir(exe)
-	staged, err := stage(archive.Bytes(), dir)
+	staged, err := d.stage(archive.Bytes(), dir)
 	if err != nil {
 		var noBinary errNoBinary
 		if errors.As(err, &noBinary) {
@@ -285,8 +295,8 @@ func latestTag(ctx context.Context, client *http.Client, base *url.URL) (string,
 // SHA-256 sum when it is not empty. A failed request's error is its short
 // reason, such as "connection refused" or "timed out", since the messages
 // already name what was requested.
-func fetch(ctx context.Context, u *url.URL, w io.Writer, limit int64, sum string) error {
-	err := download.Fetch(ctx, u.String(), w, download.Options{Limit: limit, Stall: stallTimeout, SHA256: sum})
+func (d deps) fetch(ctx context.Context, u *url.URL, w io.Writer, limit int64, sum string) error {
+	err := download.Fetch(ctx, u.String(), w, download.Options{Limit: limit, Stall: d.stallTimeout, SHA256: sum})
 	var status *download.StatusError
 	var tooLarge *download.TooLargeError
 	var mismatch *download.ChecksumError
@@ -338,8 +348,8 @@ func (errNoBinary) Error() string { return "the archive holds no axon binary" }
 // file in dir, with mode 0755, and returns the file's path. Only the first
 // regular file named axon, whatever directory the archive puts it in, is
 // written; every other entry is ignored. On failure nothing is left in dir.
-func stage(archive []byte, dir string) (string, error) {
-	bin, err := download.ExtractFile(bytes.NewReader(archive), "axon", maxBinary)
+func (d deps) stage(archive []byte, dir string) (string, error) {
+	bin, err := download.ExtractFile(bytes.NewReader(archive), "axon", d.maxBinary)
 	if errors.Is(err, download.ErrNotInArchive) {
 		return "", errNoBinary{}
 	}

@@ -64,6 +64,7 @@ func run(t *testing.T, args ...string) (string, error) {
 }
 
 func TestHelpListsTheCommands(t *testing.T) {
+	t.Parallel()
 	out, err := run(t, "--help")
 	if err != nil {
 		t.Fatal(err)
@@ -85,6 +86,7 @@ func TestHelpListsTheCommands(t *testing.T) {
 }
 
 func TestHelpAndCompletionCommandsAbsent(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"help", "completion"} {
 		if _, err := run(t, name); err == nil || !strings.Contains(err.Error(), "unknown command") {
 			t.Errorf("axon %s: err = %v, want unknown command", name, err)
@@ -93,6 +95,7 @@ func TestHelpAndCompletionCommandsAbsent(t *testing.T) {
 }
 
 func TestVersion(t *testing.T) {
+	t.Parallel()
 	out, err := run(t, "--version")
 	if err != nil {
 		t.Fatal(err)
@@ -103,6 +106,7 @@ func TestVersion(t *testing.T) {
 }
 
 func TestUpdateHelpNamesItsFlag(t *testing.T) {
+	t.Parallel()
 	out, err := run(t, "update", "--help")
 	if err != nil {
 		t.Fatal(err)
@@ -117,6 +121,7 @@ func TestUpdateHelpNamesItsFlag(t *testing.T) {
 // The root's --version still prints the version; the update command's own
 // --version names a release.
 func TestUpdateVersionFlagIsTheCommands(t *testing.T) {
+	t.Parallel()
 	_, err := run(t, "update", "--version")
 	if err == nil || !strings.Contains(err.Error(), "flag needs an argument: --version") {
 		t.Errorf("update --version: err = %v", err)
@@ -124,6 +129,7 @@ func TestUpdateVersionFlagIsTheCommands(t *testing.T) {
 }
 
 func TestUpdateOfADevelopmentBuildIsRefused(t *testing.T) {
+	t.Parallel()
 	root := NewRoot("dev")
 	var out bytes.Buffer
 	root.SetOut(&out)
@@ -136,6 +142,7 @@ func TestUpdateOfADevelopmentBuildIsRefused(t *testing.T) {
 }
 
 func TestLoginHelpNamesItsFlags(t *testing.T) {
+	t.Parallel()
 	out, err := run(t, "login", "--help")
 	if err != nil {
 		t.Fatal(err)
@@ -201,6 +208,7 @@ func TestDevenvIsGone(t *testing.T) {
 }
 
 func TestConfigHelp(t *testing.T) {
+	t.Parallel()
 	for args, want := range map[string][]string{
 		"config":             {"See the config files and pathways stored on this laptop", "list"},
 		"config --help":      {"See the config files and pathways stored on this laptop", "list"},

@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/enigma-brain/axon/internal/axondir"
@@ -44,15 +43,9 @@ var uvBuilds = map[string]uvBuild{
 	},
 }
 
-// uvBaseURL is where uv's release archives are downloaded from.
-var uvBaseURL = "https://github.com/astral-sh/uv/releases/download"
-
-// platform is the GOOS/GOARCH this binary runs on.
-var platform = runtime.GOOS + "/" + runtime.GOARCH
-
 // ensureUV returns the path of the pinned uv under tools, downloading and
 // verifying it when it is not there. Other versions of uv are removed.
-func ensureUV(ctx context.Context, tools string, progress io.Writer) (string, error) {
+func (d deps) ensureUV(ctx context.Context, tools string, progress io.Writer) (string, error) {
 	uvRoot := filepath.Join(tools, "uv")
 	uvDir := filepath.Join(uvRoot, uvVersion)
 	uvPath := filepath.Join(uvDir, "uv")
@@ -60,9 +53,9 @@ func ensureUV(ctx context.Context, tools string, progress io.Writer) (string, er
 		return uvPath, nil
 	}
 
-	build, ok := uvBuilds[platform]
+	build, ok := d.uvBuilds[d.platform]
 	if !ok {
-		return "", unavailableError{fmt.Errorf("the SkyPilot client cannot be installed on %s; axon supports macOS on Apple silicon and Intel, and Linux on x86-64", platform)}
+		return "", unavailableError{fmt.Errorf("the SkyPilot client cannot be installed on %s; axon supports macOS on Apple silicon and Intel, and Linux on x86-64", d.platform)}
 	}
 
 	// The version's directory is made only once the archive has arrived
@@ -83,11 +76,11 @@ func ensureUV(ctx context.Context, tools string, progress io.Writer) (string, er
 	defer os.Remove(archive.Name())
 	defer archive.Close()
 
-	url := fmt.Sprintf("%s/%s/uv-%s.tar.gz", uvBaseURL, uvVersion, build.target)
-	err = step(progress, "uv "+uvVersion, false, func(out io.Writer) error {
+	url := fmt.Sprintf("%s/%s/uv-%s.tar.gz", d.uvBaseURL, uvVersion, build.target)
+	err = d.step(progress, "uv "+uvVersion, false, func(out io.Writer) error {
 		err := download.Fetch(ctx, url, archive, download.Options{
-			Limit:    maxDownload,
-			Stall:    stallTimeout,
+			Limit:    d.maxDownload,
+			Stall:    d.stallTimeout,
 			SHA256:   build.sha256,
 			Progress: quarters(out),
 		})

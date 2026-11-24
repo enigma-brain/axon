@@ -98,6 +98,7 @@ func endedBy(err error, sig syscall.Signal) bool {
 // pathway the user is on: axon ends by the signal, prints one line, and
 // sets no pathway.
 func TestInterruptAtAQuestion(t *testing.T) {
+	t.Parallel()
 	bin := build(t, "1.2.3")
 	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
 		t.Run(sig.String(), func(t *testing.T) {

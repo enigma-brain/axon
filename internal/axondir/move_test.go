@@ -89,6 +89,7 @@ var allMoved = []string{
 }
 
 func TestMoveOldNamesWithNoAxonDirectoryCreatesNothing(t *testing.T) {
+	t.Parallel()
 	d, _ := newDir(t)
 	m, err := d.MoveOldNames()
 	if err != nil {
@@ -103,6 +104,7 @@ func TestMoveOldNamesWithNoAxonDirectoryCreatesNothing(t *testing.T) {
 }
 
 func TestMoveOldNamesOnTheNewLayoutWritesNothing(t *testing.T) {
+	t.Parallel()
 	d, _ := newDir(t)
 	writeTree(t, d.Root(), newLayout)
 	m, err := d.MoveOldNames()
@@ -121,6 +123,7 @@ func TestMoveOldNamesOnTheNewLayoutWritesNothing(t *testing.T) {
 }
 
 func TestMoveOldNamesMovesTheOldLayout(t *testing.T) {
+	t.Parallel()
 	d, _ := newDir(t)
 	writeTree(t, d.Root(), oldLayout)
 	m, err := d.MoveOldNames()
@@ -154,6 +157,7 @@ func TestMoveOldNamesMovesTheOldLayout(t *testing.T) {
 
 // A move stopped after any of its renames is finished by the next run.
 func TestMoveOldNamesFinishesAnInterruptedMove(t *testing.T) {
+	t.Parallel()
 	type part struct{ old, new string }
 	parts := []part{{"orgs", "configs"}, {"state/orgs", "state/configs"}, {"config.toml", "settings.toml"}}
 	for done := 0; done < 1<<len(parts); done++ {
@@ -201,6 +205,7 @@ func TestMoveOldNamesFinishesAnInterruptedMove(t *testing.T) {
 // When both names exist, the new one is kept as it is, the old one is left
 // where it is, and the rest still moves.
 func TestMoveOldNamesLeavesBothNames(t *testing.T) {
+	t.Parallel()
 	d, _ := newDir(t)
 	writeTree(t, d.Root(), oldLayout)
 	writeTree(t, d.Root(), map[string]string{"configs/new.toml": "id = \"new\"\n"})
@@ -233,6 +238,7 @@ func TestMoveOldNamesLeavesBothNames(t *testing.T) {
 
 // An old layout without a state directory gets one, for the lock.
 func TestMoveOldNamesCreatesTheStateDirectoryForTheLock(t *testing.T) {
+	t.Parallel()
 	d, _ := newDir(t)
 	writeTree(t, d.Root(), map[string]string{"orgs/a.toml": "x", "config.toml": "pathway = \"a\"\n"})
 	m, err := d.MoveOldNames()
@@ -250,6 +256,7 @@ func TestMoveOldNamesCreatesTheStateDirectoryForTheLock(t *testing.T) {
 
 // Two processes started together move each name once and lose nothing.
 func TestMoveOldNamesTogether(t *testing.T) {
+	t.Parallel()
 	d, _ := newDir(t)
 	writeTree(t, d.Root(), oldLayout)
 	const n = 8
@@ -287,6 +294,7 @@ func TestMoveOldNamesTogether(t *testing.T) {
 // A move that cannot be made stops with the path and the reason, and
 // leaves the name it could not move under its old name.
 func TestMoveOldNamesThatCannotBeMade(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root writes to a read-only directory")
 	}

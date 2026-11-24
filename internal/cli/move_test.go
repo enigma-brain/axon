@@ -21,20 +21,18 @@ func TestMain(m *testing.M) {
 	os.Exit(testkit.Main(m, testkit.FenceOptions{}))
 }
 
-// countMoves replaces moveOldNames with one that counts its calls.
-func countMoves(t *testing.T) *int {
-	t.Helper()
-	n := new(int)
-	saved := moveOldNames
-	moveOldNames = func(io.Writer, axondir.Dir) error { *n++; return nil }
-	t.Cleanup(func() { moveOldNames = saved })
-	return n
+// countMoves returns deps whose moveOldNames counts its calls in n.
+func countMoves() (d deps, n *int) {
+	n = new(int)
+	d = defaults()
+	d.moveOldNames = func(io.Writer, axondir.Dir) error { *n++; return nil }
+	return d, n
 }
 
-// stubbedRoot returns the command tree with every command's own work
-// replaced by nothing, so that only the hooks run.
-func stubbedRoot() *cobra.Command {
-	root := NewRoot("1.2.3")
+// stubbedRoot returns the command tree built with d, with every command's
+// own work replaced by nothing, so that only the hooks run.
+func stubbedRoot(d deps) *cobra.Command {
+	root := newRoot("1.2.3", d)
 	var stub func(c *cobra.Command)
 	stub = func(c *cobra.Command) {
 		if c.Runnable() {
@@ -59,6 +57,7 @@ func execute(root *cobra.Command, args ...string) error {
 // Every command that can run moves the old names first, except update, so
 // that a command added later cannot read ~/.axon under the old names.
 func TestEveryCommandMovesTheOldNamesFirst(t *testing.T) {
+	t.Parallel()
 	var paths [][]string
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
@@ -75,8 +74,8 @@ func TestEveryCommandMovesTheOldNamesFirst(t *testing.T) {
 	}
 	for _, path := range paths {
 		t.Run(strings.Join(path, " "), func(t *testing.T) {
-			n := countMoves(t)
-			if err := execute(stubbedRoot(), path...); err != nil {
+			d, n := countMoves()
+			if err := execute(stubbedRoot(d), path...); err != nil {
 				t.Fatal(err)
 			}
 			want := 1
@@ -94,6 +93,7 @@ func TestEveryCommandMovesTheOldNamesFirst(t *testing.T) {
 // moves the old names; cobra answers --help and --version for axon's own
 // commands before any hook runs.
 func TestWhichFormsMoveTheOldNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		args  []string
 		moves int
@@ -113,8 +113,8 @@ func TestWhichFormsMoveTheOldNames(t *testing.T) {
 		{[]string{"update", "--version", "1.2.3"}, 0},
 	} {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
-			n := countMoves(t)
-			if err := execute(stubbedRoot(), tc.args...); err != nil {
+			d, n := countMoves()
+			if err := execute(stubbedRoot(d), tc.args...); err != nil {
 				t.Fatal(err)
 			}
 			if *n != tc.moves {

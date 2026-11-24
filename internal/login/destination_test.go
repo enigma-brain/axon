@@ -50,6 +50,7 @@ func keptCampus(t *testing.T, h *harness, before os.FileInfo) {
 }
 
 func TestRefetchMovingThePathwayAsksAndNoKeepsTheStoredCopy(t *testing.T) {
+	t.Parallel()
 	for name, answer := range map[string]string{"enter": "\n", "no": "n\n"} {
 		t.Run(name, func(t *testing.T) {
 			h, _ := connectedFromAddress(t, movedCampus)
@@ -72,6 +73,7 @@ func TestRefetchMovingThePathwayAsksAndNoKeepsTheStoredCopy(t *testing.T) {
 }
 
 func TestRefetchMovingThePathwayWithoutATerminalKeepsTheStoredCopy(t *testing.T) {
+	t.Parallel()
 	h, _ := connectedFromAddress(t, movedCampus)
 	before := h.emailFile()
 	if err := h.run(""); err != nil {
@@ -90,6 +92,7 @@ func TestRefetchMovingThePathwayWithoutATerminalKeepsTheStoredCopy(t *testing.T)
 // Input that is not a terminal is not read for the answer: a piped yes
 // keeps the stored copy, as no terminal does.
 func TestRefetchMovingThePathwayIgnoresPipedAnswers(t *testing.T) {
+	t.Parallel()
 	h, _ := connectedFromAddress(t, movedCampus)
 	before := h.emailFile()
 	if err := h.login(Options{In: strings.NewReader("y\n")}); err != nil {
@@ -102,6 +105,7 @@ func TestRefetchMovingThePathwayIgnoresPipedAnswers(t *testing.T) {
 }
 
 func TestRefetchMovingThePathwayWithReplaceSwitches(t *testing.T) {
+	t.Parallel()
 	h, _ := connectedFromAddress(t, movedCampus)
 	if err := h.login(Options{Replace: true}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -115,6 +119,7 @@ func TestRefetchMovingThePathwayWithReplaceSwitches(t *testing.T) {
 }
 
 func TestRefetchMovingThePathwayYesSwitches(t *testing.T) {
+	t.Parallel()
 	h, _ := connectedFromAddress(t, movedCampus)
 	h.terminal()
 	if err := h.login(Options{In: strings.NewReader("y\n")}); err != nil {
@@ -176,6 +181,7 @@ func TestRefetchAsksForEveryValueOfWhereThePathwayGoes(t *testing.T) {
 // Addresses that name the same server, by the rule for clashes, are no
 // change, and a change elsewhere in the file is stored without a question.
 func TestRefetchKeepingWhereThePathwayGoesIsStored(t *testing.T) {
+	t.Parallel()
 	next := strings.Replace(testkit.ExampleConfig, `endpoint = "https://sky.example.org"`, `endpoint = "https://SKY.example.org/"`, 1)
 	next = strings.Replace(next, `app = "skypilot"`, `app = "other"`, 1)
 	h, _ := connectedFromAddress(t, next)
@@ -191,6 +197,7 @@ func TestRefetchKeepingWhereThePathwayGoesIsStored(t *testing.T) {
 }
 
 func TestRefetchDroppingThePathwayAsksAndNoKeepsTheStoredCopy(t *testing.T) {
+	t.Parallel()
 	h, _ := connectedFromAddress(t, dropCampus)
 	h.terminal()
 	before := h.emailFile()
@@ -210,6 +217,7 @@ func TestRefetchDroppingThePathwayAsksAndNoKeepsTheStoredCopy(t *testing.T) {
 // lower revision; no to the first asks nothing more, and --replace answers
 // both.
 func TestRefetchAsksAboutTheServerBeforeTheRevision(t *testing.T) {
+	t.Parallel()
 	withRevision := func(data, n string) string {
 		return strings.Replace(data, "format = 2\n", "format = 2\nrevision = "+n+"\n", 1)
 	}
@@ -267,6 +275,7 @@ func TestRefetchAsksAboutTheServerBeforeTheRevision(t *testing.T) {
 // stored as before, without a question, and the old and the new values are
 // printed.
 func TestConfigMovingThePathwayInUsePrintsTheValues(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.connectedTo("campus")
 	file := filepath.Join(t.TempDir(), "example.toml")
@@ -290,6 +299,7 @@ func TestConfigMovingThePathwayInUsePrintsTheValues(t *testing.T) {
 // axon login deletes a record whose stored file is gone, and files a put
 // left renamed aside.
 func TestLoginDeletesARecordWithoutItsFile(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.store(otherConfig)
 	h.connectedTo("campus")
@@ -317,6 +327,7 @@ func TestLoginDeletesARecordWithoutItsFile(t *testing.T) {
 // The user name the server reports is printed without control or format
 // characters.
 func TestConnectedLineIsCleaned(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.user = "ada\u200b[2J@example.org\u202e"
 	h.logIn()

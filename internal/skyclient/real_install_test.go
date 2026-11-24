@@ -32,8 +32,9 @@ func TestRealInstall(t *testing.T) {
 	dir := axondir.New(home)
 	ctx := context.Background()
 
+	d := defaults()
 	log := &testWriter{t: t}
-	from, to, err := Ensure(ctx, dir, "", log)
+	from, to, err := d.ensure(ctx, dir, "", log)
 	log.flush()
 	if err != nil {
 		t.Fatalf("Ensure: %v", err)
@@ -69,11 +70,9 @@ func TestRealInstall(t *testing.T) {
 
 	// A second call at the same version downloads nothing: any download
 	// would fail against this address, and no stage reports progress.
-	oldURL := uvBaseURL
-	uvBaseURL = "http://127.0.0.1:1/unreachable"
-	t.Cleanup(func() { uvBaseURL = oldURL })
+	d.uvBaseURL = "http://127.0.0.1:1/unreachable"
 	var progress bytes.Buffer
-	from, to, err = Ensure(ctx, dir, DefaultVersion, &progress)
+	from, to, err = d.ensure(ctx, dir, DefaultVersion, &progress)
 	if err != nil {
 		t.Fatalf("second Ensure: %v", err)
 	}

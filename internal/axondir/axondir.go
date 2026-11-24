@@ -217,6 +217,10 @@ func FollowLink() ReplaceOption { return func(o *replaceOptions) { o.followLink 
 // "write <path>: <cause>", wrapping only the cause. The directory must
 // exist.
 func ReplaceFile(path string, r io.Reader, perm fs.FileMode, opts ...ReplaceOption) error {
+	return defaults().replaceFile(path, r, perm, opts...)
+}
+
+func (d deps) replaceFile(path string, r io.Reader, perm fs.FileMode, opts ...ReplaceOption) error {
 	var o replaceOptions
 	for _, opt := range opts {
 		opt(&o)
@@ -261,7 +265,7 @@ func ReplaceFile(path string, r io.Reader, perm fs.FileMode, opts ...ReplaceOpti
 	if err := os.Rename(tmp.Name(), target); err != nil {
 		return fail(err)
 	}
-	if err := SyncDir(dir); err != nil {
+	if err := d.syncDir(dir); err != nil {
 		return fail(err)
 	}
 	return nil
@@ -272,20 +276,28 @@ func ReplaceFile(path string, r io.Reader, perm fs.FileMode, opts ...ReplaceOpti
 // directory, such as some network and FUSE mounts, answers EINVAL, ENOTSUP
 // or EOPNOTSUPP; SyncDir then reports success, since nothing more can be
 // done there.
-func SyncDir(dir string) error {
-	d, err := os.Open(dir)
+func SyncDir(dir string) error { return defaults().syncDir(dir) }
+
+func (d deps) syncDir(dir string) error {
+	f, err := os.Open(dir)
 	if err != nil {
 		return err
 	}
-	if err := syncFile(d); err != nil && !syncUnsupported(err) {
-		d.Close()
+	if err := d.syncFile(f); err != nil && !syncUnsupported(err) {
+		f.Close()
 		return err
 	}
-	return d.Close()
+	return f.Close()
 }
 
-// syncFile syncs an open file. Tests replace it.
-var syncFile = (*os.File).Sync
+// deps are what writing a file depends on. The exported functions use
+// defaults(); tests build their own.
+type deps struct {
+	// syncFile syncs an open file.
+	syncFile func(*os.File) error
+}
+
+func defaults() deps { return deps{syncFile: (*os.File).Sync} }
 
 // syncUnsupported reports whether err says the filesystem does not support
 // the sync.

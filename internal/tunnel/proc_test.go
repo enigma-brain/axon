@@ -13,6 +13,7 @@ import (
 )
 
 func TestIsTunnelCommand(t *testing.T) {
+	t.Parallel()
 	want := []string{"proxy", "app", "skypilot", "--port", "46581"}
 	tests := []struct {
 		name string
@@ -41,6 +42,7 @@ func TestIsTunnelCommand(t *testing.T) {
 }
 
 func TestLookupProcess(t *testing.T) {
+	t.Parallel()
 	cmd := exec.Command("sleep", "30")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
@@ -77,6 +79,7 @@ func TestLookupProcess(t *testing.T) {
 }
 
 func TestLookupProcessUnreaped(t *testing.T) {
+	t.Parallel()
 	cmd := exec.Command("sh", "-c", "exit 0")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
@@ -90,6 +93,7 @@ func TestLookupProcessUnreaped(t *testing.T) {
 }
 
 func TestPortListeners(t *testing.T) {
+	t.Parallel()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -114,6 +118,7 @@ func TestPortListeners(t *testing.T) {
 }
 
 func TestListenerAccepts(t *testing.T) {
+	t.Parallel()
 	v4, v6 := netip.MustParseAddr("127.0.0.1"), netip.MustParseAddr("::1")
 	tests := []struct {
 		listen, remote netip.Addr
@@ -136,6 +141,7 @@ func TestListenerAccepts(t *testing.T) {
 }
 
 func TestProcessStart(t *testing.T) {
+	t.Parallel()
 	first := exec.Command("sleep", "30")
 	if err := first.Start(); err != nil {
 		t.Fatal(err)

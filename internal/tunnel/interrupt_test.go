@@ -128,6 +128,7 @@ func TestStartCancelledDuringLaunchLeavesNoTunnel(t *testing.T) {
 
 // A lock that waits for another holder stops waiting when cancelled.
 func TestLockCancelledWhileHeld(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	unlock, err := lock(context.Background(), dir)
 	if err != nil {

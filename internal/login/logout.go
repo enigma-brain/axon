@@ -56,7 +56,7 @@ type logout struct {
 	tshLogout func(ctx context.Context, tshPath, proxy string) error
 	// newTunnel returns the tunnel to the Teleport application app through
 	// the Teleport proxy proxy, recorded in stateDir.
-	newTunnel func(stateDir, proxy, app string) *tunnel.Tunnel
+	newTunnel func(stateDir, proxy, app string) teleportTunnel
 }
 
 // Logout runs axon logout: it logs the SkyPilot client out, removes the
@@ -71,9 +71,9 @@ func Logout(ctx context.Context, dir axondir.Dir, opts LogoutOptions) error {
 		sky:       sky.NewConnector(dir, os.Getenv),
 		findTsh:   tsh.Find,
 		tshLogout: tsh.Logout,
-		newTunnel: func(stateDir, proxy, app string) *tunnel.Tunnel {
+		newTunnel: func(stateDir, proxy, app string) teleportTunnel {
 			// Stopping needs no tsh: only a start runs it.
-			return tunnel.New(stateDir, "", proxy, app)
+			return newTunnel(stateDir, "", proxy, app)
 		},
 	}
 	return lo.run(ctx, opts)
@@ -122,7 +122,7 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 	}
 	// The connected pathway's tunnel, which runs with no record when it was
 	// started by hand or its record was lost.
-	var pathwayTunnel *tunnel.Tunnel
+	var pathwayTunnel teleportTunnel
 	if hasRecord && rec.Kind == string(configfile.KindTeleport) && rec.TeleportProxy != "" && rec.SkyApp != "" {
 		pathwayTunnel = lo.newTunnel(stateDir, rec.TeleportProxy, rec.SkyApp)
 		up, err := pathwayTunnelRunning(stateDir, pathwayTunnel)
@@ -247,7 +247,7 @@ func tunnelRunning(stateDir string) (bool, error) {
 
 // pathwayTunnelRunning reports whether tn runs, recorded or not, and creates
 // no directory.
-func pathwayTunnelRunning(stateDir string, tn *tunnel.Tunnel) (bool, error) {
+func pathwayTunnelRunning(stateDir string, tn teleportTunnel) (bool, error) {
 	if _, err := os.Stat(stateDir); errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
@@ -256,7 +256,7 @@ func pathwayTunnelRunning(stateDir string, tn *tunnel.Tunnel) (bool, error) {
 
 // stopTunnels writes to w that the tunnel is stopping, then stops tn, when
 // it is not nil, and the tunnel recorded in stateDir.
-func stopTunnels(w io.Writer, stateDir string, tn *tunnel.Tunnel) error {
+func stopTunnels(w io.Writer, stateDir string, tn teleportTunnel) error {
 	fmt.Fprintf(w, lineStopTunnel+"\n", tunnel.Port)
 	if tn != nil {
 		if err := tn.Stop(); err != nil {

@@ -11,26 +11,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/netreason"
 	"github.com/enigma-brain/axon/internal/termtext"
 )
 
-// pingURL returns where the proxy at proxy, a host or host:port, reports
-// its version. Tests replace it.
-var pingURL = func(proxy string) string {
-	return "https://" + proxy + "/webapi/ping"
-}
-
 // versionPattern accepts a Teleport release version such as 18.11.7 or
 // 17.0.0-aa.
 var versionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*$`)
-
-// pingTimeout bounds the request for the proxy's version, from sending it
-// to reading its answer.
-var pingTimeout = 30 * time.Second
 
 // statusError is an answer whose status is not OK: the server answered.
 type statusError struct {
@@ -40,8 +29,8 @@ type statusError struct {
 func (e *statusError) Error() string { return fmt.Sprintf("GET %s: %s", e.url, e.status) }
 
 // proxyVersion reads the version the proxy at proxy reports.
-func proxyVersion(ctx context.Context, proxy string) (string, error) {
-	ping := pingURL(proxy)
+func (d deps) proxyVersion(ctx context.Context, proxy string) (string, error) {
+	ping := d.pingURL(proxy)
 	fail := func(err error) (string, error) {
 		return "", fmt.Errorf("read the Teleport proxy's version at %s: %w", ping, err)
 	}
@@ -49,7 +38,7 @@ func proxyVersion(ctx context.Context, proxy string) (string, error) {
 	if err != nil {
 		return fail(err)
 	}
-	resp, err := (&http.Client{Timeout: pingTimeout}).Do(req)
+	resp, err := (&http.Client{Timeout: d.pingTimeout}).Do(req)
 	if err != nil {
 		// A request the caller cancelled is not a proxy that can't be
 		// reached.
@@ -133,10 +122,12 @@ func supported(version, proxy string) bool {
 // Ping reports whether the Teleport proxy at proxy, a host or host:port,
 // answers: it asks the proxy for its version, which needs no login and no
 // tsh. The error says why it did not answer.
-func Ping(ctx context.Context, proxy string) error {
+func Ping(ctx context.Context, proxy string) error { return defaults().ping(ctx, proxy) }
+
+func (d deps) ping(ctx context.Context, proxy string) error {
 	if err := CheckProxy(proxy); err != nil {
 		return err
 	}
-	_, err := proxyVersion(ctx, proxy)
+	_, err := d.proxyVersion(ctx, proxy)
 	return err
 }

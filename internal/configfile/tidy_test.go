@@ -72,9 +72,7 @@ func TestRecoverWithNothingToDoWritesNothing(t *testing.T) {
 	add(t, s, oneDirect("a", "one"), "-")
 	before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
 	locked := false
-	realLock := lockStore
-	lockStore = func(d axondir.Dir) (func(), error) { locked = true; return realLock(d) }
-	t.Cleanup(func() { lockStore = realLock })
+	s.d.lockStore = func(d axondir.Dir) (func(), error) { locked = true; return axondir.Dir.Lock(d) }
 	if restored, err := s.Recover(); err != nil || restored != nil {
 		t.Fatalf("Recover = %v, %v", restored, err)
 	}
@@ -94,7 +92,7 @@ func TestAPutKeepsTheFileItSetAside(t *testing.T) {
 	added, old := clashing(t, s)
 	aside := s.Path("a") + removingExt
 	seen := false
-	replaceFile = func(p string, data []byte) error {
+	s.d.replaceFile = func(p string, data []byte) error {
 		if p == s.Path("b") {
 			// The put has renamed "a" aside and recovered first; run
 			// the recovery a put runs once more, under the same lock.
@@ -106,7 +104,6 @@ func TestAPutKeepsTheFileItSetAside(t *testing.T) {
 		}
 		return writeFile(p, data)
 	}
-	t.Cleanup(func() { replaceFile = writeFile })
 	if _, err := s.Put(added, PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{old}}); err != nil {
 		t.Fatal(err)
 	}

@@ -59,6 +59,10 @@ type fixture struct {
 	home string
 	bin  string
 
+	// d is what the tests call the package's functions with: its pingURL
+	// sends every version request to the fake proxy.
+	d deps
+
 	mu    sync.Mutex
 	proxy string
 	// pinged holds the proxy of every version request.
@@ -76,22 +80,17 @@ func newFixture(t *testing.T) *fixture {
 	srv := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(srv.Close)
 
-	setVar(t, &pingURL, func(proxy string) string {
+	f.d = defaults()
+	f.d.pingURL = func(proxy string) string {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		f.pinged = append(f.pinged, proxy)
 		return srv.URL + "/webapi/ping"
-	})
+	}
 	t.Setenv("HOME", f.home)
 	t.Setenv("PATH", f.bin)
 	t.Setenv("FAKETSH_LOG", filepath.Join(t.TempDir(), "log"))
 	return f
-}
-
-func setVar[T any](t *testing.T, v *T, value T) {
-	old := *v
-	*v = value
-	t.Cleanup(func() { *v = old })
 }
 
 func (f *fixture) serve(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +133,7 @@ func TestPathTSHInRangeIsUsed(t *testing.T) {
 			want := f.putOnPath(version)
 			before, _ := os.ReadFile(want)
 
-			got, err := Ensure(context.Background(), testProxy)
+			got, err := f.d.ensure(context.Background(), testProxy)
 			if err != nil {
 				t.Fatalf("Ensure: %v", err)
 			}
@@ -161,7 +160,7 @@ func TestPathTSHOutOfRangeStops(t *testing.T) {
 			f := newFixture(t)
 			path := f.putOnPath(version)
 
-			_, err := Ensure(context.Background(), testProxy)
+			_, err := f.d.ensure(context.Background(), testProxy)
 			if err == nil {
 				t.Fatal("Ensure succeeded, want an error")
 			}
@@ -183,7 +182,7 @@ func TestNoTSHOnPathStops(t *testing.T) {
 			if own {
 				ownPath = f.putOwn("18.11.7")
 			}
-			path, err := Ensure(context.Background(), testProxy)
+			path, err := f.d.ensure(context.Background(), testProxy)
 			if !errors.Is(err, ErrNotFound) || path != "" {
 				t.Fatalf("Ensure = %q, %v; want ErrNotFound", path, err)
 			}
@@ -209,16 +208,16 @@ func TestNoTSHOnPathStops(t *testing.T) {
 func TestStalledProxyStops(t *testing.T) {
 	f := newFixture(t)
 	f.putOnPath("18.11.7")
-	setVar(t, &pingTimeout, 200*time.Millisecond)
+	f.d.pingTimeout = 200 * time.Millisecond
 	release := make(chan struct{})
 	stall := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-release }))
 	// Cleanups run last first: the handlers are released before the server
 	// closes, since Close waits for them.
 	t.Cleanup(stall.Close)
 	t.Cleanup(func() { close(release) })
-	pingURL = fixedURL(stall.URL + "/webapi/ping")
+	f.d.pingURL = fixedURL(stall.URL + "/webapi/ping")
 
-	_, err := Ensure(context.Background(), testProxy)
+	_, err := f.d.ensure(context.Background(), testProxy)
 	if want := "can't reach the Teleport proxy at " + testProxy + ": timed out"; err == nil || err.Error() != want {
 		t.Errorf("Ensure returned %v, want %q", err, want)
 	}
@@ -227,8 +226,8 @@ func TestStalledProxyStops(t *testing.T) {
 func TestProxyUnreachable(t *testing.T) {
 	f := newFixture(t)
 	f.putOnPath("18.11.7")
-	pingURL = fixedURL("http://127.0.0.1:1/webapi/ping")
-	_, err := Ensure(context.Background(), testProxy)
+	f.d.pingURL = fixedURL("http://127.0.0.1:1/webapi/ping")
+	_, err := f.d.ensure(context.Background(), testProxy)
 	var unreachable *UnreachableError
 	if want := "can't reach the Teleport proxy at " + testProxy + ": connection refused"; err == nil || err.Error() != want || !errors.As(err, &unreachable) {
 		t.Fatalf("Ensure returned %v, want %q", err, want)
@@ -242,8 +241,8 @@ func TestProxyAnswersWithAnError(t *testing.T) {
 	f.putOnPath("18.11.7")
 	srv := httptest.NewServer(http.NotFoundHandler())
 	t.Cleanup(srv.Close)
-	pingURL = fixedURL(srv.URL + "/webapi/ping")
-	_, err := Ensure(context.Background(), testProxy)
+	f.d.pingURL = fixedURL(srv.URL + "/webapi/ping")
+	_, err := f.d.ensure(context.Background(), testProxy)
 	var unreachable *UnreachableError
 	if err == nil || errors.As(err, &unreachable) || !strings.Contains(err.Error(), "read the Teleport proxy's version at "+srv.URL+"/webapi/ping: GET "+srv.URL+"/webapi/ping: 404 Not Found") {
 		t.Fatalf("Ensure returned %v, want the step and the status named", err)
@@ -251,10 +250,10 @@ func TestProxyAnswersWithAnError(t *testing.T) {
 }
 
 func TestCancelledPingIsNotUnreachable(t *testing.T) {
-	newFixture(t)
+	f := newFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := Ping(ctx, testProxy)
+	err := f.d.ping(ctx, testProxy)
 	var unreachable *UnreachableError
 	if !errors.Is(err, context.Canceled) || errors.As(err, &unreachable) {
 		t.Fatalf("Ping returned %v, want context.Canceled", err)
@@ -271,7 +270,7 @@ func TestLogin(t *testing.T) {
 	path := f.putOnPath("18.11.7")
 	for _, proxy := range []string{testProxy, "teleport.example.org:3080"} {
 		os.Remove(os.Getenv("FAKETSH_LOG"))
-		if err := Login(context.Background(), path, proxy, strings.NewReader("")); err != nil {
+		if err := f.d.login(context.Background(), path, proxy, strings.NewReader("")); err != nil {
 			t.Fatalf("Login: %v", err)
 		}
 		if got, want := readLog(t), "login --proxy="+proxy+"\n"; got != want {
@@ -280,7 +279,7 @@ func TestLogin(t *testing.T) {
 	}
 
 	t.Setenv("FAKETSH_EXIT", "3")
-	err := Login(context.Background(), path, testProxy, strings.NewReader(""))
+	err := f.d.login(context.Background(), path, testProxy, strings.NewReader(""))
 	if err == nil || !strings.HasPrefix(err.Error(), "Teleport login (tsh login --proxy=teleport.example.org): exit status 3") {
 		t.Errorf("Login returned %v, want the step named", err)
 	}
@@ -291,7 +290,7 @@ func TestAppLogin(t *testing.T) {
 	path := f.putOnPath("18.11.7")
 	for _, proxy := range []string{testProxy, "teleport.example.org:3080"} {
 		os.Remove(os.Getenv("FAKETSH_LOG"))
-		if err := AppLogin(context.Background(), path, proxy, "skypilot", strings.NewReader("")); err != nil {
+		if err := f.d.appLogin(context.Background(), path, proxy, "skypilot", strings.NewReader("")); err != nil {
 			t.Fatalf("AppLogin: %v", err)
 		}
 		if got, want := readLog(t), "--proxy="+proxy+" apps login skypilot\n"; got != want {
@@ -300,12 +299,12 @@ func TestAppLogin(t *testing.T) {
 	}
 
 	t.Setenv("FAKETSH_EXIT", "1")
-	err := AppLogin(context.Background(), path, testProxy, "skypilot", strings.NewReader(""))
+	err := f.d.appLogin(context.Background(), path, testProxy, "skypilot", strings.NewReader(""))
 	if err == nil || !strings.HasPrefix(err.Error(), "Teleport application login (tsh --proxy=teleport.example.org apps login skypilot): exit status 1") {
 		t.Errorf("AppLogin returned %v, want the step named", err)
 	}
 	for _, app := range []string{"", "--proxy=x", "dev env"} {
-		if err := AppLogin(context.Background(), path, testProxy, app, strings.NewReader("")); err == nil {
+		if err := f.d.appLogin(context.Background(), path, testProxy, app, strings.NewReader("")); err == nil {
 			t.Errorf("AppLogin accepted %q as the application name", app)
 		}
 	}
@@ -319,10 +318,10 @@ func TestLoginsReadTheInputPassed(t *testing.T) {
 	t.Setenv("FAKETSH_STDIN", stdin)
 	for name, login := range map[string]func(in io.Reader) error{
 		"login": func(in io.Reader) error {
-			return Login(context.Background(), path, testProxy, in)
+			return f.d.login(context.Background(), path, testProxy, in)
 		},
 		"apps login": func(in io.Reader) error {
-			return AppLogin(context.Background(), path, testProxy, "skypilot", in)
+			return f.d.appLogin(context.Background(), path, testProxy, "skypilot", in)
 		},
 	} {
 		os.Remove(stdin)
@@ -342,16 +341,16 @@ func TestBadProxyIsRefused(t *testing.T) {
 		"teleport.example.org:", "teleport.example.org:0", "teleport.example.org:65536", "teleport.example.org:08", "teleport.example.org:http",
 		"user@teleport.example.org", "teleport example.org", "[::1]:443"} {
 		t.Run(proxy, func(t *testing.T) {
-			if err := Login(context.Background(), path, proxy, strings.NewReader("")); err == nil {
+			if err := f.d.login(context.Background(), path, proxy, strings.NewReader("")); err == nil {
 				t.Error("Login accepted it")
 			}
-			if err := AppLogin(context.Background(), path, proxy, "skypilot", strings.NewReader("")); err == nil {
+			if err := f.d.appLogin(context.Background(), path, proxy, "skypilot", strings.NewReader("")); err == nil {
 				t.Error("AppLogin accepted it")
 			}
-			if _, err := SessionValid(context.Background(), path, proxy); err == nil {
+			if _, err := f.d.sessionValid(context.Background(), path, proxy); err == nil {
 				t.Error("SessionValid accepted it")
 			}
-			if _, err := Ensure(context.Background(), proxy); err == nil {
+			if _, err := f.d.ensure(context.Background(), proxy); err == nil {
 				t.Error("Ensure accepted it")
 			}
 		})
@@ -365,6 +364,7 @@ func TestBadProxyIsRefused(t *testing.T) {
 }
 
 func TestCheckProxy(t *testing.T) {
+	t.Parallel()
 	for proxy, want := range map[string]bool{
 		"teleport.example.org":                   true,
 		"teleport.example.org:443":               true,
@@ -400,6 +400,7 @@ func TestCheckProxy(t *testing.T) {
 }
 
 func TestSameProxy(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		a, b string
 		want bool
@@ -422,7 +423,7 @@ func TestVersionIsReadFromTheProxyPassed(t *testing.T) {
 		t.Run(proxy, func(t *testing.T) {
 			f := newFixture(t)
 			f.putOnPath("18.11.7")
-			if _, err := Ensure(context.Background(), proxy); err != nil {
+			if _, err := f.d.ensure(context.Background(), proxy); err != nil {
 				t.Fatal(err)
 			}
 			if len(f.pinged) != 1 || f.pinged[0] != proxy {
@@ -433,11 +434,12 @@ func TestVersionIsReadFromTheProxyPassed(t *testing.T) {
 }
 
 func TestPingURL(t *testing.T) {
+	t.Parallel()
 	for proxy, want := range map[string]string{
 		"teleport.example.org":      "https://teleport.example.org/webapi/ping",
 		"teleport.example.org:3080": "https://teleport.example.org:3080/webapi/ping",
 	} {
-		if got := pingURL(proxy); got != want {
+		if got := defaults().pingURL(proxy); got != want {
 			t.Errorf("pingURL(%q) = %q, want %q", proxy, got, want)
 		}
 	}
@@ -446,7 +448,7 @@ func TestPingURL(t *testing.T) {
 func TestSessionValid(t *testing.T) {
 	f := newFixture(t)
 	path := f.putOnPath("18.11.7")
-	setVar(t, &now, func() time.Time { return time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC) })
+	f.d.now = func() time.Time { return time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC) }
 
 	status := func(url, until string) string {
 		return fmt.Sprintf(`{"active": {"profile_url": %q, "cluster": "teleport.example.org", "valid_until": %q}, "profiles": []}`, url, until)
@@ -473,7 +475,7 @@ func TestSessionValid(t *testing.T) {
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("FAKETSH_STATUS", c.status)
-			got, err := SessionValid(context.Background(), path, c.proxy)
+			got, err := f.d.sessionValid(context.Background(), path, c.proxy)
 			if err != nil {
 				t.Fatalf("SessionValid: %v", err)
 			}
@@ -484,10 +486,10 @@ func TestSessionValid(t *testing.T) {
 	}
 
 	t.Setenv("FAKETSH_STATUS", "not json")
-	if _, err := SessionValid(context.Background(), path, testProxy); err == nil {
+	if _, err := f.d.sessionValid(context.Background(), path, testProxy); err == nil {
 		t.Error("SessionValid accepted output that is not JSON")
 	}
-	if _, err := SessionValid(context.Background(), filepath.Join(f.bin, "missing"), testProxy); err == nil {
+	if _, err := f.d.sessionValid(context.Background(), filepath.Join(f.bin, "missing"), testProxy); err == nil {
 		t.Error("SessionValid accepted a tsh that does not exist")
 	}
 }
@@ -496,7 +498,6 @@ func TestFind(t *testing.T) {
 	t.Run("on PATH", func(t *testing.T) {
 		f := newFixture(t)
 		want := f.putOnPath("16.0.0")
-		pingURL = fixedURL("http://127.0.0.1:1/webapi/ping")
 		got, err := Find()
 		if err != nil || got != want {
 			t.Errorf("Find = %s, %v; want %s, even out of range and offline", got, err, want)
@@ -528,7 +529,7 @@ func TestSessionValidCancelled(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-	ok, err := SessionValid(ctx, path, testProxy)
+	ok, err := f.d.sessionValid(ctx, path, testProxy)
 	if ok || !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("SessionValid = %v, %v; want an error carrying the deadline, not \"no login\"", ok, err)
 	}
@@ -537,18 +538,18 @@ func TestSessionValidCancelled(t *testing.T) {
 func TestLogout(t *testing.T) {
 	f := newFixture(t)
 	path := f.putOnPath("18.11.7")
-	if err := Logout(context.Background(), path, testProxy); err != nil {
+	if err := f.d.logout(context.Background(), path, testProxy); err != nil {
 		t.Fatalf("Logout: %v", err)
 	}
 	if got, want := readLog(t), "logout --proxy="+testProxy+"\n"; got != want {
 		t.Errorf("tsh ran with %q, want %q", got, want)
 	}
 	t.Setenv("FAKETSH_EXIT", "1")
-	err := Logout(context.Background(), path, testProxy)
+	err := f.d.logout(context.Background(), path, testProxy)
 	if err == nil || !strings.HasPrefix(err.Error(), "tsh logout --proxy=teleport.example.org: exit status 1: tsh failed") {
 		t.Errorf("Logout returned %v, want the command and tsh's output", err)
 	}
-	if err := Logout(context.Background(), path, "--proxy=x"); err == nil {
+	if err := f.d.logout(context.Background(), path, "--proxy=x"); err == nil {
 		t.Error("Logout accepted a bad proxy")
 	}
 }
@@ -559,7 +560,7 @@ func TestLogoutThatEndsNoSession(t *testing.T) {
 	path := f.putOnPath("18.11.7")
 	t.Setenv("FAKETSH_STATUS", fmt.Sprintf(`{"active": {"profile_url": "https://teleport.example.org:443", "valid_until": %q}}`,
 		time.Now().Add(time.Hour).UTC().Format(time.RFC3339)))
-	err := Logout(context.Background(), path, testProxy)
+	err := f.d.logout(context.Background(), path, testProxy)
 	if !errors.Is(err, ErrStillLoggedIn) || !strings.Contains(err.Error(), "tsh logout --proxy=teleport.example.org --user=<user>") {
 		t.Errorf("Logout returned %v, want ErrStillLoggedIn with the command to run", err)
 	}
@@ -581,17 +582,17 @@ func TestFindRefusesARelativePathEntry(t *testing.T) {
 func TestPing(t *testing.T) {
 	f := newFixture(t)
 	// No tsh on PATH: the ping does not need one.
-	if err := Ping(context.Background(), testProxy); err != nil {
+	if err := f.d.ping(context.Background(), testProxy); err != nil {
 		t.Errorf("Ping = %v", err)
 	}
 	if len(f.pinged) != 1 || f.pinged[0] != testProxy {
 		t.Errorf("pinged %v", f.pinged)
 	}
-	pingURL = fixedURL("http://127.0.0.1:1/webapi/ping")
-	if err := Ping(context.Background(), testProxy); err == nil {
+	f.d.pingURL = fixedURL("http://127.0.0.1:1/webapi/ping")
+	if err := f.d.ping(context.Background(), testProxy); err == nil {
 		t.Error("Ping of a proxy that does not answer succeeded")
 	}
-	if err := Ping(context.Background(), "bad host"); err == nil {
+	if err := f.d.ping(context.Background(), "bad host"); err == nil {
 		t.Error("Ping of a bad address succeeded")
 	}
 }

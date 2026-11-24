@@ -25,9 +25,15 @@ import (
 // version is raised; 56 is the API version of SkyPilot 0.13.0.
 const APIVersion = 56
 
-// timeout bounds one health request, from the connection to the last byte of
-// the answer. A request that takes longer counts as unreachable.
-var timeout = 10 * time.Second
+// deps are what a health request depends on. Fetch uses defaults(); tests
+// build their own.
+type deps struct {
+	// timeout bounds one health request, from the connection to the last
+	// byte of the answer. A request that takes longer counts as unreachable.
+	timeout time.Duration
+}
+
+func defaults() deps { return deps{timeout: 10 * time.Second} }
 
 const (
 	healthPath           = "/api/health"
@@ -82,12 +88,16 @@ type healthResponse struct {
 // With ErrNotLoggedIn, the returned Health carries the server's version when
 // the server reported one.
 func Fetch(ctx context.Context, endpoint string, opts Options) (Health, error) {
+	return defaults().fetch(ctx, endpoint, opts)
+}
+
+func (d deps) fetch(ctx context.Context, endpoint string, opts Options) (Health, error) {
 	target, err := url.Parse(strings.TrimRight(endpoint, "/") + healthPath)
 	if err != nil || target.Host == "" {
 		return Health{}, fmt.Errorf("the API server endpoint %q is not a URL", endpoint)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
 	if err != nil {

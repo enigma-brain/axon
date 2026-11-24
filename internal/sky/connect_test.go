@@ -13,6 +13,7 @@ import (
 )
 
 func TestHasWord(t *testing.T) {
+	t.Parallel()
 	for text, want := range map[string]bool{
 		"needs_auth": true,
 		// What sky api login prints when a login ends with needs_auth: the
@@ -47,6 +48,7 @@ func TestHasWord(t *testing.T) {
 }
 
 func TestFormatWait(t *testing.T) {
+	t.Parallel()
 	for d, want := range map[time.Duration]string{
 		5 * time.Minute:        "5 minutes",
 		time.Minute:            "1 minute",
@@ -62,6 +64,7 @@ func TestFormatWait(t *testing.T) {
 }
 
 func TestSkyLoginKeepsCallerDeadline(t *testing.T) {
+	t.Parallel()
 	// A sky that waits until it is stopped.
 	hang := filepath.Join(t.TempDir(), "sky")
 	if err := os.WriteFile(hang, []byte("#!/bin/sh\nexec sleep 30\n"), 0o755); err != nil {

@@ -63,18 +63,26 @@ const (
 	logTailLines = 20
 )
 
-// startTimeout bounds the wait for a started tunnel to serve, unless
-// SetStartTimeout changes it for one tunnel.
-const startTimeout = 10 * time.Second
+// deps are what starting and stopping a tunnel depend on. New and
+// StopRecorded use defaults(); tests build their own.
+type deps struct {
+	// startTimeout bounds the wait for a started tunnel to serve.
+	startTimeout time.Duration
+	// stopTimeout is how long a tunnel has to exit after SIGTERM before
+	// it is sent SIGKILL, and killTimeout how long after SIGKILL.
+	stopTimeout, killTimeout time.Duration
+	// sendSignal sends a signal to a process.
+	sendSignal func(pid int, sig syscall.Signal) error
+}
 
-// stopTimeout is how long a tunnel has to exit after SIGTERM before it is
-// sent SIGKILL, and killTimeout how long after SIGKILL. sendSignal sends a
-// signal. Tests change them.
-var (
-	stopTimeout = 3 * time.Second
-	killTimeout = time.Second
-	sendSignal  = syscall.Kill
-)
+func defaults() deps {
+	return deps{
+		startTimeout: 10 * time.Second,
+		stopTimeout:  3 * time.Second,
+		killTimeout:  time.Second,
+		sendSignal:   syscall.Kill,
+	}
+}
 
 // Status holds two separate facts about the tunnel, so that a failed tunnel
 // can be told from an unavailable server.
@@ -122,27 +130,17 @@ type Tunnel struct {
 	// proxy is the Teleport proxy, a host or host:port, and app the
 	// Teleport application.
 	proxy, app string
-	// port is the local port, Port outside tests.
+	// port is the local port the tunnel listens on.
 	port int
-	// startTimeout bounds the wait for a started tunnel to serve.
-	startTimeout time.Duration
+	d    deps
 }
 
 // New returns the tunnel to the Teleport application app through the
-// Teleport proxy proxy, run with tshPath and recorded in stateDir.
-func New(stateDir, tshPath, proxy, app string) *Tunnel {
-	return NewOnPort(stateDir, tshPath, proxy, app, Port)
+// Teleport proxy proxy, run with tshPath, listening on the local port port
+// and recorded in stateDir. Its callers pass Port; tests pass a free one.
+func New(stateDir, tshPath, proxy, app string, port int) *Tunnel {
+	return &Tunnel{stateDir: stateDir, tshPath: tshPath, proxy: proxy, app: app, port: port, d: defaults()}
 }
-
-// NewOnPort is New with the tunnel listening on port. Outside tests the
-// port is Port; tests pass a free one.
-func NewOnPort(stateDir, tshPath, proxy, app string, port int) *Tunnel {
-	return &Tunnel{stateDir: stateDir, tshPath: tshPath, proxy: proxy, app: app, port: port, startTimeout: startTimeout}
-}
-
-// SetStartTimeout sets how long Start waits for a started tunnel to serve.
-// Outside tests it is 10 seconds.
-func (t *Tunnel) SetStartTimeout(d time.Duration) { t.startTimeout = d }
 
 // args returns the tunnel's arguments after the program name.
 func (t *Tunnel) args() []string {
@@ -320,7 +318,7 @@ func (t *Tunnel) Stop() error {
 // stopAll stops each of pids that is this tunnel and deletes this tunnel's
 // record. A record of a tunnel to another proxy or application is kept.
 func (t *Tunnel) stopAll(pids []int) error {
-	if err := stopAll(pids, t.isTunnel); err != nil {
+	if err := t.d.stopAll(pids, t.isTunnel); err != nil {
 		return err
 	}
 	rec, ok, err := readRecord(t.stateDir)
@@ -346,7 +344,9 @@ func RecordedRunning(stateDir string) (bool, error) {
 // recorded process is stopped only when it belongs to the user and its
 // command line is still the recorded one. Otherwise the process is left
 // alone and the record discarded.
-func StopRecorded(stateDir string) error {
+func StopRecorded(stateDir string) error { return defaults().stopRecorded(stateDir) }
+
+func (d deps) stopRecorded(stateDir string) error {
 	unlock, err := lock(context.Background(), stateDir)
 	if err != nil {
 		return err
@@ -359,7 +359,7 @@ func StopRecorded(stateDir string) error {
 	if !ok {
 		return nil
 	}
-	if err := stopAll([]int{rec.PID}, rec.matches); err != nil {
+	if err := d.stopAll([]int{rec.PID}, rec.matches); err != nil {
 		return err
 	}
 	return removeRecord(stateDir)
@@ -534,15 +534,15 @@ func (t *Tunnel) launch(ctx context.Context) error {
 	}()
 
 	if err := writeRecord(t.stateDir, record{PID: pid, Args: t.args()}); err != nil {
-		terminate(pid, exited, nil)
+		t.d.terminate(pid, exited, nil)
 		return err
 	}
 
-	deadline := time.NewTimer(t.startTimeout)
+	deadline := time.NewTimer(t.d.startTimeout)
 	defer deadline.Stop()
 	tick := time.NewTicker(pollInterval)
 	defer tick.Stop()
-	reason := fmt.Sprintf("it did not answer on %s within %s", t.healthURL(), t.startTimeout)
+	reason := fmt.Sprintf("it did not answer on %s within %s", t.healthURL(), t.d.startTimeout)
 	exitedFirst := false
 	for {
 		if t.serves(ctx, pid) {
@@ -560,7 +560,7 @@ func (t *Tunnel) launch(ctx context.Context) error {
 		}
 		break
 	}
-	terminate(pid, exited, nil)
+	t.d.terminate(pid, exited, nil)
 	if err := removeRecordOf(t.stateDir, pid); err != nil {
 		return err
 	}
@@ -592,7 +592,7 @@ func (t *Tunnel) serves(ctx context.Context, pid int) bool {
 // it is signaled only while both still match, and when it has not exited
 // and still matches after the wait, stopAll returns an error, and the
 // caller keeps the record.
-func stopAll(pids []int, isTunnel func(process) bool) error {
+func (d deps) stopAll(pids []int, isTunnel func(process) bool) error {
 	for _, pid := range pids {
 		start, ok := processStart(pid)
 		if !ok {
@@ -623,7 +623,7 @@ func stopAll(pids []int, isTunnel func(process) bool) error {
 			s, ok := processStart(pid)
 			return ok && s == start
 		}
-		terminate(pid, nil, same)
+		d.terminate(pid, nil, same)
 		if !processExited(pid) && same() {
 			return fmt.Errorf("process %d did not exit. Stop it with `kill -9 %d` and try again", pid, pid)
 		}
@@ -632,7 +632,7 @@ func stopAll(pids []int, isTunnel func(process) bool) error {
 }
 
 // terminate sends pid SIGTERM and, when it has not exited within
-// stopTimeout, SIGKILL, and waits for it to exit.
+// d.stopTimeout, SIGKILL, and waits for it to exit.
 //
 // When exited is not nil, pid is axon's own child, and exited closes once
 // the child has been reaped; until then the ID cannot pass to another
@@ -640,7 +640,7 @@ func stopAll(pids []int, isTunnel func(process) bool) error {
 // same process, so a signal never reaches a process that took the ID after
 // the tunnel exited. The wait ends only when the process has exited, its
 // sockets closed.
-func terminate(pid int, exited <-chan struct{}, same func() bool) {
+func (d deps) terminate(pid int, exited <-chan struct{}, same func() bool) {
 	done := func() bool {
 		if exited != nil {
 			select {
@@ -665,11 +665,11 @@ func terminate(pid int, exited <-chan struct{}, same func() bool) {
 	for _, step := range []struct {
 		sig  syscall.Signal
 		wait time.Duration
-	}{{syscall.SIGTERM, stopTimeout}, {syscall.SIGKILL, killTimeout}} {
+	}{{syscall.SIGTERM, d.stopTimeout}, {syscall.SIGKILL, d.killTimeout}} {
 		if done() {
 			return
 		}
-		sendSignal(pid, step.sig)
+		d.sendSignal(pid, step.sig)
 		if wait(step.wait) {
 			return
 		}

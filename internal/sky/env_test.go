@@ -9,6 +9,7 @@ import (
 // client, from one environment that holds every variable any of them
 // changes.
 func TestClientEnvOfEachCaller(t *testing.T) {
+	t.Parallel()
 	base := []string{
 		"PATH=/bin",
 		"SKYPILOT_API_SERVER_ENDPOINT=http://shell.example",

@@ -13,7 +13,6 @@ import (
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/tsh"
-	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
 // v010Record is a record of the connected pathway as axon v0.1.0 wrote it.
@@ -45,7 +44,7 @@ func newLogout(h *harness, tshPath string) *logout {
 			return tshPath, nil
 		},
 		tshLogout: tsh.Logout,
-		newTunnel: func(stateDir, proxy, app string) *tunnel.Tunnel {
+		newTunnel: func(stateDir, proxy, app string) teleportTunnel {
 			return h.l.teleport.newTunnel(stateDir, "", proxy, app)
 		},
 	}
@@ -139,6 +138,7 @@ func TestLogoutTeleport(t *testing.T) {
 }
 
 func TestLogoutDirect(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
@@ -206,6 +206,7 @@ func wantCookieFile(t *testing.T, h *harness, cookies ...string) {
 }
 
 func TestLogoutRemovesTheCookieWithoutAClient(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
@@ -228,6 +229,7 @@ func TestLogoutRemovesTheCookieWithoutAClient(t *testing.T) {
 }
 
 func TestLogoutRemovesTheCookieWhenSkyLogoutFails(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok", "fail")
 	if err := h.run("campus"); err != nil {
@@ -248,6 +250,7 @@ func TestLogoutRemovesTheCookieWhenSkyLogoutFails(t *testing.T) {
 }
 
 func TestLogoutWithNoCookieFile(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
@@ -270,6 +273,7 @@ func TestLogoutWithNoCookieFile(t *testing.T) {
 }
 
 func TestLogoutWithNoCookieForTheServer(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
@@ -296,6 +300,7 @@ func TestLogoutWithNoCookieForTheServer(t *testing.T) {
 }
 
 func TestLogoutWhenTheCookieFileCannotBeRewritten(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root writes to a read-only directory")
 	}
@@ -362,6 +367,7 @@ func TestLogoutSkipsSteps(t *testing.T) {
 }
 
 func TestLogoutSkipsSkyWithNoStoredEndpoint(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
@@ -381,6 +387,7 @@ func TestLogoutSkipsSkyWithNoStoredEndpoint(t *testing.T) {
 }
 
 func TestLogoutWithNothingConnected(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	writeSkyConfig(t, h, h.directURL)
 	r := (&logoutRun{lo: newLogout(h, fakeTsh)}).run()

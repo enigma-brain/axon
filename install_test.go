@@ -245,6 +245,7 @@ func requireFailure(t *testing.T, stdout, stderr string, err error) {
 }
 
 func TestInstall(t *testing.T) {
+	t.Parallel()
 	e := newInstallEnv(t)
 	e.release("1.0.0", "linux_amd64")
 	e.release("1.0.0", "darwin_arm64")
@@ -284,6 +285,7 @@ func TestInstall(t *testing.T) {
 }
 
 func TestInstallLatestUsesOneRelease(t *testing.T) {
+	t.Parallel()
 	// A newer release exists, but the latest lookup named v1.0.0: the
 	// checksums and the archive both come from v1.0.0.
 	e := newInstallEnv(t)
@@ -301,6 +303,7 @@ func TestInstallLatestUsesOneRelease(t *testing.T) {
 }
 
 func TestInstallAgainReplaces(t *testing.T) {
+	t.Parallel()
 	e := newInstallEnv(t)
 	e.env["FAKE_UNAME_S"], e.env["FAKE_UNAME_M"] = "Darwin", "arm64"
 	e.release("1.0.0", "darwin_arm64")
@@ -324,6 +327,7 @@ func TestInstallAgainReplaces(t *testing.T) {
 }
 
 func TestInstallNamedVersion(t *testing.T) {
+	t.Parallel()
 	for _, v := range []string{"0.1.0-rc.1", "v0.1.0-rc.1"} {
 		t.Run(v, func(t *testing.T) {
 			e := newInstallEnv(t)
@@ -352,6 +356,7 @@ func TestInstallNamedVersion(t *testing.T) {
 }
 
 func TestInstallBinaryDoesNotRun(t *testing.T) {
+	t.Parallel()
 	e := newInstallEnv(t)
 	e.releaseScript("1.0.0", "linux_amd64", "#!/bin/sh\nexit 1\n")
 	stdout, stderr, err := e.run("")
@@ -369,6 +374,7 @@ func TestInstallBinaryDoesNotRun(t *testing.T) {
 }
 
 func TestInstallFailures(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		setup func(e *installEnv)

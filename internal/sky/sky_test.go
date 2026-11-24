@@ -101,30 +101,35 @@ func login(t *testing.T, id string, email string) axondir.Dir {
 	return dir
 }
 
-// capture replaces the sky resolver and the process replacement for one
-// test, and returns the calls made.
-func capture(t *testing.T) *[]call {
-	t.Helper()
-	var calls []call
-	oldPath, oldPathFor, oldExec, oldCheck := skyPath, skyPathFor, execSky, check
-	check = connectedProbes()
-	skyPath = func(axondir.Dir) (string, error) { return fakeSky, nil }
-	skyPathFor = func(axondir.Dir, string) string { return fakeSky }
-	execSky = func(path string, argv, env []string) error {
-		calls = append(calls, call{path, slices.Clone(argv), slices.Clone(env)})
-		return nil
-	}
-	t.Cleanup(func() { skyPath, skyPathFor, execSky, check = oldPath, oldPathFor, oldExec, oldCheck })
-	return &calls
+// captured is a command group whose sky is a fake and whose process
+// replacement records each call instead of running it.
+type captured struct {
+	d     deps
+	calls []call
 }
 
-// runSky runs axon sky with args for the user whose home is HOME, and
-// returns its standard output, its standard error and its error. axon sky
-// writes nothing to standard output of its own.
-func runSky(args ...string) (string, string, error) {
+// capture returns a command group that passes the connection check without
+// a network, runs the fake sky and records the calls.
+func capture(t *testing.T) *captured {
+	t.Helper()
+	c := &captured{d: defaults()}
+	c.d.check = connectedProbes()
+	c.d.skyPath = func(axondir.Dir) (string, error) { return fakeSky, nil }
+	c.d.skyPathFor = func(axondir.Dir, string) string { return fakeSky }
+	c.d.execSky = func(path string, argv, env []string) error {
+		c.calls = append(c.calls, call{path, slices.Clone(argv), slices.Clone(env)})
+		return nil
+	}
+	return c
+}
+
+// run runs axon sky with args for the user whose home is HOME, and returns
+// its standard error and its error. axon sky has no standard output of its
+// own; TestHelpPrintsOnlySkysOutput checks that in a process of its own.
+func (c *captured) run(args ...string) (string, error) {
 	var errOut bytes.Buffer
-	err := Run(context.Background(), axondir.New(os.Getenv("HOME")), &errOut, append([]string{}, args...))
-	return "", errOut.String(), err
+	err := c.d.dispatch(context.Background(), axondir.New(os.Getenv("HOME")), &errOut, append([]string{}, args...))
+	return errOut.String(), err
 }
 
 func TestForwardsEveryCommand(t *testing.T) {
@@ -140,14 +145,14 @@ func TestForwardsEveryCommand(t *testing.T) {
 		{"exec", "dev", "--", "--help"},
 		{"-c", "dev", "launch"},
 	} {
-		calls := capture(t)
-		if _, _, err := runSky(args...); err != nil {
+		c := capture(t)
+		if _, err := c.run(args...); err != nil {
 			t.Fatalf("%v: %v", args, err)
 		}
-		if len(*calls) != 1 {
-			t.Fatalf("%v: sky ran %d times", args, len(*calls))
+		if len(c.calls) != 1 {
+			t.Fatalf("%v: sky ran %d times", args, len(c.calls))
 		}
-		got := (*calls)[0]
+		got := c.calls[0]
 		want := append([]string{fakeSky}, args...)
 		if got.path != fakeSky || !slices.Equal(got.argv, want) {
 			t.Errorf("%v: ran %s %q, want %q", args, got.path, got.argv, want)
@@ -159,26 +164,26 @@ func TestForwardsEveryCommand(t *testing.T) {
 // runs the sky of that version.
 func TestForwardReadsTheClientVersionOnce(t *testing.T) {
 	login(t, "campus", "ada@example.org")
-	calls := capture(t)
+	c := capture(t)
 	reads := 0
-	check.clientVersion = func(axondir.Dir) (string, bool, error) {
+	c.d.check.clientVersion = func(axondir.Dir) (string, bool, error) {
 		reads++
 		return clientVersion, true, nil
 	}
-	skyPath = func(axondir.Dir) (string, error) {
+	c.d.skyPath = func(axondir.Dir) (string, error) {
 		t.Error("the client's path was looked up again")
 		return fakeSky, nil
 	}
 	var gotVersion string
-	skyPathFor = func(_ axondir.Dir, version string) string {
+	c.d.skyPathFor = func(_ axondir.Dir, version string) string {
 		gotVersion = version
 		return fakeSky
 	}
-	if _, _, err := runSky("status"); err != nil {
+	if _, err := c.run("status"); err != nil {
 		t.Fatal(err)
 	}
-	if reads != 1 || gotVersion != clientVersion || len(*calls) != 1 {
-		t.Errorf("read the version %d times, ran the sky of %q %d times; want once, %q, once", reads, gotVersion, len(*calls), clientVersion)
+	if reads != 1 || gotVersion != clientVersion || len(c.calls) != 1 {
+		t.Errorf("read the version %d times, ran the sky of %q %d times; want once, %q, once", reads, gotVersion, len(c.calls), clientVersion)
 	}
 }
 
@@ -190,11 +195,11 @@ func TestEnvironment(t *testing.T) {
 			t.Setenv(endpointVar, "http://shell.example")
 			t.Setenv(userVar, "shell-user")
 			t.Setenv("SKYPILOT_DEBUG", "1")
-			calls := capture(t)
-			if _, _, err := runSky("status"); err != nil {
+			c := capture(t)
+			if _, err := c.run("status"); err != nil {
 				t.Fatal(err)
 			}
-			env := (*calls)[0].env
+			env := c.calls[0].env
 			var sky []string
 			for _, kv := range env {
 				if strings.HasPrefix(kv, "SKYPILOT_") {
@@ -233,11 +238,11 @@ func TestPythonVarsDoNotReachTheClient(t *testing.T) {
 	}
 	t.Setenv("UV_INDEX_URL", "https://index.example.org")
 	for _, args := range [][]string{{"status"}, {"status", "--help"}} {
-		calls := capture(t)
-		if _, _, err := runSky(args...); err != nil {
+		c := capture(t)
+		if _, err := c.run(args...); err != nil {
 			t.Fatalf("%v: %v", args, err)
 		}
-		env := (*calls)[0].env
+		env := c.calls[0].env
 		for _, kv := range env {
 			key, _, _ := strings.Cut(kv, "=")
 			if _, ok := pythonVars[key]; ok {
@@ -251,6 +256,7 @@ func TestPythonVarsDoNotReachTheClient(t *testing.T) {
 }
 
 func TestEnviron(t *testing.T) {
+	t.Parallel()
 	base := []string{
 		"PATH=/bin",
 		endpointVar + "=http://a",
@@ -286,12 +292,12 @@ func TestRefused(t *testing.T) {
 		{[]string{"api", "--", "logout"}, "`axon sky api logout` is not available."},
 		{[]string{"--", "api", "login"}, "`axon sky api login` is not available."},
 	} {
-		calls := capture(t)
-		_, _, err := runSky(tc.args...)
+		c := capture(t)
+		_, err := c.run(tc.args...)
 		if err == nil || !strings.HasPrefix(err.Error(), tc.want) {
 			t.Errorf("%v: err = %v, want it to begin %q", tc.args, err, tc.want)
 		}
-		if len(*calls) != 0 {
+		if len(c.calls) != 0 {
 			t.Errorf("%v: sky ran", tc.args)
 		}
 	}
@@ -309,25 +315,25 @@ func TestHelpPassesThroughWithoutALogin(t *testing.T) {
 		{"jobs", "launch", "-h"},
 		{"api", "--help"},
 	} {
-		calls := capture(t)
-		check = probes{} // a connection check would panic
-		out, errOut, err := runSky(args...)
+		c := capture(t)
+		c.d.check = probes{} // a connection check would panic
+		errOut, err := c.run(args...)
 		if err != nil {
 			t.Fatalf("%v: %v", args, err)
 		}
-		if out != "" || errOut != "" {
-			t.Errorf("%v: axon printed %q %q", args, out, errOut)
+		if errOut != "" {
+			t.Errorf("%v: axon printed %q", args, errOut)
 		}
 		want := append([]string{fakeSky}, args...)
-		if len(*calls) != 1 || !slices.Equal((*calls)[0].argv, want) {
-			t.Fatalf("%v: ran %v, want %q", args, *calls, want)
+		if len(c.calls) != 1 || !slices.Equal(c.calls[0].argv, want) {
+			t.Fatalf("%v: ran %v, want %q", args, c.calls, want)
 		}
-		for _, kv := range (*calls)[0].env {
+		for _, kv := range c.calls[0].env {
 			if strings.HasPrefix(kv, "SKYPILOT_") && kv != endpointVar+"="+deadEndpoint {
 				t.Errorf("%v: help got %s with no login", args, kv)
 			}
 		}
-		if !slices.Contains((*calls)[0].env, endpointVar+"="+deadEndpoint) {
+		if !slices.Contains(c.calls[0].env, endpointVar+"="+deadEndpoint) {
 			t.Errorf("%v: help did not get the dead endpoint", args)
 		}
 	}
@@ -339,13 +345,13 @@ func TestHelpRunsAgainstTheDeadEndpoint(t *testing.T) {
 	clearSkyPilotEnv(t)
 	login(t, "remote", "ada@example.org")
 	t.Setenv(endpointVar, "http://shell.example")
-	calls := capture(t)
-	check = probes{} // a connection check would panic
-	if _, _, err := runSky("status", "--help"); err != nil {
+	c := capture(t)
+	c.d.check = probes{} // a connection check would panic
+	if _, err := c.run("status", "--help"); err != nil {
 		t.Fatal(err)
 	}
 	var got []string
-	for _, kv := range (*calls)[0].env {
+	for _, kv := range c.calls[0].env {
 		if strings.HasPrefix(kv, endpointVar+"=") || strings.HasPrefix(kv, userVar+"=") {
 			got = append(got, kv)
 		}
@@ -359,6 +365,7 @@ func TestHelpRunsAgainstTheDeadEndpoint(t *testing.T) {
 // only http and https, and an empty scheme or host would let SkyPilot fall
 // back to an endpoint of its own.
 func TestDeadEndpointNamesNoServer(t *testing.T) {
+	t.Parallel()
 	u, err := url.Parse(deadEndpoint)
 	if err != nil {
 		t.Fatal(err)
@@ -377,39 +384,40 @@ func TestHelpFlagAfterABareOptionNeedsTheCheck(t *testing.T) {
 		{"launch", "--dryrun", "-c", "-h"},
 		{"launch", "-c", "--help"},
 	} {
-		calls := capture(t)
-		_, _, err := runSky(args...)
+		c := capture(t)
+		_, err := c.run(args...)
 		if !errors.Is(err, ErrNoLogin) {
 			t.Errorf("%v: err = %v, want %v", args, err, ErrNoLogin)
 		}
 		if err != nil && !strings.HasSuffix(err.Error(), msgHelpHint) {
 			t.Errorf("%v: err = %q, want it to end %q", args, err, msgHelpHint)
 		}
-		if len(*calls) != 0 {
+		if len(c.calls) != 0 {
 			t.Errorf("%v: sky ran", args)
 		}
 	}
 	// Without a help flag the stop is the plain one.
-	capture(t)
-	if _, _, err := runSky("status"); err == nil || err.Error() != ErrNoLogin.Error() {
+	c := capture(t)
+	if _, err := c.run("status"); err == nil || err.Error() != ErrNoLogin.Error() {
 		t.Errorf("status: err = %v, want %v", err, ErrNoLogin)
 	}
 }
 
 func TestHelpNeedsTheClient(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	calls := capture(t)
-	skyPath = func(axondir.Dir) (string, error) { return "", skyclient.ErrNotInstalled }
-	_, _, err := runSky("--help")
+	c := capture(t)
+	c.d.skyPath = func(axondir.Dir) (string, error) { return "", skyclient.ErrNotInstalled }
+	_, err := c.run("--help")
 	if !errors.Is(err, errNoClient) {
 		t.Errorf("err = %v, want %v", err, errNoClient)
 	}
-	if len(*calls) != 0 {
+	if len(c.calls) != 0 {
 		t.Error("sky ran")
 	}
 }
 
 func TestWantsHelp(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		args []string
 		want bool
@@ -478,12 +486,12 @@ func TestNoLogin(t *testing.T) {
 			if err := setup(axondir.New(home)); err != nil {
 				t.Fatal(err)
 			}
-			calls := capture(t)
-			_, _, err := runSky("status")
+			c := capture(t)
+			_, err := c.run("status")
 			if !errors.Is(err, ErrNoLogin) {
 				t.Errorf("err = %v, want %v", err, ErrNoLogin)
 			}
-			if len(*calls) != 0 {
+			if len(c.calls) != 0 {
 				t.Error("sky ran")
 			}
 		})
@@ -499,10 +507,11 @@ func TestHelperProcess(t *testing.T) {
 		t.Skip("run only as a helper process")
 	}
 	args := os.Args[slices.Index(os.Args, "--")+1:]
-	skyPath = func(axondir.Dir) (string, error) { return os.Getenv("AXON_TEST_FAKE_SKY"), nil }
-	skyPathFor = func(axondir.Dir, string) string { return os.Getenv("AXON_TEST_FAKE_SKY") }
-	check = helperProbes(os.Getenv(apiServerVar))
-	if err := Run(context.Background(), axondir.New(os.Getenv("HOME")), os.Stderr, args); err != nil {
+	d := defaults()
+	d.skyPath = func(axondir.Dir) (string, error) { return os.Getenv("AXON_TEST_FAKE_SKY"), nil }
+	d.skyPathFor = func(axondir.Dir, string) string { return os.Getenv("AXON_TEST_FAKE_SKY") }
+	d.check = helperProbes(os.Getenv(apiServerVar))
+	if err := d.dispatch(context.Background(), axondir.New(os.Getenv("HOME")), os.Stderr, args); err != nil {
 		fail.Exit(err)
 	}
 	os.Exit(0)
@@ -580,6 +589,23 @@ func TestReplacesProcessWithSky(t *testing.T) {
 	}
 }
 
+// axon sky's help prints nothing of its own: in a process of its own, with
+// the real process replacement, standard output begins with the first
+// lines sky prints, so nothing came before sky, and standard error is empty.
+func TestHelpPrintsOnlySkysOutput(t *testing.T) {
+	sky := writeFakeSky(t)
+	out, errOut, code := helper(t, t.TempDir(), sky, "", "launch", "--help")
+	if want := sky + "\nlaunch\n--help\n"; !strings.HasPrefix(out, want) {
+		t.Errorf("standard output:\n%s\nwant it to begin with sky's:\n%s", out, want)
+	}
+	if errOut != "" {
+		t.Errorf("stderr = %q", errOut)
+	}
+	if code != 7 {
+		t.Errorf("exit code = %d, want sky's 7", code)
+	}
+}
+
 func TestNoLoginStopsBeforeSky(t *testing.T) {
 	sky := writeFakeSky(t)
 	out, errOut, code := helper(t, t.TempDir(), sky, "", "status")
@@ -617,12 +643,12 @@ func TestSkyNeverFetchesTheConfigFile(t *testing.T) {
 	if _, err := configfile.NewStore(dir).Put([]byte(testkit.ExampleConfig), configfile.PutOptions{Origin: configfile.FromSource(src)}); err != nil {
 		t.Fatal(err)
 	}
-	calls := capture(t)
-	if _, _, err := runSky("status"); err != nil {
+	c := capture(t)
+	if _, err := c.run("status"); err != nil {
 		t.Fatalf("sky status: %v", err)
 	}
-	if len(*calls) != 1 {
-		t.Fatalf("sky ran %d times, want 1", len(*calls))
+	if len(c.calls) != 1 {
+		t.Fatalf("sky ran %d times, want 1", len(c.calls))
 	}
 	if n := conns.Load(); n != 0 {
 		t.Errorf("axon sky made %d connections to the file's address", n)

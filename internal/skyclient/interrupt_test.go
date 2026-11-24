@@ -62,7 +62,7 @@ func TestEnsureWaitStopsWhenCancelled(t *testing.T) {
 	defer unlock()
 
 	start := time.Now()
-	_, _, err = Ensure(cancelAfter(t, 100*time.Millisecond, nil), f.dir, "0.13.0", nil)
+	_, _, err = f.d.ensure(cancelAfter(t, 100*time.Millisecond, nil), f.dir, "0.13.0", nil)
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("Ensure error = %v, want the cancellation", err)
 	}
@@ -75,22 +75,22 @@ func TestEnsureWaitStopsWhenCancelled(t *testing.T) {
 // the client installed before it in place.
 func TestEnsureCancelledDuringDownloadLeavesNothing(t *testing.T) {
 	f := newFixture(t)
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 		t.Fatal(err)
 	}
 	// Without its uv, the next install downloads uv again.
 	if err := os.RemoveAll(filepath.Join(f.tools, "uv")); err != nil {
 		t.Fatal(err)
 	}
-	setDownloadLimits(t, time.Minute, 1<<20)
-	uvBaseURL = serve(t, func(w http.ResponseWriter, r *http.Request) {
+	setDownloadLimits(f, time.Minute, 1<<20)
+	f.d.uvBaseURL = serve(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "100000")
 		w.Write([]byte("partial"))
 		w.(http.Flusher).Flush()
 		hang(t, r)
 	})
 
-	_, _, err := Ensure(cancelAfter(t, 300*time.Millisecond, &interrupt.Error{Signal: syscall.SIGINT}), f.dir, "0.14.1", nil)
+	_, _, err := f.d.ensure(cancelAfter(t, 300*time.Millisecond, &interrupt.Error{Signal: syscall.SIGINT}), f.dir, "0.14.1", nil)
 	// The HTTP client reports the context's cause, the interrupt.
 	var interrupted *interrupt.Error
 	if !errors.As(err, &interrupted) {
@@ -122,7 +122,7 @@ func TestEnsureCancelledDuringUVStopsUV(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)
-			if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+			if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 				t.Fatal(err)
 			}
 			// The fake uv waits in the package stage for a file that never
@@ -149,7 +149,7 @@ func TestEnsureCancelledDuringUVStopsUV(t *testing.T) {
 			}()
 
 			start := time.Now()
-			_, _, err := Ensure(ctx, f.dir, "0.14.1", nil)
+			_, _, err := f.d.ensure(ctx, f.dir, "0.14.1", nil)
 			if !<-seen {
 				t.Fatalf("uv was not seen installing the package within %v; Ensure error = %v", testkit.WaitTimeout, err)
 			}

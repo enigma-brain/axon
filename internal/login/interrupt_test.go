@@ -20,7 +20,6 @@ import (
 	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/testkit"
-	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
 // cancelOn is an output that cancels a login, after a short delay, once
@@ -83,6 +82,7 @@ func silentInput(t *testing.T) io.Reader {
 }
 
 func TestReadLineReturnsWhenCancelled(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(50*time.Millisecond, cancel)
 	if _, err := readLine(ctx, silentInput(t)); !errors.Is(err, context.Canceled) {
@@ -94,6 +94,7 @@ func TestReadLineReturnsWhenCancelled(t *testing.T) {
 }
 
 func TestQuestionsReturnWhenCancelled(t *testing.T) {
+	t.Parallel()
 	ps := []configfile.Pathway{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}}
 	for name, ask := range map[string]func(context.Context, io.Reader, io.Writer) error{
 		"yes or no": func(ctx context.Context, in io.Reader, out io.Writer) error {
@@ -128,6 +129,7 @@ func TestQuestionsReturnWhenCancelled(t *testing.T) {
 }
 
 func TestInterruptAtTheFirstLoginPrompt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, typed, trigger string
 	}{
@@ -152,6 +154,7 @@ func TestInterruptAtTheFirstLoginPrompt(t *testing.T) {
 }
 
 func TestInterruptWhileCheckingAHandMadeServer(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	h.terminal()
@@ -169,6 +172,7 @@ func TestInterruptWhileCheckingAHandMadeServer(t *testing.T) {
 }
 
 func TestSkyProbeResultWhenCancelled(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if err := skyProbeResult(ctx, errors.New("dial tcp: operation was canceled")); !errors.Is(err, context.Canceled) {
@@ -177,6 +181,7 @@ func TestSkyProbeResultWhenCancelled(t *testing.T) {
 }
 
 func TestInterruptAtThePathwayQuestion(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.interrupted(Options{In: silentInput(t)}, "Pathway [1-2]: ", syscall.SIGINT)
 	if h.active() != "" {
@@ -187,6 +192,7 @@ func TestInterruptAtThePathwayQuestion(t *testing.T) {
 // TestInterruptAtAQuestionOnTheTerminal interrupts a question that --config -
 // asks on the terminal, since standard input holds the config file.
 func TestInterruptAtAQuestionOnTheTerminal(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.store(revised("7"))
 	before := h.stored("example")
@@ -208,6 +214,7 @@ func TestInterruptAtAQuestionOnTheTerminal(t *testing.T) {
 }
 
 func TestInterruptAtAClashQuestion(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	before := h.stored("example")
 	clashing := strings.Replace(testkit.ExampleConfig, `id = "example"`, `id = "other"`, 1)
@@ -223,6 +230,7 @@ func TestInterruptAtAClashQuestion(t *testing.T) {
 // TestInterruptDuringTheBrowserLogin forwards SIGTERM to sky, which ends at
 // once; the login stops with the cancellation and stores no login.
 func TestInterruptDuringTheBrowserLogin(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("hang")
 	h.interrupted(Options{Pathway: "campus"}, "in your browser", syscall.SIGTERM)
@@ -235,6 +243,7 @@ func TestInterruptDuringTheBrowserLogin(t *testing.T) {
 // the terminal delivers to sky itself: axon sends sky nothing, and kills it
 // only once skyWaitDelay has passed.
 func TestInterruptDuringTheBrowserLoginWaitsForSky(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("hang")
 	start := time.Now()
@@ -253,7 +262,7 @@ func (h *teleportHarness) runCancellable(ctx context.Context) error {
 // cancelAtTunnel makes the login cancel ctx when it reaches the tunnel.
 func (h *teleportHarness) cancelAtTunnel(cancel func()) {
 	newTunnel := h.l.teleport.newTunnel
-	h.l.teleport.newTunnel = func(stateDir, tshPath, proxy, app string) *tunnel.Tunnel {
+	h.l.teleport.newTunnel = func(stateDir, tshPath, proxy, app string) teleportTunnel {
 		cancel()
 		return newTunnel(stateDir, tshPath, proxy, app)
 	}
@@ -418,6 +427,7 @@ func TestLogoutThatFinishesStaysASuccess(t *testing.T) {
 // TestInterruptWhileTheConfigFileIsReadFromStandardInput cancels axon login
 // --config - while standard input stays open and sends nothing.
 func TestInterruptWhileTheConfigFileIsReadFromStandardInput(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	before := h.stored("example")
 	h.interruptAfter(Options{Config: "-", In: silentInput(t)}, 100*time.Millisecond)
