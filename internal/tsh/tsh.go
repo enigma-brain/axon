@@ -24,15 +24,31 @@ import (
 // InstallLink is Teleport's page on installing its client.
 const InstallLink = "https://goteleport.com/docs/installation/"
 
-// Where tsh writes during the logins, which can open a browser and prompt.
-// Tests replace them.
-var (
-	stdout io.Writer = os.Stdout
-	stderr io.Writer = os.Stderr
-)
+// deps are what the package depends on outside its arguments. The exported
+// functions use defaults(); tests build their own.
+type deps struct {
+	// stdout and stderr are where tsh writes during the logins, which can
+	// open a browser and prompt.
+	stdout, stderr io.Writer
+	// now is the clock the certificate is checked against.
+	now func() time.Time
+	// pingURL returns where the proxy at proxy, a host or host:port,
+	// reports its version.
+	pingURL func(proxy string) string
+	// pingTimeout bounds the request for the proxy's version, from
+	// sending it to reading its answer.
+	pingTimeout time.Duration
+}
 
-// now is the clock the certificate is checked against.
-var now = time.Now
+func defaults() deps {
+	return deps{
+		stdout:      os.Stdout,
+		stderr:      os.Stderr,
+		now:         time.Now,
+		pingURL:     func(proxy string) string { return "https://" + proxy + "/webapi/ping" },
+		pingTimeout: 30 * time.Second,
+	}
+}
 
 // ErrNotFound reports that there is no tsh on PATH.
 var ErrNotFound = fmt.Errorf("this pathway needs Teleport's client, tsh, and no tsh was found on PATH. Install it from %s and run `axon login` again.", InstallLink)
@@ -58,6 +74,10 @@ func Find() (string, error) {
 // tsh on PATH, and stops naming both versions when the proxy does not
 // support the one on PATH.
 func Ensure(ctx context.Context, proxyAddr string) (string, error) {
+	return defaults().ensure(ctx, proxyAddr)
+}
+
+func (d deps) ensure(ctx context.Context, proxyAddr string) (string, error) {
 	if err := CheckProxy(proxyAddr); err != nil {
 		return "", err
 	}
@@ -65,7 +85,7 @@ func Ensure(ctx context.Context, proxyAddr string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	proxy, err := proxyVersion(ctx, proxyAddr)
+	proxy, err := d.proxyVersion(ctx, proxyAddr)
 	if err != nil {
 		return "", err
 	}
@@ -87,10 +107,14 @@ func Ensure(ctx context.Context, proxyAddr string) (string, error) {
 // Login runs the Teleport login against the proxy at proxy. tsh reads its
 // answers from in, which is the terminal when there is one.
 func Login(ctx context.Context, tshPath, proxy string, in io.Reader) error {
+	return defaults().login(ctx, tshPath, proxy, in)
+}
+
+func (d deps) login(ctx context.Context, tshPath, proxy string, in io.Reader) error {
 	if err := CheckProxy(proxy); err != nil {
 		return err
 	}
-	if err := runInTerminal(ctx, in, tshPath, "login", "--proxy="+proxy); err != nil {
+	if err := d.runInTerminal(ctx, in, tshPath, "login", "--proxy="+proxy); err != nil {
 		return fmt.Errorf("Teleport login (tsh login --proxy=%s): %w", proxy, err)
 	}
 	return nil
@@ -99,13 +123,17 @@ func Login(ctx context.Context, tshPath, proxy string, in io.Reader) error {
 // AppLogin issues a fresh certificate for the Teleport application app,
 // served by the proxy at proxy. tsh reads its answers from in, as with Login.
 func AppLogin(ctx context.Context, tshPath, proxy, app string, in io.Reader) error {
+	return defaults().appLogin(ctx, tshPath, proxy, app, in)
+}
+
+func (d deps) appLogin(ctx context.Context, tshPath, proxy, app string, in io.Reader) error {
 	if err := CheckProxy(proxy); err != nil {
 		return err
 	}
 	if err := CheckApp(app); err != nil {
 		return fmt.Errorf("Teleport application login: %w", err)
 	}
-	if err := runInTerminal(ctx, in, tshPath, "--proxy="+proxy, "apps", "login", app); err != nil {
+	if err := d.runInTerminal(ctx, in, tshPath, "--proxy="+proxy, "apps", "login", app); err != nil {
 		return fmt.Errorf("Teleport application login (tsh --proxy=%s apps login %s): %w", proxy, app, err)
 	}
 	return nil
@@ -122,12 +150,12 @@ const waitDelay = 2 * time.Second
 
 // runInTerminal runs tsh with args, reading from in and writing to axon's
 // own output.
-func runInTerminal(ctx context.Context, in io.Reader, tshPath string, args ...string) error {
+func (d deps) runInTerminal(ctx context.Context, in io.Reader, tshPath string, args ...string) error {
 	cmd := exec.CommandContext(ctx, tshPath, args...)
 	interrupt.Stop(ctx, cmd, terminalGrace)
 	cmd.Stdin = in
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
+	cmd.Stdout = d.stdout
+	cmd.Stderr = d.stderr
 	return cmd.Run()
 }
 
@@ -138,6 +166,10 @@ func runInTerminal(ctx context.Context, in io.Reader, tshPath string, args ...st
 // the future. When tsh reports no login, by a non-zero exit, the result is
 // false with no error.
 func SessionValid(ctx context.Context, tshPath, proxy string) (bool, error) {
+	return defaults().sessionValid(ctx, tshPath, proxy)
+}
+
+func (d deps) sessionValid(ctx context.Context, tshPath, proxy string) (bool, error) {
 	if err := CheckProxy(proxy); err != nil {
 		return false, err
 	}
@@ -172,7 +204,7 @@ func SessionValid(ctx context.Context, tshPath, proxy string) (bool, error) {
 	if err != nil || !SameProxy(u.Host, proxy) {
 		return false, nil
 	}
-	return status.Active.ValidUntil.After(now()), nil
+	return status.Active.ValidUntil.After(d.now()), nil
 }
 
 // ErrStillLoggedIn reports a tsh logout that exited without ending the
@@ -183,6 +215,10 @@ var ErrStillLoggedIn = errors.New("the Teleport session is still valid after tsh
 // it ended. It runs tsh without a terminal and returns tsh's own output in
 // the error when tsh fails.
 func Logout(ctx context.Context, tshPath, proxy string) error {
+	return defaults().logout(ctx, tshPath, proxy)
+}
+
+func (d deps) logout(ctx context.Context, tshPath, proxy string) error {
 	if err := CheckProxy(proxy); err != nil {
 		return err
 	}
@@ -195,7 +231,7 @@ func Logout(ctx context.Context, tshPath, proxy string) error {
 		}
 		return fmt.Errorf("tsh logout --proxy=%s: %w", proxy, err)
 	}
-	valid, err := SessionValid(ctx, tshPath, proxy)
+	valid, err := d.sessionValid(ctx, tshPath, proxy)
 	if err != nil {
 		return err
 	}

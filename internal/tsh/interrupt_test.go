@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -69,7 +68,7 @@ func TestSessionValidInterrupted(t *testing.T) {
 	whenStarted(t, marks, func(int) { cancel() })
 
 	start := time.Now()
-	valid, err := SessionValid(ctx, path, testProxy)
+	valid, err := f.d.sessionValid(ctx, path, testProxy)
 	if valid || !errors.Is(err, context.Canceled) {
 		t.Fatalf("SessionValid = %v, %v, want context.Canceled", valid, err)
 	}
@@ -95,24 +94,23 @@ func TestClientVersionCancelled(t *testing.T) {
 	}
 }
 
-// useBuffers replaces the output tsh logs in on with buffers.
-func useBuffers(t *testing.T) {
-	setVar[io.Writer](t, &stdout, &bytes.Buffer{})
-	setVar[io.Writer](t, &stderr, &bytes.Buffer{})
+// useBuffers makes f's logins write to buffers.
+func useBuffers(f *fixture) {
+	f.d.stdout, f.d.stderr = &bytes.Buffer{}, &bytes.Buffer{}
 }
 
 // A Teleport login interrupted by SIGTERM passes the signal to tsh and
 // returns once tsh has ended.
 func TestLoginInterruptedBySIGTERMForwardsIt(t *testing.T) {
 	f := newFixture(t)
-	useBuffers(t)
+	useBuffers(f)
 	path, marks := f.putSlow()
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
 	whenStarted(t, marks, func(int) { cancel(&interrupt.Error{Signal: syscall.SIGTERM}) })
 
 	start := time.Now()
-	if err := Login(ctx, path, testProxy, bytes.NewReader(nil)); err == nil {
+	if err := f.d.login(ctx, path, testProxy, bytes.NewReader(nil)); err == nil {
 		t.Fatal("the interrupted login succeeded")
 	}
 	if got := mark(marks); got != "TERM" {
@@ -127,7 +125,7 @@ func TestLoginInterruptedBySIGTERMForwardsIt(t *testing.T) {
 // terminal delivers SIGINT to tsh itself, and waits for tsh to end.
 func TestLoginInterruptedBySIGINTWaitsForTsh(t *testing.T) {
 	f := newFixture(t)
-	useBuffers(t)
+	useBuffers(f)
 	path, marks := f.putSlow()
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
@@ -140,7 +138,7 @@ func TestLoginInterruptedBySIGINTWaitsForTsh(t *testing.T) {
 	})
 
 	start := time.Now()
-	if err := Login(ctx, path, testProxy, bytes.NewReader(nil)); err == nil {
+	if err := f.d.login(ctx, path, testProxy, bytes.NewReader(nil)); err == nil {
 		t.Fatal("the interrupted login succeeded")
 	}
 	if got := mark(marks); got != "INT" {
