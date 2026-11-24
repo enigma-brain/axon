@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -55,8 +57,16 @@ func dispatch(ctx context.Context, w io.Writer, args []string) error {
 	if wantsHelp(args) {
 		return help(dir, args)
 	}
-	return forward(ctx, w, dir, args)
+	err = forward(ctx, w, dir, args)
+	if errors.Is(err, ErrNoLogin) && hasHelpFlag(args) {
+		return fmt.Errorf("%w %s", err, msgHelpHint)
+	}
+	return err
 }
+
+// msgHelpHint follows the no-login message when a help flag was not taken
+// for a request for help.
+const msgHelpHint = "For a command's help, run `axon sky <command> --help`."
 
 // refusal returns the error for a refused command, and nil for any other.
 // A refused command is "api" followed by one of the refused words, as the
@@ -92,29 +102,66 @@ func commandWords(args []string, n int) []string {
 
 // wantsHelp reports whether sky would print help for args: when there are
 // none, or when --help or -h comes before the "--" that ends a command's
-// options. A "--" before the first word is the root group's, and sky reads
-// the options after it.
+// options and cannot be an option's value. axon does not know which of
+// sky's options take a value, so a help flag counts only as the first
+// argument, or after an argument that is not an option or that holds its
+// own value, as --name=value does. After a bare option, as in "-c -h", sky
+// can read the flag as the option's value and run the command, so it
+// goes through the connection check instead. A "--" before the first word
+// is the root group's, and sky reads the options after it.
 func wantsHelp(args []string) bool {
 	if len(args) == 0 {
 		return true
 	}
 	seenWord := false
+	prev := ""
+	for i, a := range args {
+		switch {
+		case a == "--" && seenWord:
+			return false
+		case isHelpFlag(a):
+			if i == 0 || !isBareOption(prev) {
+				return true
+			}
+		case !isOption(a):
+			seenWord = true
+		}
+		prev = a
+	}
+	return false
+}
+
+// hasHelpFlag reports whether --help or -h comes before the "--" that ends
+// a command's options, whether or not wantsHelp takes it for help.
+func hasHelpFlag(args []string) bool {
+	seenWord := false
 	for _, a := range args {
 		switch {
 		case a == "--" && seenWord:
 			return false
-		case a == "--help" || a == "-h":
+		case isHelpFlag(a):
 			return true
-		case len(a) > 0 && a[0] != '-':
+		case !isOption(a):
 			seenWord = true
 		}
 	}
 	return false
 }
 
+func isHelpFlag(a string) bool { return a == "--help" || a == "-h" }
+
+func isOption(a string) bool { return len(a) > 0 && a[0] == '-' }
+
+// isBareOption reports whether a is an option that does not hold its own
+// value, and so can be waiting for the next argument as its value. The
+// "--" that ends the root group's options is not one.
+func isBareOption(a string) bool {
+	return isOption(a) && a != "--" && !strings.Contains(a, "=")
+}
+
 // help replaces the axon process with sky's own help for args. It needs the
-// client and no login, so it runs no connection check; when a login is
-// recorded, sky gets the same environment as a forwarded command.
+// client and no login, so it runs no connection check, and runs sky against
+// an endpoint where nothing answers.
 func help(dir axondir.Dir, args []string) error {
 	path, err := skyPath(dir)
 	if errors.Is(err, skyclient.ErrNotInstalled) {
@@ -123,5 +170,5 @@ func help(dir axondir.Dir, args []string) error {
 	if err != nil {
 		return fmt.Errorf("find the SkyPilot client: %w", err)
 	}
-	return run(path, args, helpEnviron(dir))
+	return run(path, args, helpEnviron(os.Environ()))
 }
