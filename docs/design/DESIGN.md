@@ -764,11 +764,13 @@ the message adds that a command's help is `axon sky <command> --help`.
 
 `axon` runs the client for help without the connection check, so help needs
 the installed client and no login. The client runs with
-`SKYPILOT_API_SERVER_ENDPOINT` set to `http://127.0.0.1:0`, replacing any
+`SKYPILOT_API_SERVER_ENDPOINT` set to `axon-no-server://help`, replacing any
 value the shell exports, whether or not a login is recorded. SkyPilot
-prints help without a request to the server; should the client run a
-command instead, it reaches no server, since nothing listens on port 0, and
-starts none, since that is not SkyPilot's reserved local address.
+prints help without a request to the server. Should the client run a
+command instead, it reaches no server: the client's HTTP library sends only
+`http` and `https` and refuses that address before it opens a connection.
+It starts no server either, since that is not SkyPilot's reserved local
+address.
 SkyPilot's help and hints name `sky` commands; the user types each as
 `axon sky`.
 

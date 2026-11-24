@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -321,6 +322,19 @@ func TestHelpRunsAgainstTheDeadEndpoint(t *testing.T) {
 	}
 	if want := []string{endpointVar + "=" + deadEndpoint}; !slices.Equal(got, want) {
 		t.Errorf("help environment has %q, want %q", got, want)
+	}
+}
+
+// The dead endpoint can't name a server: the client's HTTP library sends
+// only http and https, and an empty scheme or host would let SkyPilot fall
+// back to an endpoint of its own.
+func TestDeadEndpointNamesNoServer(t *testing.T) {
+	u, err := url.Parse(deadEndpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Scheme == "" || u.Scheme == "http" || u.Scheme == "https" || u.Host == "" {
+		t.Errorf("deadEndpoint %q has scheme %q and host %q", deadEndpoint, u.Scheme, u.Host)
 	}
 }
 

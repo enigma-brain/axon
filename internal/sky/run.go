@@ -49,12 +49,14 @@ func run(path string, args, env []string) error {
 	return nil
 }
 
-// deadEndpoint is the endpoint sky's help runs against. Nothing can listen
-// on port 0, so a connection to it fails at once without leaving the
-// computer, and it is not one of the addresses where SkyPilot starts a
-// local API server. Should sky run a command where help was expected, it
-// reaches no server.
-const deadEndpoint = "http://127.0.0.1:0"
+// deadEndpoint is the endpoint sky's help runs against. Its scheme is
+// neither http nor https, so the client's HTTP library, which sends only
+// those, refuses any request to it before opening a connection, and it is
+// not one of the addresses where SkyPilot starts a local API server. Should
+// sky run a command where help was expected, it reaches no server. A port
+// cannot do this: no port is sure to be free, and the library drops a port
+// of 0 and connects to port 80.
+const deadEndpoint = "axon-no-server://help"
 
 // helpEnviron returns base with the SkyPilot endpoint set to deadEndpoint,
 // replacing any value base holds. Every other entry is kept.
