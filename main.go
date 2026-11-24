@@ -15,14 +15,20 @@ var version = "dev"
 
 func main() {
 	ctx, _ := interrupt.Notify(context.Background())
-	err := cli.Execute(ctx, version)
-	// A command that finished its work before it saw the signal has
-	// printed its result, and ends as it would have.
-	if sig, ok := interrupt.Signal(ctx); ok && err != nil {
+	end(ctx, cli.Execute(ctx, version))
+}
+
+// end ends axon after a command that ran with ctx returned err. A command
+// that failed after a signal ends by that signal, with one line; its own
+// error is not printed. A command that finished its work before it acted
+// on the signal has printed its result, and ends as it would have.
+func end(ctx context.Context, err error) {
+	if err == nil {
+		return
+	}
+	if sig, ok := interrupt.Signal(ctx); ok {
 		interrupt.Report(os.Stderr)
 		interrupt.Exit(sig)
 	}
-	if err != nil {
-		fail.Exit(err)
-	}
+	fail.Exit(err)
 }
