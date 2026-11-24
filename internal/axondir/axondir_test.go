@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
 
@@ -198,5 +199,31 @@ func TestReplaceFile(t *testing.T) {
 	}
 	if len(entries) != 1 {
 		t.Errorf("directory holds %d entries, want only the file", len(entries))
+	}
+}
+
+// A directory sync the filesystem does not support counts as done, and any
+// other failure is reported.
+func TestSyncDirOnAFilesystemWithoutDirectorySync(t *testing.T) {
+	real := syncFile
+	t.Cleanup(func() { syncFile = real })
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		err  error
+		fail bool
+	}{
+		{syscall.EINVAL, false},
+		{syscall.ENOTSUP, false},
+		{syscall.EOPNOTSUPP, false},
+		{&os.PathError{Op: "sync", Path: dir, Err: syscall.EINVAL}, false},
+		{syscall.EIO, true},
+	} {
+		syncFile = func(*os.File) error { return tc.err }
+		if err := SyncDir(dir); (err != nil) != tc.fail {
+			t.Errorf("sync answering %v: SyncDir = %v", tc.err, err)
+		}
+		if err := ReplaceFile(filepath.Join(dir, "f"), []byte("x")); (err != nil) != tc.fail {
+			t.Errorf("sync answering %v: ReplaceFile = %v", tc.err, err)
+		}
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/BurntSushi/toml"
 )
@@ -207,15 +208,27 @@ func ReplaceFile(path string, data []byte) error {
 }
 
 // SyncDir syncs the directory dir, so that the names in it, as a rename
-// left them, are on disk.
+// left them, are on disk. A filesystem that does not support syncing a
+// directory, such as some network and FUSE mounts, answers EINVAL, ENOTSUP
+// or EOPNOTSUPP; SyncDir then reports success, since nothing more can be
+// done there.
 func SyncDir(dir string) error {
 	d, err := os.Open(dir)
 	if err != nil {
 		return err
 	}
-	if err := d.Sync(); err != nil {
+	if err := syncFile(d); err != nil && !syncUnsupported(err) {
 		d.Close()
 		return err
 	}
 	return d.Close()
+}
+
+// syncFile syncs an open file. Tests replace it.
+var syncFile = (*os.File).Sync
+
+// syncUnsupported reports whether err says the filesystem does not support
+// the sync.
+func syncUnsupported(err error) bool {
+	return errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.EOPNOTSUPP)
 }
