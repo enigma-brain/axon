@@ -95,8 +95,11 @@ var ErrOlderFormat = errors.New("the file is in an older format. Run `axon login
 // white space and comments.
 var ErrEmpty = errors.New("the file is empty")
 
+// MaxFileIDLength is the longest identifier a config file may have.
+const MaxFileIDLength = 32
+
 var (
-	fileIDPattern    = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+	fileIDPattern    = regexp.MustCompile(fmt.Sprintf(`^[a-z][a-z0-9-]{0,%d}$`, MaxFileIDLength-1))
 	pathwayIDPattern = regexp.MustCompile(`^[a-z0-9-]+$`)
 	hostLabelPattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 )
@@ -187,7 +190,7 @@ func Parse(data []byte) (File, error) {
 	}
 	id, ok := raw.ID.(string)
 	if !ok || !fileIDPattern.MatchString(id) {
-		return File{}, refuse("id", "must be lowercase letters, digits and hyphens, start with a letter, and be at most 32 characters")
+		return File{}, refuse("id", "must be lowercase letters, digits and hyphens, start with a letter, and be at most %d characters", MaxFileIDLength)
 	}
 	if len(raw.Pathway) == 0 {
 		return File{}, refuse("pathway", "the file must have at least one [[pathway]]")

@@ -28,6 +28,7 @@ const (
 	lineSkyNoClient  = "sky: skipped logging out of SkyPilot: the SkyPilot client is not installed"
 	lineSkyNoLogin   = "sky: skipped logging out of SkyPilot: the SkyPilot client is not logged in"
 	lineSkyCookies   = "sky: removed the saved login for %s"
+	lineStopTunnel   = "sky: stopping the Teleport tunnel on port %d"
 	lineTeleportOut  = "teleport: logged out of %s"
 	lineTeleportNone = "teleport: skipped logging out of %s: tsh is not on PATH"
 	lineTeleportOld  = "teleport: skipped logging out of Teleport: the record of the connected pathway is from an earlier axon. Run `tsh logout` to end a Teleport session."
@@ -172,8 +173,7 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 	// 3. The tunnel: the connected pathway's, recorded or not, and the
 	// one the record names.
 	if running {
-		fmt.Fprintf(opts.Out, "sky: stopping the Teleport tunnel on port %d\n", tunnel.Port)
-		if err := stopTunnels(stateDir, pathwayTunnel); err != nil {
+		if err := stopTunnels(opts.Out, stateDir, pathwayTunnel); err != nil {
 			fail("stop the Teleport tunnel", err)
 		}
 	}
@@ -292,9 +292,10 @@ func pathwayTunnelRunning(stateDir string, tn *tunnel.Tunnel) (bool, error) {
 	return tn.Running()
 }
 
-// stopTunnels stops tn, when it is not nil, and then the tunnel recorded in
-// stateDir.
-func stopTunnels(stateDir string, tn *tunnel.Tunnel) error {
+// stopTunnels writes to w that the tunnel is stopping, then stops tn, when
+// it is not nil, and the tunnel recorded in stateDir.
+func stopTunnels(w io.Writer, stateDir string, tn *tunnel.Tunnel) error {
+	fmt.Fprintf(w, lineStopTunnel+"\n", tunnel.Port)
 	if tn != nil {
 		if err := tn.Stop(); err != nil {
 			return err

@@ -559,7 +559,7 @@ instead of the latest. CI runs it on Linux when `internal/update/` or
 | `internal/configfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/configs/`. |
 | `internal/axondir` | `~/.axon`: every name in it, the settings file, `tools/`, `state/`, the store's lock, and renaming what `v0.3.0` and earlier kept under other names. |
 | `internal/connected` | The record of the connected pathway and its settings, in `~/.axon/state/pathway.toml`. |
-| `internal/login` | `axon login` and `axon logout` (`logout.go`): adding a file, choosing the pathway, disconnecting the one left, the stages, the sky group's connect steps, and each kind's login in `direct.go` and `teleport.go`. `browser.go` holds the length of the browser wait. |
+| `internal/login` | `axon login` and `axon logout` (`logout.go`): adding a file, choosing the pathway, disconnecting the one left, the stages, the sky group's connect steps, and each kind's login in `direct.go` and `teleport.go`. |
 | `internal/sky` | The `axon sky` command group: its refusals, its connection check, and each pathway kind's endpoint. |
 | `internal/apiserver` | The SkyPilot API server's health request, with SkyPilot's cookies and the client's version headers. |
 | `internal/skyclient` | `axon`'s own SkyPilot client. |
