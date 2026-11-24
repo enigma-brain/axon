@@ -3,6 +3,7 @@ package termtext
 import "testing"
 
 func TestClean(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ in, want string }{
 		{"plain text", "plain text"},
 		{"Café ü", "Café ü"},
