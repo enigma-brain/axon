@@ -26,6 +26,10 @@ behind it is free to change without the user learning a new path
 through to the organization's SkyPilot API server: dev environments, GPUs,
 jobs and volumes.
 
+`axon config` is neither kind of group: it reaches no tool and no part of
+the platform. Like `axon login`, `axon logout` and `axon update`, it is
+`axon`'s own, and works on what `axon` keeps on the laptop.
+
 `axon` is written in Go and is a single binary that runs on the user's
 laptop. It has no server component.
 
@@ -215,7 +219,12 @@ replace. When it stores a file that has a `revision`, `axon` says the
 revision.
 
 Removing a file is deleting it from `~/.axon/orgs/`. There is no command
-for it.
+for it. `axon config list` shows the stored files, each with its source or
+that it is hand-made, its revision and when it was stored, their pathways,
+and the pathway in use. It reads only files on the laptop: it contacts no
+server, runs no client, takes no lock and changes nothing. A stored file
+that cannot be read is listed with the reason, and the command then exits
+with an error.
 
 ### Replacing a stored pathway
 
@@ -366,6 +375,7 @@ With no terminal, it stops with a message that names `--sky-endpoint`,
 | `axon login [--config <source>] [--pathway <id>] [--sky-endpoint <address> \| --teleport-proxy <address> [--sky-app <name>]] [--name <name>] [--replace]` | Adds a config file when `--config` is given, or makes a hand-made pathway, determines the pathway, establishes its session, and connects every command group. |
 | `axon logout` | Logs out of every command group and the pathway's session, and removes the records of the connection. |
 | `axon sky [args]` | Checks the connection, then runs `axon`'s own SkyPilot client with the same arguments. |
+| `axon config list` | Lists the stored config files, their pathways and the pathway in use. |
 | `axon update [--version <version>]` | Replaces the running `axon` with the latest release, or with the release `--version` names. |
 | `axon --version` | Prints the version of `axon`. |
 | `axon --help` | Lists the commands. |
