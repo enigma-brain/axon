@@ -176,8 +176,8 @@ first job reads the change, the pull request's diff or the commits a push to
 `main` added, and sets three flags:
 
 - **code**: any `.go` file, `go.mod`, `go.sum`, anything under `internal/`,
-  `install.sh`, `.goreleaser.yaml`, anything under `.github/release-gate/`
-  or `ci.yml` itself;
+  `install.sh`, `.goreleaser.yaml`, anything under `.github/release-gate/`,
+  `release.yml`, or `ci.yml` itself;
 - **skyclient**: anything under `internal/skyclient/`, or `ci.yml`;
 - **update**: anything under `internal/update/`, `update_test.go`, or
   `ci.yml`.

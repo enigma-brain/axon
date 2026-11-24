@@ -57,7 +57,7 @@ jobs:
           matches() { echo "$changed" | grep -qE "$1"; }
           workflow='^\.github/workflows/ci\.yml$'
           code=false skyclient=false update=false
-          if matches "\.go\$|^go\.(mod|sum)\$|^internal/|^install\.sh\$|^\.goreleaser\.yaml\$|^\.github/release-gate/|$workflow"; then
+          if matches "\.go\$|^go\.(mod|sum)\$|^internal/|^install\.sh\$|^\.goreleaser\.yaml\$|^\.github/release-gate/|^\.github/workflows/release\.yml\$|$workflow"; then
             code=true
           fi
           if matches "^internal/skyclient/|$workflow"; then skyclient=true; fi
