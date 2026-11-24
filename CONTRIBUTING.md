@@ -176,8 +176,8 @@ first job reads the change, the pull request's diff or the commits a push to
 `main` added, and sets three flags:
 
 - **code**: any `.go` file, `go.mod`, `go.sum`, anything under `internal/`,
-  `install.sh`, `.goreleaser.yaml`, anything under `.github/release-gate/`
-  or `ci.yml` itself;
+  `install.sh`, `.goreleaser.yaml`, anything under `.github/release-gate/`,
+  `release.yml`, or `ci.yml` itself;
 - **skyclient**: anything under `internal/skyclient/`, or `ci.yml`;
 - **update**: anything under `internal/update/`, `update_test.go`, or
   `ci.yml`.
@@ -200,7 +200,7 @@ flag is set. A change to documentation alone sets none.
 | Release | Publishing the draft | `ubuntu-latest` | When the gate passed on all three |
 | Release | The install line and `axon --version`, and `axon update --version <tag>` from an old `axon`, against the published release | `ubuntu-latest` | After the release is published |
 | Mac | Build and test | `macos-latest` | When started by hand |
-| Mac | The real install of the SkyPilot client, and the smoke test | `macos-latest` and `macos-15-intel` | When started by hand |
+| Mac | The real install of the SkyPilot client, the smoke test, and the real update | `macos-latest` and `macos-15-intel` | When started by hand |
 
 A job that does not run is reported as skipped, which a required check
 accepts.
@@ -224,10 +224,10 @@ page, under "Mac", or with:
     gh workflow run mac.yml --ref <branch>
 
 Run it on a pull request's branch before merging when the change touches
-`install.sh`, `internal/skyclient/`, or anything that
-behaves differently on macOS, and on `main` before tagging a release that
-holds such a change, so that the release gate does not find the failure
-first. Run it as well to reproduce a failure reported on a Mac.
+`install.sh`, `internal/skyclient/`, `internal/update/`, or anything
+that behaves differently on macOS, and on `main` before tagging a release
+that holds such a change, so that the release gate does not find the
+failure first. Run it as well to reproduce a failure reported on a Mac.
 
 ### The release gate
 

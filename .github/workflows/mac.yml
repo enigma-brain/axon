@@ -5,10 +5,10 @@ name: Mac
 #
 #   gh workflow run mac.yml --ref <branch>
 #
-# It runs build and test on macOS on Apple silicon, and every real install
-# and the smoke test on macOS on Apple silicon and on Intel, whatever the
-# branch changes. CONTRIBUTING.md, under "Continuous integration", says
-# when to run it.
+# It runs build and test on macOS on Apple silicon, and every real install,
+# the smoke test and the real update on macOS on Apple silicon and on Intel,
+# whatever the branch changes. CONTRIBUTING.md, under "Continuous
+# integration", says when to run it.
 on:
   workflow_dispatch:
 
@@ -40,7 +40,7 @@ jobs:
         run: go test -race ./...
 
   real:
-    name: Real installs and smoke test (${{ matrix.os }})
+    name: Real installs, smoke test and real update (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -59,3 +59,7 @@ jobs:
         run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
       - name: Run axon login with an example config file in an empty home
         run: go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
+      - name: Update an old axon to the latest release with axon update
+        env:
+          AXON_REAL_UPDATE: "1"
+        run: go test -count=1 -timeout 10m -run '^TestRealUpdate$' -v .
