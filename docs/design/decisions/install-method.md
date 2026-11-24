@@ -32,8 +32,6 @@ archive, and puts `axon` in `~/.local/bin`.
 - Nothing needs `sudo`, and the script says what to add when the directory
   is not on `PATH`.
 - Fetching from the terminal avoids the macOS block on unsigned downloads.
-- Updating is running the same line again, so there is one procedure to
-  document and support.
 
 ## Alternatives considered
 
@@ -45,5 +43,3 @@ archive, and puts `axon` in `~/.local/bin`.
   method is needed anyway.
 - **`go install`.** It needs Go on the laptop and builds without the
   release's version.
-- **A built-in upgrade command beside the script.** It adds a command and
-  its failure cases for an operation that is rare.
