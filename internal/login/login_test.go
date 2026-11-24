@@ -265,6 +265,7 @@ func (h *harness) email() string {
 }
 
 func TestDirectFirstLogin(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
@@ -302,6 +303,7 @@ func TestDirectFirstLogin(t *testing.T) {
 }
 
 func TestDirectIdempotent(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.logIn()
 	if err := h.run("campus"); err != nil {
@@ -339,6 +341,7 @@ func TestDirectIdempotent(t *testing.T) {
 }
 
 func TestDirectUnreachable(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -359,6 +362,7 @@ func TestDirectUnreachable(t *testing.T) {
 }
 
 func TestDirectNeedsAuthRetriesOnce(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if err := os.MkdirAll(filepath.Dir(h.cookieFile), 0o700); err != nil {
 		t.Fatal(err)
@@ -395,6 +399,7 @@ func TestDirectNeedsAuthRetriesOnce(t *testing.T) {
 }
 
 func TestDirectNeedsAuthRetriesWithNoCookieFile(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("needs", "ok")
 	if err := h.run("campus"); err != nil {
@@ -406,6 +411,7 @@ func TestDirectNeedsAuthRetriesWithNoCookieFile(t *testing.T) {
 }
 
 func TestDirectCookieRemovalFailureSaysWhatToDo(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	// The server's cookie is in a directory that cannot be written, so
 	// the file can be read but not rewritten without it.
@@ -442,6 +448,7 @@ func TestDirectCookieRemovalFailureSaysWhatToDo(t *testing.T) {
 // An address that holds needs_auth, such as the login page's, is not the
 // status, so no retry follows.
 func TestDirectNeedsAuthInAnAddressIsNotTheStatus(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("address")
 	if err := os.WriteFile(filepath.Join(h.skyDir, "sky"), []byte(strings.Replace(fakeSky,
@@ -458,6 +465,7 @@ func TestDirectNeedsAuthInAnAddressIsNotTheStatus(t *testing.T) {
 }
 
 func TestDirectNeedsAuthTwice(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("needs", "needs")
 	err := h.run("campus")
@@ -470,6 +478,7 @@ func TestDirectNeedsAuthTwice(t *testing.T) {
 }
 
 func TestDirectLoginFails(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("fail")
 	err := h.run("campus")
@@ -482,6 +491,7 @@ func TestDirectLoginFails(t *testing.T) {
 }
 
 func TestDirectSilentFailureCaughtByIdentityCheck(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("silent")
 	err := h.run("campus")
@@ -495,6 +505,7 @@ func TestDirectSilentFailureCaughtByIdentityCheck(t *testing.T) {
 }
 
 func TestDirectLeavesBrowserUnset(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.l.sky.Environ = func() []string { return []string{"PATH=" + os.Getenv("PATH")} }
 	h.script("ok")
@@ -507,6 +518,7 @@ func TestDirectLeavesBrowserUnset(t *testing.T) {
 }
 
 func TestDirectBrowserWaitEnds(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.l.sky.LoginWait = 300 * time.Millisecond
 	h.script("hang")
@@ -522,6 +534,7 @@ func TestDirectBrowserWaitEnds(t *testing.T) {
 }
 
 func TestVersionSync(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.client.version = "0.12.3"
 	h.logIn()
@@ -539,6 +552,7 @@ func TestVersionSync(t *testing.T) {
 }
 
 func TestClientInstalledAtDefault(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.client.installed, h.client.version = false, ""
 	h.serverVersion = skyclient.DefaultVersion
@@ -559,6 +573,7 @@ func (errNoBuild) Error() string        { return "uv pip: no pre-built package f
 func (errNoBuild) Is(target error) bool { return target == skyclient.ErrUnavailable }
 
 func TestClientInstallFailureMessages(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		err     error
@@ -586,6 +601,7 @@ func TestClientInstallFailureMessages(t *testing.T) {
 }
 
 func TestClientUpdateFailureMessages(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		err     error
@@ -616,6 +632,7 @@ func TestClientUpdateFailureMessages(t *testing.T) {
 // A config file update that stopped with the stored file missing leaves
 // the previous copy beside it, which the next login puts back and reports.
 func TestLoginPutsBackAnInterruptedUpdate(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok")
 	path := configfile.NewStore(axondir.New(h.home)).Path("example")
@@ -637,6 +654,7 @@ func TestLoginPutsBackAnInterruptedUpdate(t *testing.T) {
 }
 
 func TestLoginReadsSkyPilotsSettingsFile(t *testing.T) {
+	t.Parallel()
 	for v, want := range map[string]string{
 		"":              "/home/ada/.sky/config.yaml",
 		"/etc/sky.yaml": "/etc/sky.yaml",

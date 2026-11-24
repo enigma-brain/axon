@@ -53,6 +53,7 @@ func (h *harness) active() string {
 }
 
 func TestNoConfigFileStops(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	err := h.run("")
@@ -75,6 +76,7 @@ func TestNoConfigFileStops(t *testing.T) {
 // pathway: it removes the recorded email and the record of the connected
 // pathway, then asks for --config.
 func TestLastFileDeletedWithoutTunnelDisconnects(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.logIn()
 	h.script("ok")
@@ -106,6 +108,7 @@ func TestLastFileDeletedWithoutTunnelDisconnects(t *testing.T) {
 // A laptop set up before config files has a pathway stored under an
 // old name and no file: login stops with the same message.
 func TestOldPathwayWithoutFileStops(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	if err := axondir.New(h.home).SetPathway("old-name"); err != nil {
@@ -117,6 +120,7 @@ func TestOldPathwayWithoutFileStops(t *testing.T) {
 }
 
 func TestOnePathwayIsUsedWithoutAsking(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	h.store(otherConfig)
@@ -133,6 +137,7 @@ func TestOnePathwayIsUsedWithoutAsking(t *testing.T) {
 }
 
 func TestTwoPathwaysInOneFileAsk(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.logIn()
 	if err := h.login(Options{In: strings.NewReader("1\n")}); err != nil {
@@ -151,6 +156,7 @@ func TestTwoPathwaysInOneFileAsk(t *testing.T) {
 }
 
 func TestTwoFilesAreOfferedInTheirOrder(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.store(otherConfig)
 	h.logIn()
@@ -168,6 +174,7 @@ func TestTwoFilesAreOfferedInTheirOrder(t *testing.T) {
 }
 
 func TestActivePathwayIsUsedWithoutAsking(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if err := axondir.New(h.home).SetPathway("campus"); err != nil {
 		t.Fatal(err)
@@ -182,6 +189,7 @@ func TestActivePathwayIsUsedWithoutAsking(t *testing.T) {
 }
 
 func TestActivePathwayNoFileHasIsChosenAgain(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if err := axondir.New(h.home).SetPathway("old-name"); err != nil {
 		t.Fatal(err)
@@ -197,6 +205,7 @@ func TestActivePathwayNoFileHasIsChosenAgain(t *testing.T) {
 }
 
 func TestPathwayFlagSwitches(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.store(otherConfig)
 	h.logIn()
@@ -216,6 +225,7 @@ func TestPathwayFlagSwitches(t *testing.T) {
 }
 
 func TestUnknownPathwayIsRefused(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.store(otherConfig)
 	err := h.run("nope")
@@ -232,6 +242,7 @@ func TestUnknownPathwayIsRefused(t *testing.T) {
 }
 
 func TestStoredFileThatFailsIsLeftOutWithOneLine(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	bad := filepath.Join(h.home, ".axon", "configs", "broken.toml")
 	if err := os.WriteFile(bad, []byte("format = 2\n"), 0o600); err != nil {
@@ -247,6 +258,7 @@ func TestStoredFileThatFailsIsLeftOutWithOneLine(t *testing.T) {
 }
 
 func TestConfigFromPath(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	path := filepath.Join(t.TempDir(), "axon.toml")
@@ -270,6 +282,7 @@ func TestConfigFromPath(t *testing.T) {
 }
 
 func TestConfigFromAddress(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	const address = "https://example.org/axon.toml"
@@ -293,6 +306,7 @@ func TestConfigFromAddress(t *testing.T) {
 }
 
 func TestConfigFromStdinWithTwoPathwaysAsksOnTheTerminal(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	tty := &closer{Reader: strings.NewReader("1\n")}
@@ -310,6 +324,7 @@ func TestConfigFromStdinWithTwoPathwaysAsksOnTheTerminal(t *testing.T) {
 }
 
 func TestConfigFromStdinWithoutTerminalNamesTheFlag(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	err := h.login(Options{Config: "-", In: strings.NewReader(testkit.ExampleConfig)})
@@ -369,6 +384,7 @@ func TestConfigKeepsActivePathwayInTheAddedFile(t *testing.T) {
 }
 
 func TestConfigOffersOnlyTheAddedFilesPathways(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	h.store(otherConfig)
@@ -388,6 +404,7 @@ func TestConfigOffersOnlyTheAddedFilesPathways(t *testing.T) {
 }
 
 func TestRefusedConfigChangesNothing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if err := axondir.New(h.home).SetPathway("campus"); err != nil {
 		t.Fatal(err)
@@ -408,6 +425,7 @@ func TestRefusedConfigChangesNothing(t *testing.T) {
 }
 
 func TestConnectedRecord(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.logIn()
 	if err := h.run("campus"); err != nil {
@@ -508,6 +526,7 @@ func TestAskPathway(t *testing.T) {
 }
 
 func TestAskPathwayLeavesLaterInput(t *testing.T) {
+	t.Parallel()
 	ps := []configfile.Pathway{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}}
 	in := strings.NewReader("1\nTOKEN\n")
 	if _, err := askPathway(context.Background(), ps, in, io.Discard); err != nil {
@@ -541,6 +560,7 @@ func equalMaps(a, b map[string]string) bool {
 
 // Empty input to --config names its source, and nothing is stored.
 func TestConfigEmpty(t *testing.T) {
+	t.Parallel()
 	empty := filepath.Join(t.TempDir(), "empty.toml")
 	if err := os.WriteFile(empty, nil, 0o644); err != nil {
 		t.Fatal(err)

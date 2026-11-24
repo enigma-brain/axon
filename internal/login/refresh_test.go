@@ -191,6 +191,7 @@ endpoint = "https://sky.example.org"
 `
 
 func TestRefreshReplacesTheFileWithoutDisconnectingOnText(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	server := h.serveConfigs()
 	h.storeFrom("/example.toml", testkit.ExampleConfig)
@@ -227,6 +228,7 @@ func TestRefreshReplacesTheFileWithoutDisconnectingOnText(t *testing.T) {
 }
 
 func TestRefreshOfTheSameFileSaysNothing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	server := h.serveConfigs()
 	h.storeFrom("/example.toml", testkit.ExampleConfig)
@@ -245,6 +247,7 @@ func TestRefreshOfTheSameFileSaysNothing(t *testing.T) {
 }
 
 func TestRefreshFailureUsesTheStoredFile(t *testing.T) {
+	t.Parallel()
 	path := func(h *harness) string { return filepath.Join(h.home, ".axon", "configs", "example.toml") }
 	for _, tc := range []struct {
 		name   string
@@ -284,6 +287,7 @@ func TestRefreshFailureUsesTheStoredFile(t *testing.T) {
 }
 
 func TestRefreshFetchesOnlyThePathwaysFile(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	server := h.serveConfigs()
 	h.storeFrom("/example.toml", testkit.ExampleConfig)
@@ -301,6 +305,7 @@ func TestRefreshFetchesOnlyThePathwaysFile(t *testing.T) {
 }
 
 func TestRefreshSkipsFilesNotFromAnAddress(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	server := h.serveConfigs()
 	// The harness stored testkit.ExampleConfig from standard input. A file from a
@@ -330,6 +335,7 @@ func TestRefreshSkipsFilesNotFromAnAddress(t *testing.T) {
 }
 
 func TestConfigAddedIsNotFetchedAgain(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	server := h.serveConfigs()
 	server.publish("/other.toml", otherConfig)
@@ -349,6 +355,7 @@ func TestConfigAddedIsNotFetchedAgain(t *testing.T) {
 var dropCampus = strings.Replace(testkit.ExampleConfig, testkit.ExampleConfig[strings.Index(testkit.ExampleConfig, "[[pathway]]\nid = \"campus\""):strings.Index(testkit.ExampleConfig, "[[pathway]]\nid = \"remote\"")], "", 1)
 
 func TestDroppedPathwayNamedByFlagStops(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	server := h.serveConfigs()
 	h.storeFrom("/example.toml", testkit.ExampleConfig)
@@ -371,6 +378,7 @@ func TestDroppedPathwayNamedByFlagStops(t *testing.T) {
 }
 
 func TestDroppedPathwayWithOneLeftIsReplacedWithoutAsking(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.noFiles()
 	server := h.serveConfigs()
@@ -404,6 +412,7 @@ func TestDroppedPathwayWithOneLeftIsReplacedWithoutAsking(t *testing.T) {
 }
 
 func TestDroppedPathwayWithSeveralLeftAsks(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	server := h.serveConfigs()
 	h.storeFrom("/example.toml", testkit.ExampleConfig)
@@ -431,6 +440,7 @@ func TestDroppedPathwayWithSeveralLeftAsks(t *testing.T) {
 }
 
 func TestDroppedPathwayWithoutAnAnswerChangesNothing(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	server := h.serveConfigs()
 	h.storeFrom("/example.toml", testkit.ExampleConfig)
@@ -451,6 +461,7 @@ func TestDroppedPathwayWithoutAnAnswerChangesNothing(t *testing.T) {
 }
 
 func TestRefreshedSettingsReconnectDirectPathway(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	server := h.serveConfigs()
 	h.storeFrom("/example.toml", testkit.ExampleConfig)
@@ -473,6 +484,7 @@ func TestRefreshedSettingsReconnectDirectPathway(t *testing.T) {
 }
 
 func TestActiveFileThatFailsIsLeft(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.store(otherConfig)
 	h.connectedTo("campus")
@@ -545,6 +557,7 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 // the query string that can hold a token, and the login goes on with the
 // stored file.
 func TestRefreshOfAnEmptyFileNamesTheAddress(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	server := h.serveConfigs()
 	h.storeFrom("/example.toml?token=s3cret", testkit.ExampleConfig)
@@ -566,6 +579,7 @@ func TestRefreshOfAnEmptyFileNamesTheAddress(t *testing.T) {
 
 // A failed fetch names the address without its query string.
 func TestRefreshFailureHidesTheToken(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	server := h.serveConfigs()
 	h.storeFrom("/example.toml?token=s3cret", testkit.ExampleConfig)

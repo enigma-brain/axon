@@ -138,6 +138,7 @@ func TestLogoutTeleport(t *testing.T) {
 }
 
 func TestLogoutDirect(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
@@ -205,6 +206,7 @@ func wantCookieFile(t *testing.T, h *harness, cookies ...string) {
 }
 
 func TestLogoutRemovesTheCookieWithoutAClient(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
@@ -227,6 +229,7 @@ func TestLogoutRemovesTheCookieWithoutAClient(t *testing.T) {
 }
 
 func TestLogoutRemovesTheCookieWhenSkyLogoutFails(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok", "fail")
 	if err := h.run("campus"); err != nil {
@@ -247,6 +250,7 @@ func TestLogoutRemovesTheCookieWhenSkyLogoutFails(t *testing.T) {
 }
 
 func TestLogoutWithNoCookieFile(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
@@ -269,6 +273,7 @@ func TestLogoutWithNoCookieFile(t *testing.T) {
 }
 
 func TestLogoutWithNoCookieForTheServer(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
@@ -295,6 +300,7 @@ func TestLogoutWithNoCookieForTheServer(t *testing.T) {
 }
 
 func TestLogoutWhenTheCookieFileCannotBeRewritten(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root writes to a read-only directory")
 	}
@@ -361,6 +367,7 @@ func TestLogoutSkipsSteps(t *testing.T) {
 }
 
 func TestLogoutSkipsSkyWithNoStoredEndpoint(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
@@ -380,6 +387,7 @@ func TestLogoutSkipsSkyWithNoStoredEndpoint(t *testing.T) {
 }
 
 func TestLogoutWithNothingConnected(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	writeSkyConfig(t, h, h.directURL)
 	r := (&logoutRun{lo: newLogout(h, fakeTsh)}).run()
