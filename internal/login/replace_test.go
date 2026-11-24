@@ -359,13 +359,13 @@ func TestRefreshThatNewlyClashesIsLeftOut(t *testing.T) {
 func TestAskYesNo(t *testing.T) {
 	for in, want := range map[string]bool{"y\n": true, "YES\n": true, "n\n": false, "\n": false, "maybe\ny\n": true} {
 		var out strings.Builder
-		got, err := askYesNo(strings.NewReader(in), &out, "? ")
+		got, err := askYesNo(context.Background(), strings.NewReader(in), &out, "? ")
 		if err != nil || got != want {
 			t.Errorf("askYesNo(%q) = %v, %v", in, got, err)
 		}
 	}
 	var out strings.Builder
-	if _, err := askYesNo(strings.NewReader("maybe\n"), &out, "? "); err != errNoAnswer || !strings.Contains(out.String(), "Answer y or n.") {
+	if _, err := askYesNo(context.Background(), strings.NewReader("maybe\n"), &out, "? "); err != errNoAnswer || !strings.Contains(out.String(), "Answer y or n.") {
 		t.Errorf("err = %v, out %q", err, out.String())
 	}
 }

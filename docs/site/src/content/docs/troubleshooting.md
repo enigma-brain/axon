@@ -776,3 +776,25 @@ own error, such as the output of `sky api logout` or `tsh logout`.
 When `axon` could not remove the saved SkyPilot login, the reason names SkyPilot's
 cookie file, `~/.sky/cookies.txt` or the file `SKYPILOT_API_COOKIE_FILE` names;
 check that you can write to its directory.
+
+## Interrupting axon
+
+### axon was interrupted
+
+```text
+axon: interrupted
+```
+
+You pressed Ctrl-C, or something sent `axon` SIGTERM, and `axon` stopped the
+command. What the command had not finished is undone: a download leaves no
+file behind, `axon update` leaves the `axon` you ran in place, the SkyPilot
+client stays at the version it was, a stored config file is as it was or as
+the command was making it, and a Teleport tunnel that the login started
+either runs or does not. A program that `axon` was running, such as the
+browser login or Teleport's login, received your Ctrl-C from the terminal
+too, or SIGTERM from `axon`, and `axon` waited for it to end. Run the command again when you want it.
+
+Pressing Ctrl-C a second time while `axon` stops ends it at once, and can
+leave a temporary file whose name begins with a dot beside the file `axon`
+was writing, such as `.axon-update-…` beside `axon` itself. It does nothing,
+and you can delete it.

@@ -14,6 +14,7 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/configfile"
+	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/skyclient"
 )
@@ -33,8 +34,8 @@ const needsAuth = "needs_auth"
 // endpointVar is the variable sky api login refuses to run with.
 const endpointVar = "SKYPILOT_API_SERVER_ENDPOINT"
 
-// skyWaitDelay bounds how long login waits for sky's output after sky exits
-// or is stopped.
+// skyWaitDelay bounds how long login waits for sky to end after an
+// interrupt, and for sky's output after sky exits or is stopped.
 const skyWaitDelay = 2 * time.Second
 
 // connectDirect connects the sky group on a direct pathway. It returns the
@@ -79,7 +80,7 @@ func (l *login) browserLogin(ctx context.Context, opts Options, skyPath, endpoin
 	defer cancel()
 	cmd := exec.CommandContext(ctx, skyPath, "api", "login", "-e", endpoint)
 	cmd.Env = env
-	cmd.WaitDelay = skyWaitDelay
+	interrupt.Stop(ctx, cmd, skyWaitDelay)
 	var seen scanWriter
 	cmd.Stdin = opts.In
 	cmd.Stdout = io.MultiWriter(opts.Out, &seen)

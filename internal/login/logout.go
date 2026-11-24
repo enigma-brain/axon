@@ -16,6 +16,7 @@ import (
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
+	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -115,7 +116,11 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 	failed := false
 	fail := func(step string, err error) {
 		failed = true
-		fmt.Fprintf(opts.Err, "axon: could not %s: %v\n", step, err)
+		// A step cut short by an interrupt did not fail; axon reports the
+		// interrupt once, when logout returns.
+		if ctx.Err() == nil {
+			fmt.Fprintf(opts.Err, "axon: could not %s: %v\n", step, err)
+		}
 	}
 
 	// What is recorded. A record that cannot be read is reported, and the
@@ -197,6 +202,10 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 		}
 	}
 
+	// A logout whose steps all succeeded is done, interrupted or not.
+	if err := ctx.Err(); failed && err != nil {
+		return err
+	}
 	fmt.Fprintf(opts.Out, lineKept+"\n", lo.dir.ConfigsPath())
 	if failed {
 		return errLogoutFailed
@@ -235,7 +244,7 @@ func (lo *logout) skyLogout(ctx context.Context, opts LogoutOptions) error {
 	cmd := exec.CommandContext(ctx, skyPath, "api", "logout")
 	// sky api logout refuses to run while the endpoint variable is set.
 	cmd.Env = skyEnv(lo.environ())
-	cmd.WaitDelay = skyWaitDelay
+	interrupt.Stop(ctx, cmd, skyWaitDelay)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if msg := strings.TrimSpace(string(out)); msg != "" {
