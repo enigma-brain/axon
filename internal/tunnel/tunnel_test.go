@@ -958,3 +958,24 @@ func TestDiscardRecordStopsWaitingWhenCancelled(t *testing.T) {
 		t.Errorf("discardRecord while the lock is held = %v, want context.DeadlineExceeded", err)
 	}
 }
+
+// TestCheckPortFreeProbesWhenOwnListenerMissesLoopback has the tunnel
+// listen only on the IPv6 loopback address. Its listener does not take the
+// client's address, 127.0.0.1, so that address is probed; with nothing
+// there the port counts as free. Another user's listener there, invisible
+// to the process table, would answer the probe, which a test run by one
+// user cannot set up.
+func TestCheckPortFreeProbesWhenOwnListenerMissesLoopback(t *testing.T) {
+	probe, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skipf("no IPv6 loopback: %v", err)
+	}
+	probe.Close()
+
+	tn := newTestTunnel(t)
+	t.Setenv("FAKETSH_HOST", "::1")
+	pid := startByHand(t, "serve")
+	if err := tn.checkPortFree([]int{pid}); err != nil {
+		t.Errorf("checkPortFree with nothing on 127.0.0.1 = %v, want nil", err)
+	}
+}

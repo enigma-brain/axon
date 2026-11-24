@@ -491,11 +491,16 @@ func (t *Tunnel) checkPortFree(own []int) error {
 		}
 		return &PortBusyError{PID: pid, Command: cmd}
 	}
-	if len(listeners) > 0 {
-		return nil
+	// Every listener seen is own. When one of them takes connections to the
+	// loopback address the client uses, nothing else can hold it.
+	for _, l := range listeners {
+		if l.accepts(netip.MustParseAddr(loopback)) {
+			return nil
+		}
 	}
 	// A listener of another user is invisible to the process table but
-	// still accepts connections.
+	// still accepts connections, including on the loopback address when
+	// own listeners take only another one.
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort(loopback, strconv.Itoa(t.port)), probeTimeout)
 	if err == nil {
 		conn.Close()
