@@ -1,8 +1,6 @@
 package skyclient
 
 import (
-	"archive/tar"
-	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/download"
 )
 
 // uvVersion is the version of uv that installs Python and the client.
@@ -82,12 +81,20 @@ func ensureUV(ctx context.Context, tools string, progress io.Writer) (string, er
 
 	url := fmt.Sprintf("%s/%s/uv-%s.tar.gz", uvBaseURL, uvVersion, build.target)
 	err = step(progress, "uv "+uvVersion, false, func(out io.Writer) error {
-		sum, err := download(ctx, url, archive, out)
-		if err != nil {
+		err := download.Fetch(ctx, url, archive, download.Options{
+			Limit:    maxDownload,
+			Stall:    stallTimeout,
+			SHA256:   build.sha256,
+			Progress: quarters(out),
+		})
+		var mismatch *download.ChecksumError
+		switch {
+		case errors.As(err, &mismatch):
+			return fmt.Errorf("checksum mismatch for %s: got %s, want %s", url, mismatch.Got, mismatch.Want)
+		case isPlain(err):
+			return fmt.Errorf("GET %s: %w", url, err)
+		case err != nil:
 			return err
-		}
-		if sum != build.sha256 {
-			return fmt.Errorf("checksum mismatch for %s: got %s, want %s", url, sum, build.sha256)
 		}
 		if _, err := archive.Seek(0, io.SeekStart); err != nil {
 			return err
@@ -103,24 +110,24 @@ func ensureUV(ctx context.Context, tools string, progress io.Writer) (string, er
 
 // extractUV writes the uv executable from the release archive r to path.
 func extractUV(r io.Reader, path string) error {
-	gz, err := gzip.NewReader(r)
+	uv, err := download.ExtractFile(r, "uv", maxUV)
+	if errors.Is(err, download.ErrNotInArchive) {
+		return errors.New("the archive holds no uv executable")
+	}
 	if err != nil {
-		return fmt.Errorf("read the archive: %w", err)
+		return err
 	}
-	tr := tar.NewReader(gz)
-	for {
-		hdr, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			return errors.New("the archive holds no uv executable")
-		}
-		if err != nil {
-			return fmt.Errorf("read the archive: %w", err)
-		}
-		if hdr.Typeflag != tar.TypeReg || filepath.Base(hdr.Name) != "uv" {
-			continue
-		}
-		return axondir.ReplaceFile(path, tr, 0o700)
-	}
+	return axondir.ReplaceFile(path, uv, 0o700)
+}
+
+// isPlain reports whether err is a failed request that does not already
+// say what went wrong in words of its own: not a stall, a refusal for size
+// or a server's answer.
+func isPlain(err error) bool {
+	var stalled *download.StallError
+	var tooLarge *download.TooLargeError
+	var status *download.StatusError
+	return err != nil && !errors.As(err, &stalled) && !errors.As(err, &tooLarge) && !errors.As(err, &status)
 }
 
 // uvEnv returns the environment uv runs with: the caller's, without anything
