@@ -59,7 +59,7 @@ func (l *login) establishTeleportSession(ctx context.Context, p configfile.Pathw
 		return nil
 	}
 	fmt.Fprintf(opts.Out, "teleport: logging in to %s\n", proxy)
-	if err := tsh.Login(ctx, path, proxy); err != nil {
+	if err := tsh.Login(ctx, path, proxy, opts.In); err != nil {
 		return fmt.Errorf("%w. Run `axon login` again.", err)
 	}
 	return nil
@@ -91,7 +91,7 @@ func (l *login) connectTeleport(ctx context.Context, p configfile.Pathway, opts 
 		fmt.Fprintf(opts.Out, "sky: the Teleport tunnel is up on port %d\n", tunnel.Port)
 	} else {
 		// 2. A fresh application certificate.
-		if err := tsh.AppLogin(ctx, l.teleport.path, proxy, app); err != nil {
+		if err := tsh.AppLogin(ctx, l.teleport.path, proxy, app, opts.In); err != nil {
 			return apiserver.Health{}, fmt.Errorf("%w. Run `axon login` again.", err)
 		}
 		// 3. A running tunnel keeps the certificate it started with.

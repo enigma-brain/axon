@@ -521,6 +521,10 @@ Teleport supports a client whose major version is the proxy's or one behind
 it. When the `tsh` on `PATH` is outside that range, `axon` stops, names the
 installed version and the proxy's, and says to update `tsh`.
 
+`tsh`'s logins read from the terminal, as `axon`'s own questions do, also
+when `axon login --config -` takes the config file from standard input;
+with no terminal, they read an empty input.
+
 ## axon logout
 
 `axon logout` undoes what `axon login` did, by `axon`'s own records alone,
