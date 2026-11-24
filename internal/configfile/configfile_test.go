@@ -208,6 +208,8 @@ func TestParseRefuses(t *testing.T) {
 		{"hint with a format character", direct{goodHead, goodPathway + "unreachable_hint = \"Re\\u2066try.\"\n", goodSky, ""}.String(), `pathway "campus": unreachable_hint`, "format characters"},
 		{"endpoint with a control character", direct{goodHead, goodPathway, "endpoint = \"https://sky.example.org/\\u001b\"\n", ""}.String(), `pathway "campus": sky.endpoint`, "control characters"},
 		{"endpoint with a format character", direct{goodHead, goodPathway, "endpoint = \"https://sky.example.org/\\u202e\"\n", ""}.String(), `pathway "campus": sky.endpoint`, "format characters"},
+		{"endpoint with an encoded format character in the host", direct{goodHead, goodPathway, "endpoint = \"https://sky%E2%80%8B.example.org\"\n", ""}.String(), `pathway "campus": sky.endpoint`, "format characters"},
+		{"endpoint with an encoded format character in the path", direct{goodHead, goodPathway, "endpoint = \"https://sky.example.org/%E2%80%AE\"\n", ""}.String(), `pathway "campus": sky.endpoint`, "format characters"},
 		{"endpoint with a user", direct{goodHead, goodPathway, "endpoint = \"https://ada:secret@sky.example.org\"\n", ""}.String(), `pathway "campus": sky.endpoint`, "user name"},
 		{"endpoint with a query", direct{goodHead, goodPathway, "endpoint = \"https://sky.example.org/?token=secret\"\n", ""}.String(), `pathway "campus": sky.endpoint`, "query string"},
 		{"endpoint with an empty query", direct{goodHead, goodPathway, "endpoint = \"https://sky.example.org/?\"\n", ""}.String(), `pathway "campus": sky.endpoint`, "query string"},

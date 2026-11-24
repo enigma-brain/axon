@@ -359,7 +359,7 @@ func checkPathway(i int, rp rawPathway) (Pathway, error) {
 			return Pathway{}, refuse(field("sky.app"), "not allowed on a direct pathway")
 		}
 		endpoint, ok := sky.Endpoint.(string)
-		if ok && termtext.HasUnsafe(endpoint) {
+		if ok && unsafeAddress(endpoint) {
 			return Pathway{}, refuse(field("sky.endpoint"), msgUnsafe)
 		}
 		if !ok || !isHTTPSAddress(endpoint) {
@@ -405,6 +405,21 @@ func requiredText(field string, v any) (string, error) {
 	}
 	return s, nil
 }
+
+// unsafeAddress reports whether the address s holds a control or format
+// character, written out or percent-encoded in its host or path, which
+// url.Parse decodes and a message can print.
+func unsafeAddress(s string) bool {
+	if termtext.HasUnsafe(s) {
+		return true
+	}
+	u, err := url.Parse(s)
+	return err == nil && (termtext.HasUnsafe(u.Host) || termtext.HasUnsafe(u.Path))
+}
+
+// UnsafeAddress reports whether the address s holds a control or format
+// character, written out or percent-encoded in its host or path.
+func UnsafeAddress(s string) bool { return unsafeAddress(s) }
 
 // isHTTPSAddress reports whether s is an absolute https URL with a host and
 // without user information, a query string or a fragment, any of which can

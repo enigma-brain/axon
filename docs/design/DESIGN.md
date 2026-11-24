@@ -169,7 +169,9 @@ parts, whatever its kind [{D!}](decisions/pathway-contract.md):
   with a port, and `sky.app`, a name that does not start with `-` and holds
   no white space;
 - no `name`, `description`, `unreachable_hint`, `sky.app` or
-  `sky.endpoint` holds a control character or a Unicode format character;
+  `sky.endpoint` holds a control character or a Unicode format character,
+  in `sky.endpoint` whether written out or percent-encoded in its host or
+  path;
 - `revision`, when present, is a whole number, 0 or more;
 - it has no field or table that this section does not list for the file or
   for the pathway's kind;
