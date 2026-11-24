@@ -219,6 +219,39 @@ func TestEnvironment(t *testing.T) {
 	}
 }
 
+// The user's Python settings do not reach the client, whether it runs a
+// forwarded command or its help.
+func TestPythonVarsDoNotReachTheClient(t *testing.T) {
+	clearSkyPilotEnv(t)
+	login(t, "campus", "ada@example.org")
+	pythonVars := map[string]string{
+		"PYTHONPATH":   "/elsewhere/lib",
+		"PYTHONHOME":   "/elsewhere",
+		"VIRTUAL_ENV":  "/elsewhere/venv",
+		"CONDA_PREFIX": "/elsewhere/conda",
+	}
+	for k, v := range pythonVars {
+		t.Setenv(k, v)
+	}
+	t.Setenv("UV_INDEX_URL", "https://index.example.org")
+	for _, args := range [][]string{{"status"}, {"status", "--help"}} {
+		calls := capture(t)
+		if _, _, err := runSky(args...); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		env := (*calls)[0].env
+		for _, kv := range env {
+			key, _, _ := strings.Cut(kv, "=")
+			if _, ok := pythonVars[key]; ok {
+				t.Errorf("%v: sky ran with %s", args, kv)
+			}
+		}
+		if !slices.Contains(env, "UV_INDEX_URL=https://index.example.org") {
+			t.Errorf("%v: sky ran without the user's UV_INDEX_URL", args)
+		}
+	}
+}
+
 func TestEnviron(t *testing.T) {
 	base := []string{
 		"PATH=/bin",
