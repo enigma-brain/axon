@@ -360,6 +360,11 @@ func (l *login) addConfig(ctx context.Context, opts Options) (f configfile.File,
 		return fail(err)
 	}
 	reportRemoved(store, change, put.Remove, opts.Out)
+	if change.Previous != nil {
+		if active, ok, err := l.dir.Pathway(); err == nil && ok {
+			reportDestination(opts.Out, *change.Previous, f, active)
+		}
+	}
 	previous := change.Previous
 	if previous != nil && !previous.HasRevision && !f.HasRevision {
 		previous = nil

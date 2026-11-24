@@ -127,7 +127,7 @@ func Run(opts Options) error {
 				mark = "* "
 			}
 			w.wrapped("  "+mark+termtext.Clean(p.Name)+"  --pathway "+p.ID, "  ")
-			w.wrapped("      "+server(p), "  ")
+			w.wrapped("      "+termtext.Clean(p.Destination()), "  ")
 		}
 	}
 
@@ -138,20 +138,6 @@ func Run(opts Options) error {
 	}
 
 	return w.result(unreadable)
-}
-
-// server describes where a pathway reaches its server, after its kind.
-func server(p configfile.Pathway) string {
-	switch p.Kind {
-	case configfile.KindTeleport:
-		proxy := ""
-		if p.Teleport != nil {
-			proxy = p.Teleport.Proxy
-		}
-		return fmt.Sprintf("teleport, proxy %s, application %s", termtext.Clean(proxy), termtext.Clean(p.Sky.App))
-	default:
-		return fmt.Sprintf("%s, %s", p.Kind, termtext.Clean(p.Sky.Endpoint))
-	}
 }
 
 // writer writes lines and keeps the first error.

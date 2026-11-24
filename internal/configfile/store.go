@@ -220,6 +220,20 @@ func (s Store) inspect(f File, handMade bool) (Change, error) {
 	return c, nil
 }
 
+// Destination describes where p reaches its server, for a message: its
+// kind and the API server's address, or its kind, Teleport proxy and
+// application.
+func (p Pathway) Destination() string {
+	if p.Kind == KindTeleport {
+		proxy := ""
+		if p.Teleport != nil {
+			proxy = p.Teleport.Proxy
+		}
+		return fmt.Sprintf("%s, proxy %s, application %s", p.Kind, proxy, p.Sky.App)
+	}
+	return fmt.Sprintf("%s, %s", p.Kind, p.Sky.Endpoint)
+}
+
 // SameServer reports whether a and b reach the same server: the same API
 // server address on a direct pathway, or the same Teleport proxy and
 // application on a teleport pathway.

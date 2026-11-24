@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/enigma-brain/axon/internal/configfile"
+	"github.com/enigma-brain/axon/internal/termtext"
 )
 
 // refresh fetches the file that holds p again, when its recorded source is
@@ -16,8 +17,9 @@ import (
 // returns the pathway the login goes on with:
 //
 //   - p as the stored file has it, when nothing is fetched, the fetch
-//     fails or the fetched file is refused; each failure is one line on
-//     standard error;
+//     fails or the fetched file is refused, each failure one line on
+//     standard error, or when the user declines a fetched file that
+//     changes where p goes;
 //   - p as the fetched file has it, which may carry new settings for
 //     machines;
 //   - when the fetched file no longer has p, with --pathway an error that
@@ -52,6 +54,12 @@ func (l *login) refresh(ctx context.Context, p configfile.Pathway, added *config
 		changed bool
 	)
 	if err == nil {
+		switch keep, askErr := confirmDestination(p, data, src, path, opts); {
+		case askErr != nil:
+			return configfile.Pathway{}, askErr
+		case keep:
+			return p, nil
+		}
 		f, changed, err = store.Refresh(p.File, data, src, opts.Replace)
 	}
 	var lower *configfile.LowerRevisionError
@@ -116,4 +124,67 @@ func (l *login) refresh(ctx context.Context, p configfile.Pathway, added *config
 	}
 	fmt.Fprintln(opts.Out, gone)
 	return askPathway(all, opts.In, opts.Out)
+}
+
+// confirmDestination asks whether to take the fetched file data when it
+// changes where the pathway in use, p, goes: its kind, its API server's
+// address, its Teleport proxy or its application, compared as clashes
+// compare servers, or when it no longer holds p. It prints the old and the
+// new values first. The default answer is no; --replace answers yes. keep
+// reports that the stored copy is kept, and the login goes on with it:
+// the answer was no, or there is no terminal to ask on, which a warning
+// line says. A file that fails the checks, or whose id is not p's file's,
+// is not asked about: storing it refuses it.
+func confirmDestination(p configfile.Pathway, data []byte, src configfile.Source, path string, opts Options) (keep bool, err error) {
+	fetched, err := configfile.Parse(data)
+	if err != nil || fetched.ID != p.File {
+		return false, nil
+	}
+	fresh, ok := find(fetched.Pathways, p.ID)
+	if ok && configfile.SameServer(p, fresh) {
+		return false, nil
+	}
+	fmt.Fprintf(opts.Out, msgDestinationChanged, src, p.ID)
+	fmt.Fprintf(opts.Out, msgDestinationNow, termtext.Clean(p.Destination()))
+	if ok {
+		fmt.Fprintf(opts.Out, msgDestinationNew, termtext.Clean(fresh.Destination()))
+	} else {
+		fmt.Fprint(opts.Out, msgDestinationGone)
+	}
+	if opts.Replace {
+		return false, nil
+	}
+	yes, err := askYesNo(opts.In, opts.Out, msgDestinationPrompt)
+	switch {
+	case errors.Is(err, errNoAnswer):
+		fmt.Fprintf(opts.Err, msgDestinationWarning, src, p.ID)
+		return true, nil
+	case err != nil:
+		return false, err
+	case !yes:
+		fmt.Fprintf(opts.Out, msgDestinationKept, path)
+		return true, nil
+	}
+	return false, nil
+}
+
+// reportDestination prints the old and the new values of where the pathway
+// in use, active, goes when an update of the file that holds it, from
+// previous to f, changes them or drops the pathway. It asks nothing.
+func reportDestination(out io.Writer, previous, f configfile.File, active string) {
+	old, ok := find(previous.Pathways, active)
+	if !ok {
+		return
+	}
+	fresh, ok := find(f.Pathways, active)
+	if ok && configfile.SameServer(old, fresh) {
+		return
+	}
+	fmt.Fprintf(out, msgDestinationChangedAdded, active)
+	fmt.Fprintf(out, msgDestinationNow, termtext.Clean(old.Destination()))
+	if ok {
+		fmt.Fprintf(out, msgDestinationNew, termtext.Clean(fresh.Destination()))
+	} else {
+		fmt.Fprint(out, msgDestinationGone)
+	}
 }

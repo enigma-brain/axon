@@ -347,7 +347,7 @@ func TestDroppedPathwayNamedByFlagStops(t *testing.T) {
 	before := h.record()
 	server.publish("/example.toml", dropCampus)
 
-	err := h.run("campus")
+	err := h.login(Options{Pathway: "campus", Replace: true})
 	want := `determine the pathway: the pathway "campus" is no longer in its config file. The stored pathways are remote and lab.`
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
@@ -368,14 +368,21 @@ func TestDroppedPathwayWithOneLeftIsReplacedWithoutAsking(t *testing.T) {
 	h.connectedTo("campus")
 	server.publish("/example.toml", strings.Replace(oneCampus, `id = "campus"`, `id = "campus-sso"`, 1))
 
-	if err := h.run(""); err != nil {
+	if err := h.login(Options{In: strings.NewReader("y\n")}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	asked := "The config file at https://example.org/example.toml changes where the pathway \"campus\" goes:\n" +
+		"  now: direct, https://sky.example.org\n" +
+		"  new: no longer in the file\n" +
+		"Switch to the fetched config file? [y/N, Enter for no]: "
+	if !strings.Contains(h.out.String(), asked) {
+		t.Errorf("output lacks the question:\n%s", h.out.String())
 	}
 	if !strings.Contains(h.out.String(), "The pathway \"campus\" is no longer in its config file. Using the pathway \"campus-sso\".\n") {
 		t.Errorf("output lacks the line naming the new pathway:\n%s", h.out.String())
 	}
 	if strings.Contains(h.out.String(), "Which pathway") {
-		t.Error("login asked with one pathway left")
+		t.Error("login asked for a pathway with one pathway left")
 	}
 	if h.active() != "campus-sso" || h.record().ID != "campus-sso" {
 		t.Errorf("active = %q, record = %+v; want campus-sso", h.active(), h.record())
@@ -394,7 +401,7 @@ func TestDroppedPathwayWithSeveralLeftAsks(t *testing.T) {
 	h.connectedTo("campus")
 	server.publish("/example.toml", dropCampus)
 
-	if err := h.login(Options{In: strings.NewReader("lab\n")}); err != nil {
+	if err := h.login(Options{In: strings.NewReader("y\nlab\n")}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	want := "The pathway \"campus\" is no longer in its config file.\nWhich pathway are you on?\n" +
@@ -420,7 +427,7 @@ func TestDroppedPathwayWithoutAnAnswerChangesNothing(t *testing.T) {
 	before := h.record()
 	server.publish("/example.toml", dropCampus)
 
-	err := h.run("")
+	err := h.login(Options{In: strings.NewReader("y\n")})
 	want := "determine the pathway: no pathway chosen. Run `axon login --pathway <id>` with one of remote and lab."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
@@ -438,7 +445,7 @@ func TestRefreshedSettingsReconnectDirectPathway(t *testing.T) {
 	before := h.emailFile()
 	server.publish("/example.toml", strings.Replace(exampleConfig, "https://sky.example.org", "https://sky2.example.org", 1))
 
-	if err := h.run(""); err != nil {
+	if err := h.login(Options{Replace: true}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	if h.active() != "campus" {
@@ -499,7 +506,7 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 	moved := h.l.teleport.newTunnel(stateDir, fakeTsh, testProxy, "skypilot2")
 	t.Cleanup(func() { moved.Stop() })
 
-	if err := h.run(""); err != nil {
+	if err := h.login(Options{In: strings.NewReader("yes\n")}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	if !strings.Contains(h.out.String(), "sky: stopping the Teleport tunnel") {
