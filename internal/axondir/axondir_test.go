@@ -21,6 +21,7 @@ func newDir(t *testing.T) (Dir, string) {
 }
 
 func TestNewIsUnderHome(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	d := New(home)
 	if want := filepath.Join(home, ".axon"); d.Root() != want {
@@ -32,6 +33,7 @@ func TestNewIsUnderHome(t *testing.T) {
 }
 
 func TestNewCreatesNothing(t *testing.T) {
+	t.Parallel()
 	d, _ := newDir(t)
 	if _, err := os.Stat(d.Root()); !os.IsNotExist(err) {
 		t.Fatalf("New created %s", d.Root())
@@ -39,6 +41,7 @@ func TestNewCreatesNothing(t *testing.T) {
 }
 
 func TestDirectoriesCreatedOnFirstUse(t *testing.T) {
+	t.Parallel()
 	d, home := newDir(t)
 	for name, get := range map[string]func() (string, error){
 		"configs": d.ConfigsDir,
@@ -62,6 +65,7 @@ func TestDirectoriesCreatedOnFirstUse(t *testing.T) {
 }
 
 func TestDirectoryThatIsAFile(t *testing.T) {
+	t.Parallel()
 	d, _ := newDir(t)
 	if err := os.Mkdir(d.Root(), 0o700); err != nil {
 		t.Fatal(err)
@@ -106,6 +110,7 @@ func TestPathwayRoundTrip(t *testing.T) {
 }
 
 func TestSetPathwayRejectsEmpty(t *testing.T) {
+	t.Parallel()
 	d, _ := newDir(t)
 	for _, id := range []string{"", "a\nb"} {
 		if err := d.SetPathway(id); err == nil {
@@ -115,6 +120,7 @@ func TestSetPathwayRejectsEmpty(t *testing.T) {
 }
 
 func TestPathwayRejectsBadConfig(t *testing.T) {
+	t.Parallel()
 	d, _ := newDir(t)
 	if err := os.Mkdir(d.Root(), 0o700); err != nil {
 		t.Fatal(err)
@@ -130,6 +136,7 @@ func TestPathwayRejectsBadConfig(t *testing.T) {
 }
 
 func TestRemoveEmail(t *testing.T) {
+	t.Parallel()
 	d, _ := newDir(t)
 	if err := d.RemoveEmail(); err != nil {
 		t.Fatalf("RemoveEmail with none recorded: %v", err)
@@ -146,6 +153,7 @@ func TestRemoveEmail(t *testing.T) {
 }
 
 func TestEmailRoundTrip(t *testing.T) {
+	t.Parallel()
 	d, home := newDir(t)
 	if e, ok, err := d.Email(); err != nil || ok || e != "" {
 		t.Fatalf("Email() before any write = %q, %v, %v", e, ok, err)
@@ -163,6 +171,7 @@ func TestEmailRoundTrip(t *testing.T) {
 }
 
 func TestSetEmailRejectsBlank(t *testing.T) {
+	t.Parallel()
 	d, _ := newDir(t)
 	for _, e := range []string{"", "  ", "a@b\nc@d"} {
 		if err := d.SetEmail(e); err == nil {
@@ -172,6 +181,7 @@ func TestSetEmailRejectsBlank(t *testing.T) {
 }
 
 func TestReplaceFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f")
 	for _, content := range []string{"first\n", "second\n"} {
@@ -197,6 +207,7 @@ func TestReplaceFile(t *testing.T) {
 }
 
 func TestReplaceFileMode(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "f")
 	for _, mode := range []fs.FileMode{0o755, 0o600} {
 		if err := ReplaceFile(path, strings.NewReader("x"), mode); err != nil {
@@ -209,6 +220,7 @@ func TestReplaceFileMode(t *testing.T) {
 // KeepMode keeps the permissions of the file replaced, and FollowLink
 // replaces the file a link points to and keeps the link.
 func TestReplaceFileKeepModeFollowLink(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target")
 	link := filepath.Join(dir, "link")
@@ -243,6 +255,7 @@ func TestReplaceFileKeepModeFollowLink(t *testing.T) {
 // Without FollowLink a link at the path is itself replaced, and without
 // KeepMode the mode given is used.
 func TestReplaceFileReplacesALink(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target")
 	link := filepath.Join(dir, "link")
@@ -266,6 +279,7 @@ func TestReplaceFileReplacesALink(t *testing.T) {
 
 // KeepMode needs the file to exist.
 func TestReplaceFileKeepModeMissing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f")
 	if err := ReplaceFile(path, strings.NewReader("x"), 0o600, KeepMode()); err == nil {
@@ -278,6 +292,7 @@ func TestReplaceFileKeepModeMissing(t *testing.T) {
 
 // A reader that fails leaves the file as it was and no temporary file.
 func TestReplaceFileReadFailure(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f")
 	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
@@ -299,6 +314,7 @@ func TestReplaceFileReadFailure(t *testing.T) {
 // A directory sync the filesystem does not support counts as done, and any
 // other failure is reported.
 func TestSyncDirOnAFilesystemWithoutDirectorySync(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		err  error
