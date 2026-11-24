@@ -18,6 +18,7 @@ func remote() configfile.Pathway {
 }
 
 func TestWriteAndRead(t *testing.T) {
+	t.Parallel()
 	dir := axondir.New(t.TempDir())
 	if _, ok, err := Read(dir); ok || err != nil {
 		t.Fatalf("Read before any write = %v, %v", ok, err)
@@ -40,6 +41,7 @@ func TestWriteAndRead(t *testing.T) {
 }
 
 func TestIs(t *testing.T) {
+	t.Parallel()
 	dir := axondir.New(t.TempDir())
 	if same, err := Is(dir, remote()); same || err != nil {
 		t.Errorf("Is with no record = %v, %v", same, err)
@@ -67,6 +69,7 @@ func TestIs(t *testing.T) {
 }
 
 func TestOtherFormatIsNoRecord(t *testing.T) {
+	t.Parallel()
 	dir := axondir.New(t.TempDir())
 	if _, err := dir.StateDir(); err != nil {
 		t.Fatal(err)
