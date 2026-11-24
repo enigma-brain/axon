@@ -256,6 +256,7 @@ func TestPythonVarsDoNotReachTheClient(t *testing.T) {
 }
 
 func TestEnviron(t *testing.T) {
+	t.Parallel()
 	base := []string{
 		"PATH=/bin",
 		endpointVar + "=http://a",
@@ -364,6 +365,7 @@ func TestHelpRunsAgainstTheDeadEndpoint(t *testing.T) {
 // only http and https, and an empty scheme or host would let SkyPilot fall
 // back to an endpoint of its own.
 func TestDeadEndpointNamesNoServer(t *testing.T) {
+	t.Parallel()
 	u, err := url.Parse(deadEndpoint)
 	if err != nil {
 		t.Fatal(err)
@@ -415,6 +417,7 @@ func TestHelpNeedsTheClient(t *testing.T) {
 }
 
 func TestWantsHelp(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		args []string
 		want bool

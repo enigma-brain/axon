@@ -31,6 +31,7 @@ func only(name, v string) func(string) string {
 }
 
 func TestCookieFile(t *testing.T) {
+	t.Parallel()
 	d := fakeAccounts()
 	cwd, _ := os.Getwd()
 	for v, want := range map[string]string{
@@ -50,6 +51,7 @@ func TestCookieFile(t *testing.T) {
 
 // The settings file follows the cookie file's rule for a leading "~".
 func TestSettingsFile(t *testing.T) {
+	t.Parallel()
 	d := fakeAccounts()
 	cwd, _ := os.Getwd()
 	for v, want := range map[string]string{

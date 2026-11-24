@@ -473,6 +473,7 @@ func TestCheckStopsWithoutAClient(t *testing.T) {
 }
 
 func TestDirectUnreachableMessage(t *testing.T) {
+	t.Parallel()
 	p := pathwayOf(t, "campus")
 	err := failure(context.Background(), p, Endpoint(p), apiserver.ErrUnreachable)
 	want := "Can't reach sky.example.org. Connect to the campus VPN and retry."
@@ -495,6 +496,7 @@ func TestDirectUnreachableMessage(t *testing.T) {
 // added later is checked as well; a method is followed by its name,
 // whatever its receiver.
 func TestCheckNeverInstallsOrOpensABrowser(t *testing.T) {
+	t.Parallel()
 	forbidden := map[string][]string{
 		"skyclient": {"Ensure"},
 		"tsh":       {"Ensure", "Login", "AppLogin"},
