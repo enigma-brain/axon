@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/configlist"
 	"github.com/enigma-brain/axon/internal/login"
 	"github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/update"
@@ -45,7 +46,7 @@ func NewRoot(version string) *cobra.Command {
 	root.CompletionOptions.DisableDefaultCmd = true
 	root.SetHelpCommand(&cobra.Command{Use: "no-help", Hidden: true})
 
-	root.AddCommand(newLogin(), newLogout(), sky.Command(), newUpdate(version))
+	root.AddCommand(newLogin(), newLogout(), newConfig(), sky.Command(), newUpdate(version))
 	return root
 }
 
@@ -133,6 +134,43 @@ again.`,
 			})
 		},
 	}
+}
+
+func newConfig() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "See the config files and pathways stored on this laptop",
+		Long: `See the config files and pathways stored on this laptop.
+
+"axon login" adds config files and makes pathways; the commands here show what
+is stored. They read only files on this laptop and change nothing.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+	}
+	cmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List the stored config files, their pathways and the one in use",
+		Long: `List the stored config files, their pathways and the one in use.
+
+For each stored config file: its id; where it came from, or that it was made
+by hand at "axon login"; its revision; and when it was stored. Under each file,
+its pathways: the name, the identifier that --pathway takes, the kind, and the
+server. The pathway in use is marked with *.
+
+A stored file that cannot be read is listed with the reason, and the command
+then exits with an error. Nothing is contacted and nothing is changed.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir, err := axondir.Default()
+			if err != nil {
+				return err
+			}
+			return configlist.Run(configlist.Options{Dir: dir, Out: cmd.OutOrStdout()})
+		},
+	})
+	return cmd
 }
 
 func newUpdate(current string) *cobra.Command {

@@ -217,9 +217,43 @@ use:
 axon: determine the pathway: the pathway "<id>" is no longer in its config file. The stored pathways are <list>.
 ```
 
+## Seeing what is stored
+
+`axon config list` lists every stored config file and its pathways, and says
+which pathway is in use:
+
+```text
+The pathway in use is Remote (remote), from remote.
+
+example-campus
+  from https://example.org/axon.toml
+  revision 3, stored 2026-11-20 14:03 CET
+
+    Campus  --pathway campus
+      direct, https://sky.example.org
+
+remote
+  made by hand at `axon login`
+  no revision, stored 2026-11-21 09:12 CET
+
+  * Remote  --pathway remote
+      teleport, proxy teleport.example.org, application skypilot
+```
+
+For each file it shows the `id`, where the file came from or that it was made
+by hand at `axon login`, its revision, and when it was stored. Under each file
+are its pathways: the name, the identifier that `--pathway` takes, the kind and
+the server. The pathway in use is marked `*`. A file from an address is shown
+without its query string, which can hold a token.
+
+It reads only files on your laptop: it contacts no server and changes nothing.
+A stored file that cannot be read is listed with its path and the reason, the
+rest are still listed, and the command exits with an error.
+
 ## Removing a file
 
-Delete it from `~/.axon/configs/`. There is no command for it. When it held the
+Run `axon config list` to find the file's `id`, and delete `<id>.toml` from
+`~/.axon/configs/`. There is no command for it. When it held the
 active pathway and another valid file is stored, the next `axon login` disconnects
 that pathway and chooses another. When no valid file is left, `axon login`
 disconnects the pathway first: it stops what it started for the pathway, such

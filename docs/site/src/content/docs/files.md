@@ -5,6 +5,11 @@ description: What axon keeps in ~/.axon, and where the axon binary is.
 
 `axon` keeps everything it owns on your laptop in one directory, `~/.axon`.
 
+To see the config files and pathways stored there, and which pathway is in
+use, run `axon config list`, as
+[Logging in](/axon/logging-in/#seeing-what-is-stored) describes. You do not
+need to read the files yourself.
+
 ## ~/.axon
 
 | Path | Holds |
