@@ -47,9 +47,9 @@ func TestNewCreatesNothing(t *testing.T) {
 func TestDirectoriesCreatedOnFirstUse(t *testing.T) {
 	d, home := newDir(t)
 	for name, get := range map[string]func() (string, error){
-		"orgs":  d.ConfigsDir,
-		"tools": d.ToolsDir,
-		"state": d.StateDir,
+		"configs": d.ConfigsDir,
+		"tools":   d.ToolsDir,
+		"state":   d.StateDir,
 	} {
 		path, err := get()
 		if err != nil {
@@ -107,7 +107,7 @@ func TestPathwayRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, want := string(data), "pathway = \"remote\"\n"; got != want {
-		t.Errorf("config.toml = %q, want %q", got, want)
+		t.Errorf("settings.toml = %q, want %q", got, want)
 	}
 }
 

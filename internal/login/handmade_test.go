@@ -64,7 +64,7 @@ func TestPromptMakesADirectPathway(t *testing.T) {
 		"SkyPilot API server address, such as https://sky.example.org: ",
 		"Checking https://sky.example.org\n",
 		"Name for this pathway [Enter for sky.example.org]: ",
-		`Stored the pathway "sky.example.org" in ` + filepath.Join(h.home, ".axon", "orgs", "sky-example-org.toml"),
+		`Stored the pathway "sky.example.org" in ` + filepath.Join(h.home, ".axon", "configs", "sky-example-org.toml"),
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
@@ -183,8 +183,8 @@ func TestPromptEndOfInput(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
-	if _, err := os.Stat(filepath.Join(h.home, ".axon", "orgs")); err == nil {
-		entries, _ := os.ReadDir(filepath.Join(h.home, ".axon", "orgs"))
+	if _, err := os.Stat(filepath.Join(h.home, ".axon", "configs")); err == nil {
+		entries, _ := os.ReadDir(filepath.Join(h.home, ".axon", "configs"))
 		if len(entries) != 0 {
 			t.Errorf("something was stored: %v", entries)
 		}
@@ -303,7 +303,7 @@ func TestFlagsWithAServerThatDoesNotAnswer(t *testing.T) {
 			if err == nil || err.Error() != tc.want {
 				t.Fatalf("err = %v, want %q", err, tc.want)
 			}
-			if entries, _ := os.ReadDir(filepath.Join(h.home, ".axon", "orgs")); len(entries) != 0 {
+			if entries, _ := os.ReadDir(filepath.Join(h.home, ".axon", "configs")); len(entries) != 0 {
 				t.Errorf("stored %v", entries)
 			}
 		})
@@ -382,7 +382,7 @@ func TestFileID(t *testing.T) {
 	if got := must(fileID(store, long, nil)); got != strings.Repeat("a", 32) {
 		t.Errorf("fileID = %q", got)
 	}
-	if err := os.MkdirAll(filepath.Join(home, ".axon", "orgs"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".axon", "configs"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(store.Path("lab"), nil, 0o600); err != nil {

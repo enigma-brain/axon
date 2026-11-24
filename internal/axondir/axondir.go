@@ -23,17 +23,17 @@ const (
 	dirMode  fs.FileMode = 0o700
 	fileMode fs.FileMode = 0o600
 
-	settingsFile = "config.toml"
-	configsDir   = "orgs"
+	settingsFile = "settings.toml"
+	configsDir   = "configs"
 	toolsDir     = "tools"
 	stateDir     = "state"
 	emailFile    = "email"
 	// recordsDir, under the state directory, holds a record of each stored
 	// config file.
-	recordsDir = "orgs"
+	recordsDir = "configs"
 	// lockFile, under the state directory, is the file whose lock
 	// serializes changes to the stored config files.
-	lockFile = "orgs.lock"
+	lockFile = "configs.lock"
 )
 
 // Dir is the axon directory under one home directory.
@@ -184,7 +184,7 @@ func (d Dir) ensure(sub string) (string, error) {
 				return "", fmt.Errorf("create %s: it exists and is not a directory", p)
 			}
 		} else if err != nil {
-			return "", fmt.Errorf("create %s: %w", p, err)
+			return "", fmt.Errorf("create %s: %w", p, unwrapPath(err))
 		}
 		path = p
 	}

@@ -126,7 +126,7 @@ func (h *harness) storeFrom(path, data string) {
 // stored returns the stored file id.
 func (h *harness) stored(id string) string {
 	h.t.Helper()
-	data, err := os.ReadFile(filepath.Join(h.home, ".axon", "orgs", id+".toml"))
+	data, err := os.ReadFile(filepath.Join(h.home, ".axon", "configs", id+".toml"))
 	if err != nil {
 		h.t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestRefreshReplacesTheFileWithoutDisconnectingOnText(t *testing.T) {
 	if got := h.stored("example"); got != renamed {
 		t.Errorf("stored file = %q, want the fetched one", got)
 	}
-	path := filepath.Join(h.home, ".axon", "orgs", "example.toml")
+	path := filepath.Join(h.home, ".axon", "configs", "example.toml")
 	if !strings.Contains(h.out.String(), "Updated the config file "+path+"\n") {
 		t.Errorf("output lacks the update line:\n%s", h.out.String())
 	}
@@ -235,7 +235,7 @@ func TestRefreshOfTheSameFileSaysNothing(t *testing.T) {
 }
 
 func TestRefreshFailureUsesTheStoredFile(t *testing.T) {
-	path := func(h *harness) string { return filepath.Join(h.home, ".axon", "orgs", "example.toml") }
+	path := func(h *harness) string { return filepath.Join(h.home, ".axon", "configs", "example.toml") }
 	for _, tc := range []struct {
 		name   string
 		serve  func(*orgServer)
@@ -303,7 +303,7 @@ func TestRefreshSkipsFilesNotFromAnAddress(t *testing.T) {
 	if err := h.login(Options{Config: file, Pathway: "lab"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(filepath.Join(h.home, ".axon", "state", "orgs", "other.toml")); err != nil {
+	if err := os.Remove(filepath.Join(h.home, ".axon", "state", "configs", "other.toml")); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"campus", "lab", ""} {
@@ -457,7 +457,7 @@ func TestActiveFileThatFailsIsLeft(t *testing.T) {
 	h.store(otherOrg)
 	h.connectedTo("campus")
 	before := h.emailFile()
-	path := filepath.Join(h.home, ".axon", "orgs", "example.toml")
+	path := filepath.Join(h.home, ".axon", "configs", "example.toml")
 	if err := os.WriteFile(path, []byte("format = 2\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +533,7 @@ func TestRefreshOfAnEmptyFileNamesTheAddress(t *testing.T) {
 	if err := h.run(""); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
-	path := filepath.Join(h.home, ".axon", "orgs", "example.toml")
+	path := filepath.Join(h.home, ".axon", "configs", "example.toml")
 	want := "axon: could not update " + path + ": https://example.org/example.toml is empty. Using the stored file.\n"
 	if got := h.errOut.String(); got != want {
 		t.Errorf("warnings = %q, want %q", got, want)

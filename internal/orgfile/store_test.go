@@ -78,7 +78,7 @@ func TestAddStoresBytesAndSource(t *testing.T) {
 		t.Fatalf("Add returned %q", f.ID)
 	}
 
-	path := filepath.Join(home, ".axon", "orgs", "example-campus.toml")
+	path := filepath.Join(home, ".axon", "configs", "example-campus.toml")
 	if s.Path("example-campus") != path {
 		t.Errorf("Path = %q, want %q", s.Path("example-campus"), path)
 	}
@@ -99,7 +99,7 @@ func TestAddStoresBytesAndSource(t *testing.T) {
 	if src.String() != "https://example.org/campus.toml" || !src.IsAddress() {
 		t.Errorf("recorded source = %q (address %v)", src, src.IsAddress())
 	}
-	record := filepath.Join(home, ".axon", "state", "orgs", "example-campus.toml")
+	record := filepath.Join(home, ".axon", "state", "configs", "example-campus.toml")
 	assertMode(t, record, 0o600)
 	assertMode(t, filepath.Dir(record), 0o700)
 
@@ -112,7 +112,7 @@ func TestRecordKeepsTheWholeAddress(t *testing.T) {
 	s, home := newStore(t)
 	address := "https://example.org/campus.toml?" + secret
 	add(t, s, campusFile, address)
-	record, err := os.ReadFile(filepath.Join(home, ".axon", "state", "orgs", "example-campus.toml"))
+	record, err := os.ReadFile(filepath.Join(home, ".axon", "state", "configs", "example-campus.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestAddReplacesTheSameID(t *testing.T) {
 	newer := oneDirect("example", "lab", "annex")
 	add(t, s, newer, "-")
 
-	got, err := os.ReadFile(filepath.Join(home, ".axon", "orgs", "example.toml"))
+	got, err := os.ReadFile(filepath.Join(home, ".axon", "configs", "example.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestAddRestoresTheFileWhenTheSourceCannotBeRecorded(t *testing.T) {
 	if err := os.MkdirAll(state, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(state, "orgs"), nil, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(state, "configs"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Add([]byte(campusFile), mustSource(t, "-")); err == nil {
@@ -227,13 +227,13 @@ func TestAddRestoresTheFileWhenTheSourceCannotBeRecorded(t *testing.T) {
 	}
 
 	// A replacement puts the previous file back.
-	if err := os.Remove(filepath.Join(state, "orgs")); err != nil {
+	if err := os.Remove(filepath.Join(state, "configs")); err != nil {
 		t.Fatal(err)
 	}
 	add(t, s, campusFile, "-")
 	// A directory in place of the source record makes its replacement
 	// fail, whatever the process's permissions.
-	record := filepath.Join(state, "orgs", "example-campus.toml")
+	record := filepath.Join(state, "configs", "example-campus.toml")
 	if err := os.Remove(record); err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestAddRefusesToReplaceANonRegularFile(t *testing.T) {
 	s, home := newStore(t)
 	// A directory stands in for any entry that is not a regular file,
 	// such as a named pipe, which reading could block on.
-	if err := os.MkdirAll(filepath.Join(home, ".axon", "orgs", "example-campus.toml"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".axon", "configs", "example-campus.toml"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	_, err := s.Add([]byte(campusFile), mustSource(t, "-"))
@@ -268,7 +268,7 @@ func TestAddRefusesToReplaceANonRegularFile(t *testing.T) {
 
 func TestAddIgnoresBadStoredFiles(t *testing.T) {
 	s, home := newStore(t)
-	orgs := filepath.Join(home, ".axon", "orgs")
+	orgs := filepath.Join(home, ".axon", "configs")
 	if err := os.MkdirAll(orgs, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ func TestListOrderAndProblems(t *testing.T) {
 	if files, problems, err := s.List(); files != nil || problems != nil || err != nil {
 		t.Fatalf("List with no directory = %v, %v, %v", files, problems, err)
 	}
-	orgs := filepath.Join(home, ".axon", "orgs")
+	orgs := filepath.Join(home, ".axon", "configs")
 	if err := os.MkdirAll(filepath.Join(orgs, "adir.toml"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -485,7 +485,7 @@ func TestListLeavesOutOlderFormat(t *testing.T) {
 	add(t, s, oneDirect("example", "campus"), "-")
 	older := strings.Replace(oneDirect("older", "lab"), "format = 2", "format = 1", 1)
 	older = strings.Replace(older, "[pathway.sky]", "[pathway.devenv]", 1)
-	if err := os.WriteFile(filepath.Join(home, ".axon", "orgs", "older.toml"), []byte(older), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(home, ".axon", "configs", "older.toml"), []byte(older), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	files, problems, err := s.List()

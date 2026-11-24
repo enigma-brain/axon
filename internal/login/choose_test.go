@@ -32,7 +32,7 @@ endpoint = "https://lab.example.org"
 // noFiles removes every stored config file.
 func (h *harness) noFiles() {
 	h.t.Helper()
-	if err := os.RemoveAll(filepath.Join(h.home, ".axon", "orgs")); err != nil {
+	if err := os.RemoveAll(filepath.Join(h.home, ".axon", "configs")); err != nil {
 		h.t.Fatal(err)
 	}
 }
@@ -60,7 +60,7 @@ func TestNoOrganizationFileStops(t *testing.T) {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
 	if _, err := os.Stat(axondir.New(h.home).SettingsPath()); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("config.toml was written: %v", err)
+		t.Errorf("settings.toml was written: %v", err)
 	}
 	if h.skyRuns() != 0 {
 		t.Error("sky ran")
@@ -98,7 +98,7 @@ func TestLastFileDeletedWithoutTunnelDisconnects(t *testing.T) {
 		t.Errorf("output %q stops a tunnel that was not recorded", h.out.String())
 	}
 	if h.active() != "campus" {
-		t.Errorf("active pathway = %q, want campus left in config.toml", h.active())
+		t.Errorf("active pathway = %q, want campus left in settings.toml", h.active())
 	}
 }
 
@@ -232,7 +232,7 @@ func TestUnknownPathwayIsRefused(t *testing.T) {
 
 func TestStoredFileThatFailsIsLeftOutWithOneLine(t *testing.T) {
 	h := newHarness(t)
-	bad := filepath.Join(h.home, ".axon", "orgs", "broken.toml")
+	bad := filepath.Join(h.home, ".axon", "configs", "broken.toml")
 	if err := os.WriteFile(bad, []byte("format = 2\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +256,7 @@ func TestOrgFromPath(t *testing.T) {
 	if err := h.login(Options{Config: path}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
-	stored := filepath.Join(h.home, ".axon", "orgs", "other.toml")
+	stored := filepath.Join(h.home, ".axon", "configs", "other.toml")
 	if data, _ := os.ReadFile(stored); string(data) != otherOrg {
 		t.Errorf("stored file = %q", data)
 	}
@@ -588,7 +588,7 @@ func TestConfigEmpty(t *testing.T) {
 			if err == nil || err.Error() != tc.want {
 				t.Fatalf("err = %v, want %q", err, tc.want)
 			}
-			if entries, _ := os.ReadDir(filepath.Join(h.home, ".axon", "orgs")); len(entries) != 0 {
+			if entries, _ := os.ReadDir(filepath.Join(h.home, ".axon", "configs")); len(entries) != 0 {
 				t.Errorf("stored %v", entries)
 			}
 		})

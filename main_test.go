@@ -134,7 +134,7 @@ const stopped = "axon: connect sky: check the SkyPilot client: "
 // stores writes data as the stored config file id under home.
 func stores(t *testing.T, home, id, data string) {
 	t.Helper()
-	orgs := filepath.Join(home, ".axon", "orgs")
+	orgs := filepath.Join(home, ".axon", "configs")
 	if err := os.MkdirAll(orgs, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func stores(t *testing.T, home, id, data string) {
 
 func readActive(t *testing.T, home string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(home, ".axon", "config.toml"))
+	data, err := os.ReadFile(filepath.Join(home, ".axon", "settings.toml"))
 	if errors.Is(err, os.ErrNotExist) {
 		return ""
 	}
@@ -213,7 +213,7 @@ func TestBinary(t *testing.T) {
 
 	t.Run("old pathway and no file", func(t *testing.T) {
 		h := home(t)
-		if err := os.WriteFile(filepath.Join(h, ".axon", "config.toml"), []byte("pathway = \"old-name\"\n"), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(h, ".axon", "settings.toml"), []byte("pathway = \"old-name\"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		_, stderr, err := runAxon(t, bin, h, nil, "login")
@@ -232,7 +232,7 @@ func TestBinary(t *testing.T) {
 			t.Errorf("stderr = %q, want the stop at the client", stderr)
 		}
 		if got := readActive(t, h); got != "pathway = \"campus\"\n" {
-			t.Errorf("config.toml = %q", got)
+			t.Errorf("settings.toml = %q", got)
 		}
 	})
 
@@ -250,7 +250,7 @@ func TestBinary(t *testing.T) {
 			t.Errorf("prompt:\n%s", stdout)
 		}
 		if got := readActive(t, h); got != "pathway = \"north\"\n" {
-			t.Errorf("config.toml = %q", got)
+			t.Errorf("settings.toml = %q", got)
 		}
 	})
 
@@ -280,7 +280,7 @@ func TestBinary(t *testing.T) {
 			t.Errorf("stderr = %q", stderr)
 		}
 		if got := readActive(t, h); got != "pathway = \"campus\"\n" {
-			t.Errorf("config.toml = %q", got)
+			t.Errorf("settings.toml = %q", got)
 		}
 		if _, err := os.Stat(filepath.Join(state, "email")); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("the email of the pathway left is still recorded: %v", err)
@@ -301,7 +301,7 @@ func TestBinary(t *testing.T) {
 			t.Errorf("stderr = %q, want %q", stderr, want)
 		}
 		if got := readActive(t, h); got != "" {
-			t.Errorf("config.toml = %q, want none", got)
+			t.Errorf("settings.toml = %q, want none", got)
 		}
 	})
 
@@ -313,7 +313,7 @@ func TestBinary(t *testing.T) {
 		}
 		stdout, stderr, err := runAxon(t, bin, h, nil, "login", "--config", path)
 		wantFailure(t, "login", err)
-		stored := filepath.Join(h, ".axon", "orgs", "example-campus.toml")
+		stored := filepath.Join(h, ".axon", "configs", "example-campus.toml")
 		if stdout != "Stored the config file "+stored+"\n" || !strings.HasPrefix(stderr, stopped) {
 			t.Errorf("stdout = %q, stderr = %q", stdout, stderr)
 		}
@@ -321,7 +321,7 @@ func TestBinary(t *testing.T) {
 			t.Errorf("stored file = %q", data)
 		}
 		if got := readActive(t, h); got != "pathway = \"campus\"\n" {
-			t.Errorf("config.toml = %q", got)
+			t.Errorf("settings.toml = %q", got)
 		}
 	})
 
@@ -333,7 +333,7 @@ func TestBinary(t *testing.T) {
 			t.Errorf("stderr = %q", stderr)
 		}
 		if got := readActive(t, h); got != "pathway = \"campus\"\n" {
-			t.Errorf("config.toml = %q", got)
+			t.Errorf("settings.toml = %q", got)
 		}
 	})
 
@@ -351,7 +351,7 @@ func TestBinary(t *testing.T) {
 			t.Errorf("stderr = %q", stderr)
 		}
 		if got := readActive(t, h); got != "" {
-			t.Errorf("config.toml = %q, want no active pathway", got)
+			t.Errorf("settings.toml = %q, want no active pathway", got)
 		}
 	})
 
@@ -362,7 +362,7 @@ func TestBinary(t *testing.T) {
 		if !strings.HasPrefix(stderr, "axon: add the config file: ") {
 			t.Errorf("stderr = %q", stderr)
 		}
-		if _, err := os.Stat(filepath.Join(h, ".axon", "orgs")); !errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Stat(filepath.Join(h, ".axon", "configs")); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("something was stored: %v", err)
 		}
 	})
@@ -383,7 +383,7 @@ func TestBinary(t *testing.T) {
 		stores(t, h, "example-older", formatOneFile)
 		_, stderr, err = runAxon(t, bin, h, nil, "login")
 		wantFailure(t, "login", err)
-		stored := filepath.Join(h, ".axon", "orgs", "example-older.toml")
+		stored := filepath.Join(h, ".axon", "configs", "example-older.toml")
 		want = "axon: left out " + stored + ": the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.\n" +
 			"axon: no pathway is set up, and there is no terminal to ask on. Run `axon login --sky-endpoint <address>` for a SkyPilot API server you reach directly, `axon login --teleport-proxy <address>` for one through Teleport, or `axon login --config <source>` with the file your organization gives you.\n"
 		if stderr != want {
