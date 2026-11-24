@@ -166,6 +166,7 @@ func (tn *Tunnel) record(pid int) error {
 }
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	for proxy, want := range map[string]string{
 		"teleport.example.org":      "--proxy=teleport.example.org proxy app skypilot --port 46581",
 		"teleport.example.org:3080": "--proxy=teleport.example.org:3080 proxy app skypilot --port 46581",
@@ -800,6 +801,7 @@ func TestConcurrentStarts(t *testing.T) {
 }
 
 func TestFailedStartKeepsRecordOfAnotherProcess(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := writeRecord(dir, record{PID: 12345, Args: handArgs(testProxy)}); err != nil {
 		t.Fatal(err)
@@ -819,6 +821,7 @@ func TestFailedStartKeepsRecordOfAnotherProcess(t *testing.T) {
 }
 
 func TestLockWaitsAndHonorsContext(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	unlock, err := lock(context.Background(), dir)
 	if err != nil {
@@ -838,6 +841,7 @@ func TestLockWaitsAndHonorsContext(t *testing.T) {
 }
 
 func TestPortBusyErrorCleansCommand(t *testing.T) {
+	t.Parallel()
 	err := &PortBusyError{PID: 7, Command: "evil \x1b[2J‮cmd\n"}
 	if got, want := err.Error(), "port 46581 is held by process 7 (evil [2Jcmd), which is not the Teleport tunnel"; got != want {
 		t.Errorf("Error = %q, want %q", got, want)
@@ -875,6 +879,7 @@ func TestAdoptKeepsRecordOfTunnelStartedInItsPlace(t *testing.T) {
 }
 
 func TestDiscardRecordKeepsReplacement(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	stale := record{PID: 12345, Args: handArgs(testProxy)}
 	fresh := record{PID: 54321, Args: handArgs(testProxy)}
@@ -897,6 +902,7 @@ func TestDiscardRecordKeepsReplacement(t *testing.T) {
 }
 
 func TestDiscardRecordStopsWaitingWhenCancelled(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	stale := record{PID: 12345, Args: handArgs(testProxy)}
 	if err := writeRecord(dir, stale); err != nil {

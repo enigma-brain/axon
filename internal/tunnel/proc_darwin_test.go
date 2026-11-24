@@ -7,6 +7,7 @@ import (
 )
 
 func TestParseProcargs(t *testing.T) {
+	t.Parallel()
 	raw := binary.NativeEndian.AppendUint32(nil, 3)
 	raw = append(raw, "/Users/Jane Doe/tsh\x00\x00\x00\x00"...)
 	raw = append(raw, "/Users/Jane Doe/tsh\x00proxy app\x00skypilot\x00HOME=/Users/Jane Doe\x00"...)
