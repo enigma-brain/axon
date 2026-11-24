@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -200,19 +201,21 @@ func TestARefusedPutLeavesTheHomeAsItWas(t *testing.T) {
 		// records.
 		noConfigs bool
 		put       func(t *testing.T, s Store) error
+		// refused reports whether err is the refusal the case names.
+		refused func(err error) bool
 	}{
 		{"a refresh of a file no longer stored", true, func(t *testing.T, s Store) error {
 			_, _, err := s.Refresh("example", []byte(oneDirect("example", "a")), mustSource(t, refreshAddress), false)
 			return err
-		}},
+		}, func(err error) bool { return err != nil && strings.Contains(err.Error(), "it is no longer stored") }},
 		{"a clash by name", false, func(t *testing.T, s Store) error {
 			_, err := s.Put([]byte(directConfig("b", "two", "Other", "https://b.example.org")), fromSource(t, "-"))
 			return err
-		}},
+		}, func(err error) bool { return errors.As(err, new(*ClashError)) }},
 		{"a lower revision", false, func(t *testing.T, s Store) error {
 			_, err := s.Put([]byte(withRevision(oneDirect("other", "c"), "1")), fromSource(t, "-"))
 			return err
-		}},
+		}, func(err error) bool { return errors.As(err, new(*LowerRevisionError)) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, home := newStore(t)
@@ -224,8 +227,8 @@ func TestARefusedPutLeavesTheHomeAsItWas(t *testing.T) {
 				}
 			}
 			before := tree(t, home)
-			if err := tc.put(t, s); err == nil {
-				t.Fatal("the put succeeded")
+			if err := tc.put(t, s); !tc.refused(err) {
+				t.Fatalf("put = %v, want %s refused", err, tc.name)
 			}
 			if after := tree(t, home); !reflect.DeepEqual(after, before) {
 				t.Errorf("a refused put changed the home:\nbefore %v\nafter  %v", before, after)
