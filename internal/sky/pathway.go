@@ -28,8 +28,8 @@ func Endpoint(p configfile.Pathway) string {
 	return p.Sky.Endpoint
 }
 
-// Host returns the host of endpoint, as a message names it.
-func Host(endpoint string) string {
+// hostOf returns the host of endpoint, as a message names it.
+func hostOf(endpoint string) string {
 	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
 		return u.Host
 	}
@@ -39,7 +39,7 @@ func Host(endpoint string) string {
 // Unreachable returns the message for a host that does not answer, followed
 // by the pathway's hint when it has one.
 func Unreachable(p configfile.Pathway, endpoint string) string {
-	msg := fmt.Sprintf("Can't reach %s.", Host(endpoint))
+	msg := fmt.Sprintf("Can't reach %s.", hostOf(endpoint))
 	if p.UnreachableHint != "" {
 		msg += " " + termtext.Clean(p.UnreachableHint)
 	}

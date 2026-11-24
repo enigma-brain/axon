@@ -91,7 +91,7 @@ func wantLines(t *testing.T, got string, want ...string) {
 }
 
 func TestLogoutTeleport(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
@@ -336,7 +336,7 @@ func TestLogoutWhenTheCookieFileCannotBeRewritten(t *testing.T) {
 }
 
 func TestLogoutSkipsSteps(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
@@ -397,7 +397,7 @@ func TestLogoutWithNothingConnected(t *testing.T) {
 }
 
 func TestLogoutFailingStepDoesNotStopTheOthers(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
@@ -430,7 +430,7 @@ func TestLogoutFailingStepDoesNotStopTheOthers(t *testing.T) {
 }
 
 func TestLogoutWithAnEarlierAxonsRecord(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
@@ -464,7 +464,7 @@ func TestLogoutWithAnEarlierAxonsRecord(t *testing.T) {
 // A login over a record an earlier axon wrote treats it as no record: it
 // disconnects, stopping the tunnel by its own record, and connects again.
 func TestLoginWithAnEarlierAxonsRecord(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
@@ -490,7 +490,7 @@ func TestLoginWithAnEarlierAxonsRecord(t *testing.T) {
 // An email record that cannot be read is reported, and the steps that do
 // not need it still run.
 func TestLogoutContinuesWhenTheEmailCannotBeRead(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
@@ -542,7 +542,7 @@ func TestSkyConfigPath(t *testing.T) {
 }
 
 func TestLogoutStopsTunnelWithNoRecord(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}

@@ -118,7 +118,7 @@ func (h *harness) storeFrom(path, data string) {
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	if _, err := configfile.NewStore(axondir.New(h.home)).Add([]byte(data), src); err != nil {
+	if _, err := configfile.NewStore(axondir.New(h.home)).Put([]byte(data), configfile.PutOptions{Origin: configfile.FromSource(src)}); err != nil {
 		h.t.Fatal(err)
 	}
 }
@@ -487,7 +487,7 @@ func TestActiveFileThatFailsIsLeft(t *testing.T) {
 }
 
 func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	server := h.serveConfigs()
 	h.noFiles()
 	h.storeFrom("/example.toml", exampleConfig)

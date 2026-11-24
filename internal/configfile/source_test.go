@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -331,8 +332,41 @@ func TestReadAddressTimeLimit(t *testing.T) {
 	if err == nil {
 		t.Fatal("Read succeeded")
 	}
-	if !strings.Contains(err.Error(), address) || !strings.Contains(err.Error(), "Timeout") {
-		t.Errorf("Read = %v, want an error naming %s and the time limit", err, address)
+	if want := "fetch " + address + ": timed out"; err.Error() != want {
+		t.Errorf("Read = %q, want %q", err, want)
+	}
+}
+
+// A failed request gives the short reason after the address, as every other
+// network failure does.
+func TestReadAddressShortReason(t *testing.T) {
+	old := transport
+	transport = &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, _, _ := net.SplitHostPort(addr)
+			return nil, &net.OpError{Op: "dial", Net: network, Err: &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}}
+		},
+	}
+	t.Cleanup(func() { transport = old })
+
+	address := "https://campus.example.invalid/axon.toml"
+	_, err := Read(context.Background(), mustSource(t, address), nil)
+	if want := "fetch " + address + ": no such host"; err == nil || err.Error() != want {
+		t.Errorf("Read = %v, want %q", err, want)
+	}
+}
+
+// A redirect to an address that does not parse is named as such, without
+// the address, which can hold a token.
+func TestReadAddressInvalidRedirectMessage(t *testing.T) {
+	srv := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", "/%zz?token=s3cret")
+		w.WriteHeader(http.StatusFound)
+	})
+	address := srv.URL + "/axon.toml"
+	_, err := Read(context.Background(), mustSource(t, address), nil)
+	if want := "fetch " + address + ": redirected to an address that is not valid"; err == nil || err.Error() != want {
+		t.Errorf("Read = %v, want %q", err, want)
 	}
 }
 

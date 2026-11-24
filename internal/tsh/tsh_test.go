@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,7 +17,8 @@ import (
 )
 
 // fakeTSH returns a tsh that reports version. It appends the arguments of
-// every other command to $FAKETSH_LOG and exits with $FAKETSH_EXIT, when
+// every other command to $FAKETSH_LOG, copies its standard input to
+// $FAKETSH_STDIN when that is set, and exits with $FAKETSH_EXIT, when
 // set. For status it prints $FAKETSH_STATUS, or exits 1 when that is unset,
 // as tsh does with no login. It uses only shell builtins, since the tests
 // run it with a PATH that holds nothing else.
@@ -34,6 +36,9 @@ status)
 	;;
 esac
 echo "$*" >> "$FAKETSH_LOG"
+if [ -n "$FAKETSH_STDIN" ]; then
+	while IFS= read -r line; do printf '%s\n' "$line" >> "$FAKETSH_STDIN"; done
+fi
 if [ -n "$FAKETSH_EXIT" ]; then echo "tsh failed" >&2; exit "$FAKETSH_EXIT"; fi
 `
 }
@@ -266,7 +271,7 @@ func TestLogin(t *testing.T) {
 	path := f.putOnPath("18.11.7")
 	for _, proxy := range []string{testProxy, "teleport.example.org:3080"} {
 		os.Remove(os.Getenv("FAKETSH_LOG"))
-		if err := Login(context.Background(), path, proxy); err != nil {
+		if err := Login(context.Background(), path, proxy, strings.NewReader("")); err != nil {
 			t.Fatalf("Login: %v", err)
 		}
 		if got, want := readLog(t), "login --proxy="+proxy+"\n"; got != want {
@@ -275,7 +280,7 @@ func TestLogin(t *testing.T) {
 	}
 
 	t.Setenv("FAKETSH_EXIT", "3")
-	err := Login(context.Background(), path, testProxy)
+	err := Login(context.Background(), path, testProxy, strings.NewReader(""))
 	if err == nil || !strings.HasPrefix(err.Error(), "Teleport login (tsh login --proxy=teleport.example.org): exit status 3") {
 		t.Errorf("Login returned %v, want the step named", err)
 	}
@@ -286,7 +291,7 @@ func TestAppLogin(t *testing.T) {
 	path := f.putOnPath("18.11.7")
 	for _, proxy := range []string{testProxy, "teleport.example.org:3080"} {
 		os.Remove(os.Getenv("FAKETSH_LOG"))
-		if err := AppLogin(context.Background(), path, proxy, "skypilot"); err != nil {
+		if err := AppLogin(context.Background(), path, proxy, "skypilot", strings.NewReader("")); err != nil {
 			t.Fatalf("AppLogin: %v", err)
 		}
 		if got, want := readLog(t), "--proxy="+proxy+" apps login skypilot\n"; got != want {
@@ -295,13 +300,37 @@ func TestAppLogin(t *testing.T) {
 	}
 
 	t.Setenv("FAKETSH_EXIT", "1")
-	err := AppLogin(context.Background(), path, testProxy, "skypilot")
+	err := AppLogin(context.Background(), path, testProxy, "skypilot", strings.NewReader(""))
 	if err == nil || !strings.HasPrefix(err.Error(), "Teleport application login (tsh --proxy=teleport.example.org apps login skypilot): exit status 1") {
 		t.Errorf("AppLogin returned %v, want the step named", err)
 	}
 	for _, app := range []string{"", "--proxy=x", "dev env"} {
-		if err := AppLogin(context.Background(), path, testProxy, app); err == nil {
+		if err := AppLogin(context.Background(), path, testProxy, app, strings.NewReader("")); err == nil {
 			t.Errorf("AppLogin accepted %q as the application name", app)
+		}
+	}
+}
+
+// Each login gives tsh the input it is passed, where tsh reads its answers.
+func TestLoginsReadTheInputPassed(t *testing.T) {
+	f := newFixture(t)
+	path := f.putOnPath("18.11.7")
+	stdin := filepath.Join(t.TempDir(), "stdin")
+	t.Setenv("FAKETSH_STDIN", stdin)
+	for name, login := range map[string]func(in io.Reader) error{
+		"login": func(in io.Reader) error {
+			return Login(context.Background(), path, testProxy, in)
+		},
+		"apps login": func(in io.Reader) error {
+			return AppLogin(context.Background(), path, testProxy, "skypilot", in)
+		},
+	} {
+		os.Remove(stdin)
+		if err := login(strings.NewReader("the terminal\n")); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got, _ := os.ReadFile(stdin); string(got) != "the terminal\n" {
+			t.Errorf("%s: tsh read %q, want %q", name, got, "the terminal\n")
 		}
 	}
 }
@@ -313,10 +342,10 @@ func TestBadProxyIsRefused(t *testing.T) {
 		"teleport.example.org:", "teleport.example.org:0", "teleport.example.org:65536", "teleport.example.org:08", "teleport.example.org:http",
 		"user@teleport.example.org", "teleport example.org", "[::1]:443"} {
 		t.Run(proxy, func(t *testing.T) {
-			if err := Login(context.Background(), path, proxy); err == nil {
+			if err := Login(context.Background(), path, proxy, strings.NewReader("")); err == nil {
 				t.Error("Login accepted it")
 			}
-			if err := AppLogin(context.Background(), path, proxy, "skypilot"); err == nil {
+			if err := AppLogin(context.Background(), path, proxy, "skypilot", strings.NewReader("")); err == nil {
 				t.Error("AppLogin accepted it")
 			}
 			if _, err := SessionValid(context.Background(), path, proxy); err == nil {

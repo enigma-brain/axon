@@ -25,7 +25,7 @@ func (d Dir) Lock() (unlock func(), err error) {
 	path := filepath.Join(state, lockFile)
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, fileMode)
 	if err != nil {
-		return nil, fmt.Errorf("lock %s: %w", path, unwrapPath(err))
+		return nil, fmt.Errorf("lock %s: %w", path, UnwrapPath(err))
 	}
 	for {
 		err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
@@ -41,21 +41,4 @@ func (d Dir) Lock() (unlock func(), err error) {
 		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		f.Close()
 	}, nil
-}
-
-// LockPath returns the path of the file Lock locks.
-func (d Dir) LockPath() string { return filepath.Join(d.StatePath(), lockFile) }
-
-// unwrapPath returns the error inside a *fs.PathError or *os.LinkError, so
-// that a message naming the path does not name it twice.
-func unwrapPath(err error) error {
-	var pe *os.PathError
-	if errors.As(err, &pe) {
-		return pe.Err
-	}
-	var le *os.LinkError
-	if errors.As(err, &le) {
-		return le.Err
-	}
-	return err
 }

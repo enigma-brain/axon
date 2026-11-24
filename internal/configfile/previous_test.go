@@ -37,7 +37,7 @@ func noPrevious(t *testing.T, s Store) {
 
 func TestAnUpdateLeavesNoPreviousCopy(t *testing.T) {
 	s, _, newer := updated(t)
-	if _, err := s.Add(newer, mustSource(t, "-")); err != nil {
+	if _, err := addFile(s, newer, mustSource(t, "-")); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := os.ReadFile(s.Path("a")); string(got) != string(newer) {
@@ -79,7 +79,7 @@ func TestAFailedUpdatePutsThePreviousFileBack(t *testing.T) {
 				}
 				t.Cleanup(func() { replaceFile = writeFile })
 
-				_, err := s.Add(newer, mustSource(t, "-"))
+				_, err := addFile(s, newer, mustSource(t, "-"))
 				if err == nil || !strings.Contains(err.Error(), "injected failure") {
 					t.Fatalf("Add = %v, want the injected failure", err)
 				}
@@ -102,7 +102,7 @@ func TestAFailedPutBackLeavesThePreviousFileOnDisk(t *testing.T) {
 	original, _ := os.ReadFile(s.Path("a"))
 	failReplaceOn(t, recordOf(home, "a"))
 	failOn(t, &renameFile, s.Path("a")+previousExt)
-	_, err := s.Add(newer, mustSource(t, "-"))
+	_, err := addFile(s, newer, mustSource(t, "-"))
 	if err == nil || !strings.Contains(err.Error(), s.Path("a")+" could not be put back from "+s.Path("a")+previousExt) {
 		t.Fatalf("Add = %v, want the file named", err)
 	}
@@ -207,7 +207,7 @@ func TestAPutRecoversALeftoverFirst(t *testing.T) {
 	s, home, newer := updated(t)
 	old, _ := os.ReadFile(s.Path("a"))
 	leftover(t, s, home, nil, old, old)
-	if _, err := s.Add(newer, mustSource(t, "-")); err != nil {
+	if _, err := addFile(s, newer, mustSource(t, "-")); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := os.ReadFile(s.Path("a")); string(got) != string(newer) {
@@ -256,7 +256,7 @@ func TestAnUpdateStopsWhenTheCopyCannotBeSynced(t *testing.T) {
 	real := syncDir
 	syncDir = func(string) error { return errors.New("injected failure") }
 	t.Cleanup(func() { syncDir = real })
-	if _, err := s.Add(newer, mustSource(t, "-")); err == nil || !strings.Contains(err.Error(), "injected failure") {
+	if _, err := addFile(s, newer, mustSource(t, "-")); err == nil || !strings.Contains(err.Error(), "injected failure") {
 		t.Fatalf("Add = %v, want the injected failure", err)
 	}
 	if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
@@ -280,7 +280,7 @@ func TestRecoverStopsWhenTheCopyCannotBeDeleted(t *testing.T) {
 	if _, err := s.Recover(); err == nil || !strings.Contains(err.Error(), "injected failure") {
 		t.Fatalf("Recover = %v, want the injected failure", err)
 	}
-	if _, err := s.Add([]byte(directConfig("b", "two", "B", "https://b.example.org")), mustSource(t, "-")); err == nil {
+	if _, err := addFile(s, []byte(directConfig("b", "two", "B", "https://b.example.org")), mustSource(t, "-")); err == nil {
 		t.Fatal("Add succeeded with a copy that cannot be deleted")
 	}
 }

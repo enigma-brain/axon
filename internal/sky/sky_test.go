@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -86,7 +87,7 @@ func storeConfig(t *testing.T, home string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := configfile.NewStore(axondir.New(home)).Add([]byte(exampleConfig), src); err != nil {
+	if _, err := configfile.NewStore(axondir.New(home)).Put([]byte(exampleConfig), configfile.PutOptions{Origin: configfile.FromSource(src)}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -132,14 +133,15 @@ func login(t *testing.T, id string, email string) axondir.Dir {
 func capture(t *testing.T) *[]call {
 	t.Helper()
 	var calls []call
-	oldPath, oldExec, oldCheck := skyPath, execSky, check
+	oldPath, oldPathFor, oldExec, oldCheck := skyPath, skyPathFor, execSky, check
 	check = connectedProbes()
 	skyPath = func(axondir.Dir) (string, error) { return fakeSky, nil }
+	skyPathFor = func(axondir.Dir, string) string { return fakeSky }
 	execSky = func(path string, argv, env []string) error {
 		calls = append(calls, call{path, slices.Clone(argv), slices.Clone(env)})
 		return nil
 	}
-	t.Cleanup(func() { skyPath, execSky, check = oldPath, oldExec, oldCheck })
+	t.Cleanup(func() { skyPath, skyPathFor, execSky, check = oldPath, oldPathFor, oldExec, oldCheck })
 	return &calls
 }
 
@@ -181,6 +183,33 @@ func TestForwardsEveryCommand(t *testing.T) {
 		if got.path != fakeSky || !slices.Equal(got.argv, want) {
 			t.Errorf("%v: ran %s %q, want %q", args, got.path, got.argv, want)
 		}
+	}
+}
+
+// A forwarded command reads the client's version once, in the check, and
+// runs the sky of that version.
+func TestForwardReadsTheClientVersionOnce(t *testing.T) {
+	login(t, "campus", "ada@example.org")
+	calls := capture(t)
+	reads := 0
+	check.clientVersion = func(axondir.Dir) (string, bool, error) {
+		reads++
+		return clientVersion, true, nil
+	}
+	skyPath = func(axondir.Dir) (string, error) {
+		t.Error("the client's path was looked up again")
+		return fakeSky, nil
+	}
+	var gotVersion string
+	skyPathFor = func(_ axondir.Dir, version string) string {
+		gotVersion = version
+		return fakeSky
+	}
+	if _, _, err := runSky("status"); err != nil {
+		t.Fatal(err)
+	}
+	if reads != 1 || gotVersion != clientVersion || len(*calls) != 1 {
+		t.Errorf("read the version %d times, ran the sky of %q %d times; want once, %q, once", reads, gotVersion, len(*calls), clientVersion)
 	}
 }
 
@@ -325,26 +354,76 @@ func TestHelpPassesThroughWithoutALogin(t *testing.T) {
 			t.Fatalf("%v: ran %v, want %q", args, *calls, want)
 		}
 		for _, kv := range (*calls)[0].env {
-			if strings.HasPrefix(kv, "SKYPILOT_") {
+			if strings.HasPrefix(kv, "SKYPILOT_") && kv != endpointVar+"="+deadEndpoint {
 				t.Errorf("%v: help got %s with no login", args, kv)
 			}
+		}
+		if !slices.Contains((*calls)[0].env, endpointVar+"="+deadEndpoint) {
+			t.Errorf("%v: help did not get the dead endpoint", args)
 		}
 	}
 }
 
-func TestHelpGetsTheLoginsEnvironment(t *testing.T) {
+// Help never runs against the login's server or the one the shell names,
+// so a command sky runs where help was expected reaches no server.
+func TestHelpRunsAgainstTheDeadEndpoint(t *testing.T) {
 	clearSkyPilotEnv(t)
 	login(t, "remote", "ada@example.org")
+	t.Setenv(endpointVar, "http://shell.example")
 	calls := capture(t)
 	check = probes{} // a connection check would panic
 	if _, _, err := runSky("status", "--help"); err != nil {
 		t.Fatal(err)
 	}
-	env := (*calls)[0].env
-	for _, want := range []string{endpointVar + "=http://127.0.0.1:46581", userVar + "=ada@example.org"} {
-		if !slices.Contains(env, want) {
-			t.Errorf("help environment lacks %s", want)
+	var got []string
+	for _, kv := range (*calls)[0].env {
+		if strings.HasPrefix(kv, endpointVar+"=") || strings.HasPrefix(kv, userVar+"=") {
+			got = append(got, kv)
 		}
+	}
+	if want := []string{endpointVar + "=" + deadEndpoint}; !slices.Equal(got, want) {
+		t.Errorf("help environment has %q, want %q", got, want)
+	}
+}
+
+// The dead endpoint can't name a server: the client's HTTP library sends
+// only http and https, and an empty scheme or host would let SkyPilot fall
+// back to an endpoint of its own.
+func TestDeadEndpointNamesNoServer(t *testing.T) {
+	u, err := url.Parse(deadEndpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Scheme == "" || u.Scheme == "http" || u.Scheme == "https" || u.Host == "" {
+		t.Errorf("deadEndpoint %q has scheme %q and host %q", deadEndpoint, u.Scheme, u.Host)
+	}
+}
+
+// A help flag that sky can read as an option's value goes through the
+// connection check; with no login, the stop says how to get help.
+func TestHelpFlagAfterABareOptionNeedsTheCheck(t *testing.T) {
+	clearSkyPilotEnv(t)
+	t.Setenv("HOME", t.TempDir())
+	for _, args := range [][]string{
+		{"launch", "--dryrun", "-c", "-h"},
+		{"launch", "-c", "--help"},
+	} {
+		calls := capture(t)
+		_, _, err := runSky(args...)
+		if !errors.Is(err, ErrNoLogin) {
+			t.Errorf("%v: err = %v, want %v", args, err, ErrNoLogin)
+		}
+		if err != nil && !strings.HasSuffix(err.Error(), msgHelpHint) {
+			t.Errorf("%v: err = %q, want it to end %q", args, err, msgHelpHint)
+		}
+		if len(*calls) != 0 {
+			t.Errorf("%v: sky ran", args)
+		}
+	}
+	// Without a help flag the stop is the plain one.
+	capture(t)
+	if _, _, err := runSky("status"); err == nil || err.Error() != ErrNoLogin.Error() {
+		t.Errorf("status: err = %v, want %v", err, ErrNoLogin)
 	}
 }
 
@@ -374,6 +453,15 @@ func TestWantsHelp(t *testing.T) {
 		{[]string{"launch", "--helpful"}, false},
 		{[]string{"--", "status", "--help"}, true},
 		{[]string{"exec", "dev", "--", "echo", "-h"}, false},
+		{[]string{"-h"}, true},
+		{[]string{"api", "info", "--help"}, true},
+		{[]string{"launch", "task.yaml", "-h"}, true},
+		{[]string{"launch", "--cluster=dev", "--help"}, true},
+		{[]string{"--", "-h"}, true},
+		{[]string{"launch", "--dryrun", "-c", "-h"}, false},
+		{[]string{"launch", "-c", "--help"}, false},
+		{[]string{"launch", "--dryrun", "--help"}, false},
+		{[]string{"launch", "-c", "-h", "--help"}, false},
 	} {
 		if got := wantsHelp(tc.args); got != tc.want {
 			t.Errorf("wantsHelp(%q) = %v, want %v", tc.args, got, tc.want)
@@ -443,6 +531,7 @@ func TestHelperProcess(t *testing.T) {
 	}
 	args := os.Args[slices.Index(os.Args, "--")+1:]
 	skyPath = func(axondir.Dir) (string, error) { return os.Getenv("AXON_TEST_FAKE_SKY"), nil }
+	skyPathFor = func(axondir.Dir, string) string { return os.Getenv("AXON_TEST_FAKE_SKY") }
 	check = helperProbes(os.Getenv(apiServerVar))
 	cmd := Command()
 	cmd.SetArgs(args)
@@ -558,7 +647,7 @@ func TestSkyNeverFetchesTheConfigFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := configfile.NewStore(dir).Add([]byte(exampleConfig), src); err != nil {
+	if _, err := configfile.NewStore(dir).Put([]byte(exampleConfig), configfile.PutOptions{Origin: configfile.FromSource(src)}); err != nil {
 		t.Fatal(err)
 	}
 	calls := capture(t)

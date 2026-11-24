@@ -24,9 +24,6 @@ import (
 // uses when none is given.
 const defaultApp = "skypilot"
 
-// maxFileID is the longest identifier a config file may have.
-const maxFileID = 32
-
 // handMade is the answers a hand-made pathway is made from.
 type handMade struct {
 	kind configfile.Kind
@@ -228,15 +225,15 @@ func (l *login) probe(ctx context.Context, h handMade, fromFlags bool, out io.Wr
 	case h.kind == configfile.KindTeleport && fromFlags:
 		return fmt.Errorf(msgFlagProxyUnreachable, h.proxy, reason)
 	case h.kind == configfile.KindTeleport:
-		return fmt.Errorf(strings.TrimSuffix(msgProxyUnreachable, "\n"), h.proxy, reason)
+		return fmt.Errorf(msgProxyUnreachable, h.proxy, reason)
 	case notSkyPilot && fromFlags:
 		return fmt.Errorf(msgFlagSkyNotSkyPilot, h.endpoint, reason)
 	case notSkyPilot:
-		return fmt.Errorf(strings.TrimSuffix(msgSkyNotSkyPilot, "\n"), h.endpoint, reason)
+		return fmt.Errorf(msgSkyNotSkyPilot, h.endpoint, reason)
 	case fromFlags:
 		return fmt.Errorf(msgFlagSkyUnreachable, h.endpoint, reason)
 	default:
-		return fmt.Errorf(strings.TrimSuffix(msgSkyUnreachable, "\n"), h.endpoint, reason)
+		return fmt.Errorf(msgSkyUnreachable, h.endpoint, reason)
 	}
 }
 
@@ -453,14 +450,14 @@ func fileID(store configfile.Store, id string, remove []configfile.File) (string
 		}
 		return strings.TrimRight(s, "-")
 	}
-	candidate := cut(base, maxFileID)
+	candidate := cut(base, configfile.MaxFileIDLength)
 	for n := 2; ; n++ {
 		ok, err := free(candidate)
 		if err != nil || ok {
 			return candidate, err
 		}
 		suffix := "-" + strconv.Itoa(n)
-		candidate = cut(base, maxFileID-len(suffix)) + suffix
+		candidate = cut(base, configfile.MaxFileIDLength-len(suffix)) + suffix
 	}
 }
 

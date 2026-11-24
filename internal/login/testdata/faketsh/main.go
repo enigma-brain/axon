@@ -14,6 +14,10 @@
 //	                            with "exit" in the file "proxy-mode" it prints
 //	                            an error and exits 1, and with "refuse" it
 //	                            answers every request with 503
+//
+// Each of the two logins reads one line of its standard input and writes
+// it to "stdin.login" or "stdin.apps". It reads a byte at a time, so a
+// line it leaves is there for the next run that shares the input.
 package main
 
 import (
@@ -51,6 +55,7 @@ func main() {
 		fmt.Printf(`{"active":{"profile_url":"https://%s","valid_until":%q}}`+"\n",
 			strings.TrimSpace(string(proxyAddr)), time.Now().Add(12*time.Hour).UTC().Format(time.RFC3339))
 	case len(args) == 2 && args[0] == "login" && strings.HasPrefix(args[1], "--proxy="):
+		recordLine(dir, "stdin.login")
 		if err := os.WriteFile(filepath.Join(dir, "valid"), []byte(strings.TrimPrefix(args[1], "--proxy=")), 0o644); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -63,12 +68,36 @@ func main() {
 		os.Remove(filepath.Join(dir, "valid"))
 		fmt.Printf("Logged out %s.\n", strings.TrimPrefix(args[1], "--proxy="))
 	case len(args) == 4 && strings.HasPrefix(args[0], "--proxy=") && args[1] == "apps" && args[2] == "login":
+		recordLine(dir, "stdin.apps")
 		fmt.Printf("Logged into app %s\n", args[3])
 	case len(args) == 6 && strings.HasPrefix(args[0], "--proxy=") && args[1] == "proxy" && args[2] == "app" && args[4] == "--port":
 		proxy(dir, args[3], args[5])
 	default:
 		fmt.Fprintf(os.Stderr, "faketsh: unexpected arguments %q\n", args)
 		os.Exit(2)
+	}
+}
+
+// recordLine reads one line of standard input, a byte at a time, and
+// writes it to the file name in dir.
+func recordLine(dir, name string) {
+	var line []byte
+	b := make([]byte, 1)
+	for {
+		n, err := os.Stdin.Read(b)
+		if n == 1 {
+			line = append(line, b[0])
+			if b[0] == '\n' {
+				break
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), line, 0o644); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }
 
