@@ -172,8 +172,17 @@ func startByHandNoWaitWith(t *testing.T, mode string, args []string) int {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	go cmd.Wait()
-	t.Cleanup(func() { cmd.Process.Kill() })
+	reaped := make(chan struct{})
+	go func() {
+		cmd.Wait()
+		close(reaped)
+	}()
+	// Wait for the process to be reaped, so that a later cleanup never finds
+	// it half gone.
+	t.Cleanup(func() {
+		cmd.Process.Kill()
+		<-reaped
+	})
 	return cmd.Process.Pid
 }
 
@@ -826,7 +835,7 @@ func TestConcurrentStarts(t *testing.T) {
 	if pid, ok := recorded(t, tn); !ok || pid != st.PID {
 		t.Errorf("record = %d, %v, want the running tunnel %d", pid, ok, st.PID)
 	}
-	procs, err := tn.find(false)
+	procs, err := tn.find(context.Background(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -918,16 +927,34 @@ func TestDiscardRecordKeepsReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A reader without the lock read stale before fresh replaced it.
-	if err := discardRecord(dir, stale, false); err != nil {
+	if err := discardRecord(context.Background(), dir, stale, false); err != nil {
 		t.Fatal(err)
 	}
 	if rec, ok, err := readRecord(dir); err != nil || !ok || rec.PID != fresh.PID {
 		t.Errorf("record = %+v, %v, %v, want the replacement kept", rec, ok, err)
 	}
-	if err := discardRecord(dir, fresh, false); err != nil {
+	if err := discardRecord(context.Background(), dir, fresh, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok, err := readRecord(dir); err != nil || ok {
 		t.Errorf("record after discarding it = %v, %v, want none", ok, err)
+	}
+}
+
+func TestDiscardRecordStopsWaitingWhenCancelled(t *testing.T) {
+	dir := t.TempDir()
+	stale := record{PID: 12345, Args: handArgs(testProxy)}
+	if err := writeRecord(dir, stale); err != nil {
+		t.Fatal(err)
+	}
+	unlock, err := lock(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if err := discardRecord(ctx, dir, stale, false); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("discardRecord while the lock is held = %v, want context.DeadlineExceeded", err)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 // pfExiting is the kernel flag of a process that is exiting.
@@ -22,7 +23,7 @@ const pfExiting = 0x4
 func lookupProcess(pid int) (process, bool, error) {
 	dir := filepath.Join("/proc", strconv.Itoa(pid))
 	stat, err := os.ReadFile(filepath.Join(dir, "stat"))
-	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, os.ErrProcessDone) {
+	if processGone(err) {
 		return process{}, false, nil
 	}
 	if err != nil {
@@ -45,7 +46,7 @@ func lookupProcess(pid int) (process, bool, error) {
 	}
 
 	uid, err := readUID(filepath.Join(dir, "status"))
-	if errors.Is(err, fs.ErrNotExist) {
+	if processGone(err) {
 		return process{}, false, nil
 	}
 	if err != nil {
@@ -53,7 +54,7 @@ func lookupProcess(pid int) (process, bool, error) {
 	}
 
 	cmdline, err := os.ReadFile(filepath.Join(dir, "cmdline"))
-	if errors.Is(err, fs.ErrNotExist) {
+	if processGone(err) {
 		return process{}, false, nil
 	}
 	if err != nil {
@@ -95,7 +96,7 @@ func processStart(pid int) (uint64, bool) {
 func processExited(pid int) bool {
 	stat, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
 	if err != nil {
-		return errors.Is(err, fs.ErrNotExist) || errors.Is(err, os.ErrProcessDone)
+		return processGone(err)
 	}
 	i := bytes.LastIndexByte(stat, ')')
 	if i < 0 {
@@ -109,9 +110,16 @@ func processExited(pid int) bool {
 	// they too have exited; then the leader alone remains in task.
 	tasks, err := os.ReadDir(filepath.Join("/proc", strconv.Itoa(pid), "task"))
 	if err != nil {
-		return errors.Is(err, fs.ErrNotExist)
+		return processGone(err)
 	}
 	return len(tasks) <= 1
+}
+
+// processGone reports whether err, from reading a process's files in
+// /proc, means the process no longer exists. A process that exits after
+// its file is opened makes the read fail with ESRCH rather than ENOENT.
+func processGone(err error) bool {
+	return errors.Is(err, fs.ErrNotExist) || errors.Is(err, os.ErrProcessDone) || errors.Is(err, syscall.ESRCH)
 }
 
 // readUID returns the real user ID from a /proc/<pid>/status file.

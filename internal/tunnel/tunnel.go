@@ -168,7 +168,7 @@ func (t *Tunnel) logPath() string { return filepath.Join(t.stateDir, logFile) }
 // Status adopts no process; it discards a record whose process is not the
 // tunnel.
 func (t *Tunnel) Status(ctx context.Context) (Status, error) {
-	procs, err := t.find(false)
+	procs, err := t.find(ctx, false)
 	if err != nil {
 		return Status{}, err
 	}
@@ -209,7 +209,7 @@ func (t *Tunnel) Start(ctx context.Context) error {
 		return err
 	}
 	defer unlock()
-	procs, err := t.find(true)
+	procs, err := t.find(ctx, true)
 	if err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func (t *Tunnel) Start(ctx context.Context) error {
 // When a process that is not the tunnel holds the port, Check leaves it
 // running and returns a *PortBusyError.
 func (t *Tunnel) Check(ctx context.Context) (Status, error) {
-	procs, err := t.find(false)
+	procs, err := t.find(ctx, false)
 	if err != nil {
 		return Status{}, err
 	}
@@ -277,7 +277,7 @@ func (t *Tunnel) adopt(ctx context.Context, pid int) error {
 		return err
 	}
 	defer unlock()
-	rec, ok, err := recordedProcess(t.stateDir, true)
+	rec, ok, err := recordedProcess(ctx, t.stateDir, true)
 	if err != nil {
 		return err
 	}
@@ -297,7 +297,7 @@ func (t *Tunnel) adopt(ctx context.Context, pid int) error {
 // Running reports whether a process that is the tunnel runs, recorded or
 // not. It reads the process table only and makes no request.
 func (t *Tunnel) Running() (bool, error) {
-	procs, err := t.find(false)
+	procs, err := t.find(context.Background(), false)
 	return len(procs) > 0, err
 }
 
@@ -310,7 +310,7 @@ func (t *Tunnel) Stop() error {
 		return err
 	}
 	defer unlock()
-	procs, err := t.find(true)
+	procs, err := t.find(context.Background(), true)
 	if err != nil {
 		return err
 	}
@@ -337,7 +337,7 @@ func (t *Tunnel) stopAll(pids []int) error {
 // process belongs to the user and its command line is the recorded one. It
 // discards a record that does not match its process.
 func RecordedRunning(stateDir string) (bool, error) {
-	_, ok, err := recordedProcess(stateDir, false)
+	_, ok, err := recordedProcess(context.Background(), stateDir, false)
 	return ok, err
 }
 
@@ -352,7 +352,7 @@ func StopRecorded(stateDir string) error {
 		return err
 	}
 	defer unlock()
-	rec, ok, err := recordedProcess(stateDir, true)
+	rec, ok, err := recordedProcess(context.Background(), stateDir, true)
 	if err != nil {
 		return err
 	}
@@ -368,8 +368,9 @@ func StopRecorded(stateDir string) error {
 // recordedProcess returns the record in stateDir when its process runs and
 // matches it. It discards the old form of record, and a record whose
 // process has exited or does not match. held says whether the caller holds
-// the tunnel's lock; see discardRecord.
-func recordedProcess(stateDir string, held bool) (record, bool, error) {
+// the tunnel's lock; see discardRecord, which stops waiting for the lock
+// when ctx ends.
+func recordedProcess(ctx context.Context, stateDir string, held bool) (record, bool, error) {
 	if err := removeOldRecord(stateDir); err != nil {
 		return record{}, false, err
 	}
@@ -386,7 +387,7 @@ func recordedProcess(stateDir string, held bool) (record, bool, error) {
 			return rec, true, nil
 		}
 	}
-	return record{}, false, discardRecord(stateDir, rec, held)
+	return record{}, false, discardRecord(ctx, stateDir, rec, held)
 }
 
 // discardRecord deletes stale, a record found not to match its process.
@@ -394,9 +395,9 @@ func recordedProcess(stateDir string, held bool) (record, bool, error) {
 // another axon started a tunnel, so discardRecord then takes the lock and
 // deletes the record only while it is still stale, keeping one written in
 // its place.
-func discardRecord(stateDir string, stale record, held bool) error {
+func discardRecord(ctx context.Context, stateDir string, stale record, held bool) error {
 	if !held {
-		unlock, err := lock(context.Background(), stateDir)
+		unlock, err := lock(ctx, stateDir)
 		if err != nil {
 			return err
 		}
@@ -412,9 +413,9 @@ func discardRecord(stateDir string, stale record, held bool) error {
 // find returns the IDs of the user's tunnel processes, the recorded one
 // first. It discards a record whose process does not match it. held says
 // whether the caller holds the tunnel's lock.
-func (t *Tunnel) find(held bool) ([]int, error) {
+func (t *Tunnel) find(ctx context.Context, held bool) ([]int, error) {
 	var out []int
-	rec, ok, err := recordedProcess(t.stateDir, held)
+	rec, ok, err := recordedProcess(ctx, t.stateDir, held)
 	if err != nil {
 		return nil, err
 	}
