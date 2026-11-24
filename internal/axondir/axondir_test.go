@@ -299,8 +299,6 @@ func TestReplaceFileReadFailure(t *testing.T) {
 // A directory sync the filesystem does not support counts as done, and any
 // other failure is reported.
 func TestSyncDirOnAFilesystemWithoutDirectorySync(t *testing.T) {
-	real := syncFile
-	t.Cleanup(func() { syncFile = real })
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		err  error
@@ -312,11 +310,11 @@ func TestSyncDirOnAFilesystemWithoutDirectorySync(t *testing.T) {
 		{&os.PathError{Op: "sync", Path: dir, Err: syscall.EINVAL}, false},
 		{syscall.EIO, true},
 	} {
-		syncFile = func(*os.File) error { return tc.err }
-		if err := SyncDir(dir); (err != nil) != tc.fail {
+		d := deps{syncFile: func(*os.File) error { return tc.err }}
+		if err := d.syncDir(dir); (err != nil) != tc.fail {
 			t.Errorf("sync answering %v: SyncDir = %v", tc.err, err)
 		}
-		if err := ReplaceFile(filepath.Join(dir, "f"), strings.NewReader("x"), 0o600); (err != nil) != tc.fail {
+		if err := d.replaceFile(filepath.Join(dir, "f"), strings.NewReader("x"), 0o600); (err != nil) != tc.fail {
 			t.Errorf("sync answering %v: ReplaceFile = %v", tc.err, err)
 		}
 	}
