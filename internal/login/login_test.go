@@ -438,6 +438,13 @@ func TestDirectCookieRemovalFailureSaysWhatToDo(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Chmod(skyDir, 0o700) })
+	// A process that may write any directory, such as root, is not stopped
+	// by the mode, so the failure cannot be made here.
+	if probe, err := os.CreateTemp(skyDir, "probe"); err == nil {
+		probe.Close()
+		os.Remove(probe.Name())
+		t.Skip("the directory stays writable for this user")
+	}
 	h.script("needs", "ok")
 	err := h.run("campus")
 	want := "remove the cookies of " + h.directURL + " from " + h.cookieFile + ": "
