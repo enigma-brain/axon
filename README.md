@@ -292,8 +292,9 @@ answer only from your organization's network.
 - **The wait ends after five minutes.** If the login has not been completed
   in the browser by then, `axon` stops and asks you to run `axon login` again.
 - **A stale session is cleared for you.** When the login ends with
-  `needs_auth`, `axon` removes `~/.sky/cookies.txt`, which holds only the API
-  server's cookies, and logs in once more. When `SKYPILOT_API_COOKIE_FILE`
+  `needs_auth`, `axon` removes the API server's cookies from
+  `~/.sky/cookies.txt`, keeping every other line, and logs in once more.
+  When `SKYPILOT_API_COOKIE_FILE`
   names another file, `axon` uses that file, as SkyPilot does.
 
 ### On a Teleport pathway

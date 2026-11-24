@@ -41,7 +41,7 @@ env > "$dir/env.$n"
 behavior=$(sed -n "${n}p" "$dir/script" 2>/dev/null)
 case "$behavior" in
 silent) echo "Logged in" ;;
-needs) echo "Failed to log in (status: needs_auth)" >&2; exit 1 ;;
+needs) echo "ValueError: Cannot log in API server at $4 (status: needs_auth)" >&2; exit 1 ;;
 fail) echo "boom" >&2; exit 2 ;;
 hang) exec sleep 30 ;;
 *) touch "$dir/loggedin"; echo "Logged in" ;;
@@ -174,6 +174,11 @@ func newHarness(t *testing.T) *harness {
 				"PATH=" + os.Getenv("PATH"),
 				"SKYPILOT_API_SERVER_ENDPOINT=http://elsewhere.example",
 				"BROWSER=chromium",
+				"PYTHONPATH=/elsewhere/lib",
+				"PYTHONHOME=/elsewhere",
+				"VIRTUAL_ENV=/elsewhere/venv",
+				"CONDA_PREFIX=/elsewhere/conda",
+				"UV_INDEX_URL=https://index.example.org",
 			}
 		},
 		readConfig: configfile.Read,
@@ -233,6 +238,20 @@ func (h *harness) skyRuns() int {
 	return n
 }
 
+// assertNoPythonVars fails the test when env holds a variable that points
+// Python elsewhere, or lacks the harness's UV_ variable, which is kept.
+func assertNoPythonVars(t *testing.T, env map[string]string) {
+	t.Helper()
+	for _, k := range []string{"PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "CONDA_PREFIX"} {
+		if v, ok := env[k]; ok {
+			t.Errorf("sky ran with %s=%s", k, v)
+		}
+	}
+	if env["UV_INDEX_URL"] != "https://index.example.org" {
+		t.Errorf("sky ran without the user's UV_INDEX_URL")
+	}
+}
+
 // skyEnv returns the environment of sky's nth run.
 func (h *harness) skyEnv(n int) map[string]string {
 	h.t.Helper()
@@ -283,6 +302,7 @@ func TestDirectFirstLogin(t *testing.T) {
 	if env["BROWSER"] != "chromium" {
 		t.Errorf("BROWSER = %q, want the user's own", env["BROWSER"])
 	}
+	assertNoPythonVars(t, env)
 	for _, word := range []string{"Firefox", "Chrome", "Chromium"} {
 		if strings.Contains(h.out.String(), word) {
 			t.Errorf("output names %s:\n%s", word, h.out.String())
@@ -361,7 +381,13 @@ func TestDirectNeedsAuthRetriesOnce(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(h.cookieFile), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(h.cookieFile, []byte("# Netscape HTTP Cookie File\n"), 0o600); err != nil {
+	// The fake server's address is on 127.0.0.1; the other server's
+	// cookie is not for it.
+	const otherCookie = "other.example.org\tFALSE\t/\tTRUE\t0\t_oauth2_proxy\tkeep\n"
+	cookies := "# Netscape HTTP Cookie File\n" +
+		"127.0.0.1\tFALSE\t/\tFALSE\t0\t_oauth2_proxy\tstale\n" +
+		otherCookie
+	if err := os.WriteFile(h.cookieFile, []byte(cookies), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h.script("needs", "ok")
@@ -371,11 +397,115 @@ func TestDirectNeedsAuthRetriesOnce(t *testing.T) {
 	if n := h.skyRuns(); n != 2 {
 		t.Errorf("sky ran %d times, want 2", n)
 	}
-	if _, err := os.Stat(h.cookieFile); !os.IsNotExist(err) {
-		t.Errorf("the cookie file is still there: %v", err)
+	data, err := os.ReadFile(h.cookieFile)
+	if err != nil {
+		t.Fatalf("the cookie file is gone: %v", err)
+	}
+	if want := "# Netscape HTTP Cookie File\n" + otherCookie; string(data) != want {
+		t.Errorf("cookie file =\n%s\nwant only the other server's cookie:\n%s", data, want)
+	}
+	if want := "removing the cookies of " + h.directURL + " from " + h.cookieFile; !strings.Contains(h.out.String(), want) {
+		t.Errorf("output lacks %q:\n%s", want, h.out.String())
 	}
 	if !strings.Contains(h.errOut.String(), "needs_auth") {
 		t.Errorf("sky's error output was not forwarded: %q", h.errOut.String())
+	}
+}
+
+func TestDirectNeedsAuthRetriesWithNoCookieFile(t *testing.T) {
+	h := newHarness(t)
+	h.script("needs", "ok")
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if n := h.skyRuns(); n != 2 {
+		t.Errorf("sky ran %d times, want 2", n)
+	}
+}
+
+func TestDirectCookieRemovalFailureSaysWhatToDo(t *testing.T) {
+	h := newHarness(t)
+	// The server's cookie is in a directory that cannot be written, so
+	// the file can be read but not rewritten without it.
+	skyDir := filepath.Dir(h.cookieFile)
+	if err := os.MkdirAll(skyDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(h.cookieFile, []byte("127.0.0.1\tFALSE\t/\tFALSE\t0\t_oauth2_proxy\tstale\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(skyDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(skyDir, 0o700) })
+	// A process that may write any directory, such as root, is not stopped
+	// by the mode, so the failure cannot be made here.
+	if probe, err := os.CreateTemp(skyDir, "probe"); err == nil {
+		probe.Close()
+		os.Remove(probe.Name())
+		t.Skip("the directory stays writable for this user")
+	}
+	h.script("needs", "ok")
+	err := h.run("campus")
+	want := "remove the cookies of " + h.directURL + " from " + h.cookieFile + ": "
+	if err == nil || !strings.Contains(err.Error(), want) ||
+		!strings.HasSuffix(err.Error(), ". Remove that file by hand and run `axon login` again.") {
+		t.Fatalf("err = %v, want one starting %q that says to remove the file", err, want)
+	}
+	if n := h.skyRuns(); n != 1 {
+		t.Errorf("sky ran %d times, want 1", n)
+	}
+}
+
+// An address that holds needs_auth, such as the login page's, is not the
+// status, so no retry follows.
+func TestDirectNeedsAuthInAnAddressIsNotTheStatus(t *testing.T) {
+	h := newHarness(t)
+	h.script("address")
+	if err := os.WriteFile(filepath.Join(h.skyDir, "sky"), []byte(strings.Replace(fakeSky,
+		"silent) echo",
+		"address) echo \"Open https://sky.example.org/auth/needs_auth?state=needs_auth\"; touch \"$dir/loggedin\" ;;\nsilent) echo", 1)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if n := h.skyRuns(); n != 1 {
+		t.Errorf("sky ran %d times, want 1", n)
+	}
+}
+
+func TestHasWord(t *testing.T) {
+	for text, want := range map[string]bool{
+		"needs_auth": true,
+		// What sky api login prints when a login ends with needs_auth: the
+		// ValueError raised in _show_logged_in_message, in
+		// sky/client/sdk.py of skypilot 0.13.0, printed without a traceback.
+		"ValueError: Cannot log in API server at https://sky.example.org (status: needs_auth)\n": true,
+		"Failed to log in (status: needs_auth)":                                                  true,
+		"status: \x1b[31mneeds_auth\x1b[0m":                                                      true,
+		"\x1b[1;31mneeds_auth\x1b[0m)":                                                           true,
+		"(status:\x1b[0mneeds_auth\x1b[39m)":                                                     true,
+		"https://sky.example.org/\x1b[0mx/needs_auth":                                            false,
+		"https://sky.example.org/\x1b[0mneeds_auth":                                              false,
+		"?status=\x1b[1mneeds_auth\x1b[0m":                                                       false,
+		"Open https://sky.example.org/auth:needs_auth":                                           false,
+		"(status:needs_auth)":                                                                    true,
+		"see https://sky.example.org (status: needs_auth)":                                       true,
+		"status needs_auth.":                                                                     true,
+		`{"status": "needs_auth"}`:                                                               true,
+		"status:needs_auth\n":                                                                    true,
+		"https://sky.example.org/needs_auth":                                                     false,
+		"https://sky.example.org/?s=needs_auth":                                                  false,
+		"x_needs_auth":                                                                           false,
+		"needs_auth_soon":                                                                        false,
+		"needs_authorization":                                                                    false,
+		"/needs_auth then (needs_auth)":                                                          true,
+		"":                                                                                       false,
+	} {
+		if got := hasWord(text, needsAuth); got != want {
+			t.Errorf("hasWord(%q) = %v, want %v", text, got, want)
+		}
 	}
 }
 

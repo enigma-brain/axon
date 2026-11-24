@@ -119,6 +119,7 @@ func TestLogoutTeleport(t *testing.T) {
 	if env := h.skyEnv(h.skyRuns()); env["SKYPILOT_API_SERVER_ENDPOINT"] != "" {
 		t.Errorf("sky api logout ran with SKYPILOT_API_SERVER_ENDPOINT=%s", env["SKYPILOT_API_SERVER_ENDPOINT"])
 	}
+	assertNoPythonVars(t, h.skyEnv(h.skyRuns()))
 	if calls := h.tshCalls(); !contains(calls, "logout --proxy=teleport.example.org") {
 		t.Errorf("tsh calls = %q, want logout --proxy=teleport.example.org", calls)
 	}
