@@ -434,6 +434,24 @@ func netFailure(address string, cause error) error {
 	return &url.Error{Op: "Get", URL: address, Err: &net.OpError{Op: "dial", Net: "tcp", Err: cause}}
 }
 
+// serversFailing makes the API server at https://host and the proxy at host
+// fail with err, which the API server's check reads as probeSky reads the
+// health request's error. Nothing is contacted.
+func (h *harness) serversFailing(host string, err error) {
+	h.l.probeSky = func(ctx context.Context, endpoint string) error {
+		if endpoint != "https://"+host {
+			return nil
+		}
+		return skyProbeResult(ctx, err)
+	}
+	h.l.probeProxy = func(_ context.Context, proxy string) error {
+		if proxy != host {
+			return nil
+		}
+		return err
+	}
+}
+
 // The reason in a can't-reach message is the short one, at the prompt and
 // from the flags, for an API server and a Teleport proxy.
 func TestCantReachReasonIsShort(t *testing.T) {
@@ -472,7 +490,7 @@ func TestCantReachReasonIsShort(t *testing.T) {
 
 			h := newHarness(t)
 			h.noFiles()
-			h.servers(map[string]error{"https://" + host: tc.down, host: tc.down})
+			h.serversFailing(host, tc.down)
 			want := "make the pathway: can't reach " + server + ": " + tc.reason + ". Check the address and run `axon login` again."
 			if err := h.login(flags); err == nil || err.Error() != want {
 				t.Errorf("flags: err = %v, want %q", err, want)
@@ -481,7 +499,7 @@ func TestCantReachReasonIsShort(t *testing.T) {
 			h = newHarness(t)
 			h.noFiles()
 			h.terminal()
-			h.servers(map[string]error{"https://" + host: tc.down, host: tc.down})
+			h.serversFailing(host, tc.down)
 			h.login(Options{In: strings.NewReader(kind + "\n" + host + "\n")})
 			want = "Can't reach " + server + ": " + tc.reason + ". Check the address and try again.\n"
 			if out := h.out.String(); !strings.Contains(out, want) {
@@ -518,6 +536,20 @@ func TestConfigProxyCantBeReached(t *testing.T) {
 	err := h.run("remote")
 	want := "establish the Teleport session: can't reach the Teleport proxy at " + testProxy + ": no such host"
 	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
+	}
+}
+
+// A proxy that answers, but not with its version, keeps its full reason.
+func TestProxyThatAnswersKeepsItsReason(t *testing.T) {
+	const host = "tp.example.org"
+	answered := fmt.Errorf("read the Teleport proxy's version at https://%s/webapi/ping: %w", host,
+		errors.New("GET https://"+host+"/webapi/ping: 404 Not Found"))
+	h := newHarness(t)
+	h.noFiles()
+	h.servers(map[string]error{host: answered})
+	want := "make the pathway: can't reach the Teleport proxy at " + host + ": " + answered.Error() + ". Check the address and run `axon login` again."
+	if err := h.login(Options{TeleportProxy: host}); err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
 }

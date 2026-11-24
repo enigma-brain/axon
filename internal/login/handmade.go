@@ -175,6 +175,12 @@ func (e *probeError) Error() string { return e.reason }
 // logged in or not. It sends no login.
 func probeSky(ctx context.Context, endpoint string) error {
 	_, err := apiserver.Fetch(ctx, endpoint, apiserver.Options{})
+	return skyProbeResult(ctx, err)
+}
+
+// skyProbeResult is what probeSky reports for err, the error of the health
+// request: nil when a SkyPilot API server answered, logged in or not.
+func skyProbeResult(ctx context.Context, err error) error {
 	switch {
 	case err == nil, errors.Is(err, apiserver.ErrNotLoggedIn):
 		return nil
@@ -204,9 +210,15 @@ func (l *login) probe(ctx context.Context, h handMade, fromFlags bool, out io.Wr
 	}
 	var pe *probeError
 	notSkyPilot := errors.As(err, &pe) && pe.notSkyPilot
-	reason := netreason.Short(err)
-	if pe != nil {
+	// Only a server that gave no answer gets the short reason; any other
+	// failure is shown as it is.
+	reason := err.Error()
+	var unreachable *tsh.UnreachableError
+	switch {
+	case pe != nil:
 		reason = pe.reason
+	case errors.As(err, &unreachable):
+		reason = netreason.Short(unreachable.Err)
 	}
 	switch {
 	case h.kind == orgfile.KindTeleport && fromFlags:
