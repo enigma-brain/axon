@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -18,12 +17,12 @@ import (
 
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/connected"
+	"github.com/enigma-brain/axon/internal/testkit"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
-// fakeTsh is the path of the fake tsh, built by TestMain into a file named
-// tsh so that the tunnel package recognizes its command line.
+// fakeTsh is the path of the fake tsh, built by TestMain.
 var fakeTsh string
 
 // The made-up Teleport proxy and application the tests log in to.
@@ -39,68 +38,29 @@ var testPort int
 func TestMain(m *testing.M) { os.Exit(runTests(m)) }
 
 func runTests(m *testing.M) int {
-	bin, err := os.MkdirTemp("", "login-faketsh")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	defer os.RemoveAll(bin)
-	fakeTsh = filepath.Join(bin, "tsh")
-	build := exec.Command("go", "build", "-o", fakeTsh, "./testdata/faketsh")
-	build.Stdout, build.Stderr = os.Stderr, os.Stderr
-	if err := build.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "build the fake tsh:", err)
-		return 1
-	}
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	testPort = ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
-
 	// The tests run only the fakes, by their paths, and the shell tools the
-	// fake sky uses. HOME and PATH hold nothing else, so no real login tool,
-	// client or browser can be found.
-	if err := fence(bin); err != nil {
+	// fake sky uses, and lsof, which the tunnel package runs on macOS to
+	// find a port's listeners.
+	tools := []string{"sh", "cat", "dirname", "env", "mkdir", "sed", "sleep", "touch"}
+	if runtime.GOOS == "darwin" {
+		tools = append(tools, "lsof")
+	}
+	f, err := testkit.Fence(testkit.FenceOptions{Tools: tools, FakeTsh: true})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer f.Close()
+	fakeTsh = f.Tsh
+	if testPort, err = testkit.FreePort(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
 	code := m.Run()
 	// Stop any fake tunnel a failed test left behind.
-	tunnel.NewOnPort(bin, fakeTsh, testProxy, testApp, testPort).Stop()
+	tunnel.NewOnPort(f.Dir, fakeTsh, testProxy, testApp, testPort).Stop()
 	return code
-}
-
-// fence sets HOME to an empty directory and PATH to a directory under bin
-// that holds only the shell tools the fakes run, and lsof, which the tunnel
-// package runs on macOS to find a port's listeners.
-func fence(bin string) error {
-	home := filepath.Join(bin, "home")
-	path := filepath.Join(bin, "path")
-	for _, dir := range []string{home, path} {
-		if err := os.Mkdir(dir, 0o700); err != nil {
-			return err
-		}
-	}
-	for _, tool := range []string{"sh", "cat", "dirname", "env", "mkdir", "sed", "sleep", "touch", "lsof"} {
-		real, err := exec.LookPath(tool)
-		if err != nil {
-			if tool == "lsof" && runtime.GOOS != "darwin" {
-				continue
-			}
-			return err
-		}
-		if err := os.Symlink(real, filepath.Join(path, tool)); err != nil {
-			return err
-		}
-	}
-	os.Setenv("HOME", home)
-	os.Setenv("PATH", path)
-	return nil
 }
 
 // teleportHarness is one login on a teleport pathway against the fake tsh,
@@ -242,7 +202,7 @@ func TestTeleportLoginsReadTheTerminalWithConfigFromStdin(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.l.openTerminal = func() (io.ReadCloser, error) { return tty, nil }
-	if err := h.login(Options{Config: "-", Pathway: "remote", In: strings.NewReader(exampleConfig)}); err != nil {
+	if err := h.login(Options{Config: "-", Pathway: "remote", In: strings.NewReader(testkit.ExampleConfig)}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	for name, want := range map[string]string{"stdin.login": "for login\n", "stdin.apps": "for apps login\n"} {
@@ -257,7 +217,7 @@ func TestTeleportLoginsReadTheTerminalWithConfigFromStdin(t *testing.T) {
 func TestTeleportLoginsReadNothingWithConfigFromStdinAndNoTerminal(t *testing.T) {
 	h := newTeleportHarness(t)
 	h.noFiles()
-	if err := h.login(Options{Config: "-", Pathway: "remote", In: strings.NewReader(exampleConfig)}); err != nil {
+	if err := h.login(Options{Config: "-", Pathway: "remote", In: strings.NewReader(testkit.ExampleConfig)}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	for _, name := range []string{"stdin.login", "stdin.apps"} {
@@ -303,7 +263,7 @@ func TestTeleportReplacesDeadTunnel(t *testing.T) {
 	if err := syscall.Kill(before.PID, syscall.SIGKILL); err != nil {
 		t.Fatal(err)
 	}
-	waitUntil(t, func() bool { return !h.tunnelStatus().Running })
+	testkit.WaitUntil(t, func() bool { return !h.tunnelStatus().Running })
 	h.tshCalls()
 
 	if err := h.run("remote"); err != nil {
@@ -376,7 +336,7 @@ func TestTeleportRecordsHealthyTunnelWithNoRecord(t *testing.T) {
 	if err := h.run("campus"); err != nil {
 		t.Fatalf("direct login: %v\n%s", err, h.out.String())
 	}
-	waitUntil(t, func() bool { return syscall.Kill(st.PID, 0) != nil })
+	testkit.WaitUntil(t, func() bool { return syscall.Kill(st.PID, 0) != nil })
 }
 
 // TestTeleportMovesTheOldEndpoint logs in as an earlier axon left the
@@ -564,21 +524,10 @@ func TestSwitchStopsRecordedTunnelByItsRecord(t *testing.T) {
 	if !strings.Contains(h.out.String(), "sky: stopping the Teleport tunnel") {
 		t.Errorf("output %q does not say the tunnel stopped", h.out.String())
 	}
-	waitUntil(t, func() bool {
+	testkit.WaitUntil(t, func() bool {
 		_, err := os.FindProcess(st.PID)
 		return err == nil && syscall.Kill(st.PID, 0) != nil
 	})
-}
-
-func waitUntil(t *testing.T, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatal("timed out waiting")
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
 }
 
 func TestTeleportTunnelExitsPrintsLog(t *testing.T) {
@@ -702,7 +651,7 @@ func lastFileGone(t *testing.T, gone func(h *teleportHarness)) {
 	if !strings.Contains(h.out.String(), "sky: stopping the Teleport tunnel") {
 		t.Errorf("output %q does not say the tunnel stopped", h.out.String())
 	}
-	waitUntil(t, func() bool { return syscall.Kill(st.PID, 0) != nil })
+	testkit.WaitUntil(t, func() bool { return syscall.Kill(st.PID, 0) != nil })
 	if e := h.email(); e != "" {
 		t.Errorf("email %q stayed after the pathway was left", e)
 	}

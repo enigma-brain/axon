@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // Recover deletes a record whose stored file is gone and the files left
@@ -69,7 +70,7 @@ func TestRecoverDeletesRecordsWithoutTheirFileAndFilesSetAside(t *testing.T) {
 func TestRecoverWithNothingToDoWritesNothing(t *testing.T) {
 	s, home := newStore(t)
 	add(t, s, oneDirect("a", "one"), "-")
-	before := snapshot(t, filepath.Join(home, ".axon"))
+	before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
 	locked := false
 	realLock := lockStore
 	lockStore = func(d axondir.Dir) (func(), error) { locked = true; return realLock(d) }
@@ -80,7 +81,7 @@ func TestRecoverWithNothingToDoWritesNothing(t *testing.T) {
 	if locked {
 		t.Error("Recover took the lock")
 	}
-	if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
+	if after := testkit.Snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
 		t.Errorf("Recover changed the store:\nbefore %v\nafter  %v", before, after)
 	}
 }

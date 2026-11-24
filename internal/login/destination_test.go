@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
-// movedCampus is exampleConfig with the pathway campus at another API
+// movedCampus is testkit.ExampleConfig with the pathway campus at another API
 // server.
-var movedCampus = strings.Replace(exampleConfig, "https://sky.example.org", "https://elsewhere.example.org", 1)
+var movedCampus = strings.Replace(testkit.ExampleConfig, "https://sky.example.org", "https://elsewhere.example.org", 1)
 
 // movedQuestion is what a refetch that moves campus prints before it asks.
 const movedQuestion = "The config file at https://example.org/example.toml changes where the pathway \"campus\" goes:\n" +
@@ -20,24 +21,24 @@ const movedQuestion = "The config file at https://example.org/example.toml chang
 
 const destinationPrompt = "Switch to the fetched config file? [y/N, Enter for no]: "
 
-// connectedFromAddress stores exampleConfig from the test address, logs in
+// connectedFromAddress stores testkit.ExampleConfig from the test address, logs in
 // on campus, and publishes next at the address.
 func connectedFromAddress(t *testing.T, next string) (*harness, *configServer) {
 	t.Helper()
 	h := newHarness(t)
 	server := h.serveConfigs()
-	h.storeFrom("/example.toml", exampleConfig)
-	server.publish("/example.toml", exampleConfig)
+	h.storeFrom("/example.toml", testkit.ExampleConfig)
+	server.publish("/example.toml", testkit.ExampleConfig)
 	h.connectedTo("campus")
 	server.publish("/example.toml", next)
 	return h, server
 }
 
-// keptCampus checks that the stored copy is exampleConfig and that the
+// keptCampus checks that the stored copy is testkit.ExampleConfig and that the
 // login carried on with campus as it was.
 func keptCampus(t *testing.T, h *harness, before os.FileInfo) {
 	t.Helper()
-	if h.stored("example") != exampleConfig {
+	if h.stored("example") != testkit.ExampleConfig {
 		t.Errorf("stored file = %q, want the stored copy kept whole", h.stored("example"))
 	}
 	if h.active() != "campus" || h.record().SkyEndpoint != "https://sky.example.org" {
@@ -130,16 +131,16 @@ func TestRefetchMovingThePathwayYesSwitches(t *testing.T) {
 // Each value of where a pathway goes is asked about: the kind, the
 // address, the proxy and the application.
 func TestRefetchAsksForEveryValueOfWhereThePathwayGoes(t *testing.T) {
-	teleportCampus := strings.Replace(exampleConfig, "kind = \"direct\"", "kind = \"teleport\"", 1)
+	teleportCampus := strings.Replace(testkit.ExampleConfig, "kind = \"direct\"", "kind = \"teleport\"", 1)
 	teleportCampus = strings.Replace(teleportCampus, "[pathway.sky]\nendpoint = \"https://sky.example.org\"", "[pathway.teleport]\nproxy = \"teleport.example.org\"\n\n[pathway.sky]\napp = \"skypilot\"", 1)
 	for name, tc := range map[string]struct {
 		pathway, next, now, new string
 	}{
 		"kind":    {"campus", teleportCampus, "direct, https://sky.example.org", "teleport, proxy teleport.example.org, application skypilot"},
 		"address": {"campus", movedCampus, "direct, https://sky.example.org", "direct, https://elsewhere.example.org"},
-		"proxy": {"remote", strings.Replace(exampleConfig, `proxy = "teleport.example.org"`, `proxy = "teleport.example.org:3080"`, 1),
+		"proxy": {"remote", strings.Replace(testkit.ExampleConfig, `proxy = "teleport.example.org"`, `proxy = "teleport.example.org:3080"`, 1),
 			"teleport, proxy teleport.example.org, application skypilot", "teleport, proxy teleport.example.org:3080, application skypilot"},
-		"application": {"remote", strings.Replace(exampleConfig, `app = "skypilot"`, `app = "other"`, 1),
+		"application": {"remote", strings.Replace(testkit.ExampleConfig, `app = "skypilot"`, `app = "other"`, 1),
 			"teleport, proxy teleport.example.org, application skypilot", "teleport, proxy teleport.example.org, application other"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -152,7 +153,7 @@ func TestRefetchAsksForEveryValueOfWhereThePathwayGoes(t *testing.T) {
 			server := h.serveConfigs()
 			h.noFiles()
 			h.terminal()
-			h.storeFrom("/example.toml", exampleConfig)
+			h.storeFrom("/example.toml", testkit.ExampleConfig)
 			server.publish("/example.toml", tc.next)
 			if err := axondir.New(h.home).SetPathway(tc.pathway); err != nil {
 				t.Fatal(err)
@@ -165,7 +166,7 @@ func TestRefetchAsksForEveryValueOfWhereThePathwayGoes(t *testing.T) {
 			if !strings.HasPrefix(h.out.String(), want) {
 				t.Errorf("output:\n%s\nwant it to start:\n%s", h.out.String(), want)
 			}
-			if h.stored("example") != exampleConfig {
+			if h.stored("example") != testkit.ExampleConfig {
 				t.Error("the stored copy changed")
 			}
 		})
@@ -175,7 +176,7 @@ func TestRefetchAsksForEveryValueOfWhereThePathwayGoes(t *testing.T) {
 // Addresses that name the same server, by the rule for clashes, are no
 // change, and a change elsewhere in the file is stored without a question.
 func TestRefetchKeepingWhereThePathwayGoesIsStored(t *testing.T) {
-	next := strings.Replace(exampleConfig, `endpoint = "https://sky.example.org"`, `endpoint = "https://SKY.example.org/"`, 1)
+	next := strings.Replace(testkit.ExampleConfig, `endpoint = "https://sky.example.org"`, `endpoint = "https://SKY.example.org/"`, 1)
 	next = strings.Replace(next, `app = "skypilot"`, `app = "other"`, 1)
 	h, _ := connectedFromAddress(t, next)
 	if err := h.run(""); err != nil {
@@ -215,8 +216,8 @@ func TestRefetchAsksAboutTheServerBeforeTheRevision(t *testing.T) {
 	setup := func(t *testing.T) *harness {
 		h := newHarness(t)
 		server := h.serveConfigs()
-		h.storeFrom("/example.toml", withRevision(exampleConfig, "5"))
-		server.publish("/example.toml", withRevision(exampleConfig, "5"))
+		h.storeFrom("/example.toml", withRevision(testkit.ExampleConfig, "5"))
+		server.publish("/example.toml", withRevision(testkit.ExampleConfig, "5"))
 		h.connectedTo("campus")
 		h.terminal()
 		server.publish("/example.toml", withRevision(movedCampus, "4"))
@@ -231,7 +232,7 @@ func TestRefetchAsksAboutTheServerBeforeTheRevision(t *testing.T) {
 		if strings.Contains(h.out.String(), "which is older") {
 			t.Errorf("asked about the revision after no:\n%s", h.out.String())
 		}
-		if h.stored("example") != withRevision(exampleConfig, "5") {
+		if h.stored("example") != withRevision(testkit.ExampleConfig, "5") {
 			t.Error("the stored copy changed")
 		}
 	})

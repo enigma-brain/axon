@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // oldLayout is what axon v0.3.0 kept, by path relative to ~/.axon, with a
@@ -243,7 +245,7 @@ func TestMoveOldNamesCreatesTheStateDirectoryForTheLock(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(d.StatePath(), lockFile)); err != nil {
 		t.Errorf("lock file: %v", err)
 	}
-	assertMode(t, d.StatePath(), 0o700)
+	testkit.AssertMode(t, d.StatePath(), 0o700)
 }
 
 // Two processes started together move each name once and lose nothing.

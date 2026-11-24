@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // hangPortEnv turns the test binary into a tunnel that listens on the port
@@ -57,7 +59,7 @@ func startHanging(t *testing.T) int {
 		cmd.Process.Kill()
 		<-reaped
 	})
-	waitFor(t, func() bool {
+	testkit.WaitUntil(t, func() bool {
 		ls, err := portListeners(testPort)
 		return err == nil && len(ls) > 0
 	})

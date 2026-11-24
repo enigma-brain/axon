@@ -19,6 +19,7 @@ import (
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/sky"
+	"github.com/enigma-brain/axon/internal/testkit"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
@@ -209,7 +210,7 @@ func TestInterruptAtAQuestionOnTheTerminal(t *testing.T) {
 func TestInterruptAtAClashQuestion(t *testing.T) {
 	h := newHarness(t)
 	before := h.stored("example")
-	clashing := strings.Replace(exampleConfig, `id = "example"`, `id = "other"`, 1)
+	clashing := strings.Replace(testkit.ExampleConfig, `id = "example"`, `id = "other"`, 1)
 	h.interrupted(Options{Config: writeConfig(t, clashing), Pathway: "campus", In: silentInput(t)}, msgReplacePrompt, syscall.SIGINT)
 	if after := h.stored("example"); after != before {
 		t.Errorf("the stored file changed:\n%s", after)
@@ -340,7 +341,7 @@ func TestInterruptWhileTheTunnelStarts(t *testing.T) {
 func TestInterruptWhileTheConfigFileIsFetched(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
-	h.storeFrom("/example.toml", exampleConfig)
+	h.storeFrom("/example.toml", testkit.ExampleConfig)
 	if err := axondir.New(h.home).SetPathway("remote"); err != nil {
 		t.Fatal(err)
 	}

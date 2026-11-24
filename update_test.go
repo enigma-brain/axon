@@ -9,8 +9,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"testing"
+
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // The tests in this file run `axon update` for real: they build axon from
@@ -37,13 +38,11 @@ func buildOld(t *testing.T, ldflags ...string) string {
 	return bin
 }
 
-// runFenced runs bin with args in an empty home directory, with an empty
-// PATH and no controlling terminal, and with env added to its environment.
+// runFenced runs bin with args inside testkit's fence, in an empty home
+// directory, and with env added to its environment.
 func runFenced(t *testing.T, bin string, env []string, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
-	cmd := exec.Command(bin, args...)
-	cmd.Env = append([]string{"HOME=" + t.TempDir(), "PATH=" + t.TempDir()}, env...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd := testkit.Command(t, t.TempDir(), env, bin, args...)
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	err = cmd.Run()
@@ -108,10 +107,7 @@ func TestReleaseUpdate(t *testing.T) {
 	defer srv.Close()
 
 	repo := "-X github.com/enigma-brain/axon/internal/update.repoURL=" + srv.URL + "/enigma-brain/axon"
-	env := []string{
-		"HTTPS_PROXY=" + deadProxy, "HTTP_PROXY=" + deadProxy,
-		"https_proxy=" + deadProxy, "http_proxy=" + deadProxy,
-	}
+	env := testkit.DeadProxy()
 	want := strings.TrimPrefix(tag, "v")
 
 	t.Run("named", func(t *testing.T) {

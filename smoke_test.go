@@ -3,13 +3,12 @@ package main
 import (
 	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/enigma-brain/axon/internal/skyclient"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // smokeFile is the config file the smoke test adds. Every detail is
@@ -39,7 +38,7 @@ endpoint = "https://127.0.0.1:1"
 // It builds axon from this checkout, or runs the binary AXON_SMOKE_BIN
 // names, such as one the install line installed.
 //
-// The fence is runAxon's, without the dead proxy, since the client is
+// The fence is testkit's, without the dead proxy, since the client is
 // downloaded: HOME is a temporary directory, PATH an empty one, and the
 // process has no controlling terminal.
 func TestSmokeLogin(t *testing.T) {
@@ -59,9 +58,7 @@ func TestSmokeLogin(t *testing.T) {
 
 	run := func(args ...string) (stdout, stderr string, err error) {
 		t.Helper()
-		cmd := exec.Command(bin, args...)
-		cmd.Env = []string{"HOME=" + home, "PATH=" + t.TempDir()}
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		cmd := testkit.Command(t, home, nil, bin, args...)
 		var out, errOut bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &errOut
 		err = cmd.Run()
@@ -119,9 +116,7 @@ func TestSmokeLogin(t *testing.T) {
 	// The installed client runs and reports the version axon installed.
 	// This comes after the check above, since sky creates ~/.sky when it
 	// first runs.
-	cmd := exec.Command(sky, "--version")
-	cmd.Env = []string{"HOME=" + home, "PATH=" + t.TempDir()}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd := testkit.Command(t, home, nil, sky, "--version")
 	skyOut, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("sky --version: %v\n%s", err, skyOut)

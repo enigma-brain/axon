@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/enigma-brain/axon/internal/interrupt"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // hangingArchive serves repo, except that the archive of release version
@@ -84,9 +85,19 @@ func TestUpdateCancelledDuringVersionCheck(t *testing.T) {
 
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
+	// The cancellation comes once the binary is seen to start, or after
+	// testkit.WaitTimeout, so that a binary that never starts fails the
+	// test instead of waiting for ever.
+	seen := make(chan bool, 1)
 	go func() {
+		deadline := time.Now().Add(testkit.WaitTimeout)
 		for {
 			if _, err := os.Stat(filepath.Join(marks, "started")); err == nil {
+				seen <- true
+				break
+			}
+			if time.Now().After(deadline) {
+				seen <- false
 				break
 			}
 			time.Sleep(20 * time.Millisecond)
@@ -96,6 +107,9 @@ func TestUpdateCancelledDuringVersionCheck(t *testing.T) {
 
 	start := time.Now()
 	err := Run(ctx, Options{Current: "0.4.0", Exe: exe, Platform: testPlatform, Out: &bytes.Buffer{}})
+	if !<-seen {
+		t.Fatalf("the downloaded binary was not seen to start within %v; Run error = %v", testkit.WaitTimeout, err)
+	}
 	if err == nil {
 		t.Fatal("the cancelled update succeeded")
 	}

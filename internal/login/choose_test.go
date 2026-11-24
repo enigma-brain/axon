@@ -13,6 +13,7 @@ import (
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // otherConfig is a second config file, with one direct pathway, lab.
@@ -297,7 +298,7 @@ func TestConfigFromStdinWithTwoPathwaysAsksOnTheTerminal(t *testing.T) {
 	tty := &closer{Reader: strings.NewReader("1\n")}
 	h.l.openTerminal = func() (io.ReadCloser, error) { return tty, nil }
 	h.logIn()
-	if err := h.login(Options{Config: "-", In: strings.NewReader(exampleConfig)}); err != nil {
+	if err := h.login(Options{Config: "-", In: strings.NewReader(testkit.ExampleConfig)}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	if h.active() != "campus" {
@@ -311,7 +312,7 @@ func TestConfigFromStdinWithTwoPathwaysAsksOnTheTerminal(t *testing.T) {
 func TestConfigFromStdinWithoutTerminalNamesTheFlag(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
-	err := h.login(Options{Config: "-", In: strings.NewReader(exampleConfig)})
+	err := h.login(Options{Config: "-", In: strings.NewReader(testkit.ExampleConfig)})
 	want := "determine the pathway: no pathway chosen. Run `axon login --pathway <id>` with one of campus and remote."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
@@ -319,7 +320,7 @@ func TestConfigFromStdinWithoutTerminalNamesTheFlag(t *testing.T) {
 	// The file was added; the flag answers the question.
 	h.logIn()
 	h.out.Reset()
-	if err := h.login(Options{Config: "-", Pathway: "campus", In: strings.NewReader(exampleConfig)}); err != nil {
+	if err := h.login(Options{Config: "-", Pathway: "campus", In: strings.NewReader(testkit.ExampleConfig)}); err != nil {
 		t.Fatalf("login with --pathway: %v", err)
 	}
 	if h.active() != "campus" {
@@ -355,7 +356,9 @@ func TestConfigKeepsActivePathwayInTheAddedFile(t *testing.T) {
 	if err := axondir.New(h.home).SetPathway("campus"); err != nil {
 		t.Fatal(err)
 	}
-	h.l.readConfig = func(context.Context, configfile.Source, io.Reader) ([]byte, error) { return []byte(exampleConfig), nil }
+	h.l.readConfig = func(context.Context, configfile.Source, io.Reader) ([]byte, error) {
+		return []byte(testkit.ExampleConfig), nil
+	}
 	h.out.Reset()
 	if err := h.login(Options{Config: "https://example.org/example.toml"}); err != nil {
 		t.Fatal(err)
@@ -372,7 +375,9 @@ func TestConfigOffersOnlyTheAddedFilesPathways(t *testing.T) {
 	if err := axondir.New(h.home).SetPathway("lab"); err != nil {
 		t.Fatal(err)
 	}
-	h.l.readConfig = func(context.Context, configfile.Source, io.Reader) ([]byte, error) { return []byte(exampleConfig), nil }
+	h.l.readConfig = func(context.Context, configfile.Source, io.Reader) ([]byte, error) {
+		return []byte(testkit.ExampleConfig), nil
+	}
 	err := h.login(Options{Config: "https://example.org/example.toml"})
 	if err == nil || !strings.HasSuffix(err.Error(), "with one of campus and remote.") {
 		t.Fatalf("err = %v", err)
@@ -387,7 +392,7 @@ func TestRefusedConfigChangesNothing(t *testing.T) {
 	if err := axondir.New(h.home).SetPathway("campus"); err != nil {
 		t.Fatal(err)
 	}
-	before := snapshot(t, filepath.Join(h.home, ".axon"))
+	before := testkit.Snapshot(t, filepath.Join(h.home, ".axon"))
 	clash := strings.Replace(otherConfig, `id = "lab"`, `id = "campus"`, 1)
 	path := filepath.Join(t.TempDir(), "clash.toml")
 	if err := os.WriteFile(path, []byte(clash), 0o600); err != nil {
@@ -397,7 +402,7 @@ func TestRefusedConfigChangesNothing(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), "add the config file: ") || !strings.Contains(err.Error(), "example.toml") {
 		t.Fatalf("err = %v, want a refusal naming the stored file", err)
 	}
-	if after := snapshot(t, filepath.Join(h.home, ".axon")); !equalMaps(before, after) {
+	if after := testkit.Snapshot(t, filepath.Join(h.home, ".axon")); !equalMaps(before, after) {
 		t.Errorf("the refused file changed ~/.axon:\nbefore %v\nafter  %v", before, after)
 	}
 }
@@ -521,24 +526,6 @@ type closer struct {
 }
 
 func (c *closer) Close() error { c.closed = true; return nil }
-
-// snapshot returns every file under root with its content.
-func snapshot(t *testing.T, root string) map[string]string {
-	t.Helper()
-	files := map[string]string{}
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		data, err := os.ReadFile(path)
-		files[path] = string(data)
-		return err
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return files
-}
 
 func equalMaps(a, b map[string]string) bool {
 	if len(a) != len(b) {

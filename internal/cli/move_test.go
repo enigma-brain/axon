@@ -12,19 +12,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
-// TestMain gives every test a temporary HOME, so that no test reaches the
-// user's own ~/.axon even when it forgets to set one.
+// TestMain runs the tests inside testkit's fence, so that no test reaches
+// the user's own ~/.axon even when it forgets to set a HOME.
 func TestMain(m *testing.M) {
-	home, err := os.MkdirTemp("", "axon-cli-home")
-	if err != nil {
-		panic(err)
-	}
-	os.Setenv("HOME", home)
-	code := m.Run()
-	os.RemoveAll(home)
-	os.Exit(code)
+	os.Exit(testkit.Main(m, testkit.FenceOptions{}))
 }
 
 // countMoves replaces moveOldNames with one that counts its calls.

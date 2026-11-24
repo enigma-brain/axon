@@ -16,6 +16,7 @@ import (
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // configServer is a local TLS server that publishes config files, one
@@ -157,10 +158,18 @@ func (h *harness) connectedTo(id string) {
 // emailFile returns the file that records the logged-in email. A disconnect
 // removes it, so the file after a login that disconnected is another file
 // even when it holds the same email.
+//
+// It also links the file from a directory of the test's, so that the file
+// outlives its removal for the rest of the test: a file written after it
+// cannot reuse its inode, and os.SameFile tells the two apart.
 func (h *harness) emailFile() os.FileInfo {
 	h.t.Helper()
-	info, err := os.Stat(filepath.Join(h.home, ".axon", "state", "email"))
+	path := filepath.Join(h.home, ".axon", "state", "email")
+	info, err := os.Stat(path)
 	if err != nil {
+		h.t.Fatal(err)
+	}
+	if err := os.Link(path, filepath.Join(h.t.TempDir(), "email")); err != nil {
 		h.t.Fatal(err)
 	}
 	return info
@@ -183,13 +192,13 @@ endpoint = "https://sky.example.org"
 func TestRefreshReplacesTheFileWithoutDisconnectingOnText(t *testing.T) {
 	h := newHarness(t)
 	server := h.serveConfigs()
-	h.storeFrom("/example.toml", exampleConfig)
-	server.publish("/example.toml", exampleConfig)
+	h.storeFrom("/example.toml", testkit.ExampleConfig)
+	server.publish("/example.toml", testkit.ExampleConfig)
 	h.connectedTo("campus")
 	before := h.record()
 	email := h.emailFile()
 
-	renamed := strings.Replace(exampleConfig, `name = "Campus"`, `name = "Campus SSO"`, 1)
+	renamed := strings.Replace(testkit.ExampleConfig, `name = "Campus"`, `name = "Campus SSO"`, 1)
 	renamed = strings.Replace(renamed, "Connect to the campus VPN and retry.", "Use the VPN.", 1)
 	server.publish("/example.toml", renamed)
 	if err := h.run(""); err != nil {
@@ -219,8 +228,8 @@ func TestRefreshReplacesTheFileWithoutDisconnectingOnText(t *testing.T) {
 func TestRefreshOfTheSameFileSaysNothing(t *testing.T) {
 	h := newHarness(t)
 	server := h.serveConfigs()
-	h.storeFrom("/example.toml", exampleConfig)
-	server.publish("/example.toml", exampleConfig)
+	h.storeFrom("/example.toml", testkit.ExampleConfig)
+	server.publish("/example.toml", testkit.ExampleConfig)
 	h.connectedTo("campus")
 
 	if err := h.run(""); err != nil {
@@ -244,13 +253,13 @@ func TestRefreshFailureUsesTheStoredFile(t *testing.T) {
 		{"unreachable", func(s *configServer) { s.fail("/example.toml", http.StatusInternalServerError) }, "the server answered 500 Internal Server Error"},
 		{"refused", func(s *configServer) { s.publish("/example.toml", "format = 3\n") }, "format"},
 		{"another id", func(s *configServer) {
-			s.publish("/example.toml", strings.Replace(exampleConfig, `id = "example"`, `id = "elsewhere"`, 1))
+			s.publish("/example.toml", strings.Replace(testkit.ExampleConfig, `id = "example"`, `id = "elsewhere"`, 1))
 		}, `id: is "elsewhere", not "example"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t)
 			server := h.serveConfigs()
-			h.storeFrom("/example.toml", exampleConfig)
+			h.storeFrom("/example.toml", testkit.ExampleConfig)
 			h.connectedTo("campus")
 			tc.serve(server)
 
@@ -263,7 +272,7 @@ func TestRefreshFailureUsesTheStoredFile(t *testing.T) {
 				!strings.Contains(lines[0], tc.reason) || !strings.HasSuffix(lines[0], ". Using the stored file.") {
 				t.Errorf("warnings = %q, want one line beginning %q and naming %q", h.errOut.String(), prefix, tc.reason)
 			}
-			if h.stored("example") != exampleConfig {
+			if h.stored("example") != testkit.ExampleConfig {
 				t.Error("the stored file changed")
 			}
 			if h.active() != "campus" || h.email() != h.user {
@@ -276,9 +285,9 @@ func TestRefreshFailureUsesTheStoredFile(t *testing.T) {
 func TestRefreshFetchesOnlyThePathwaysFile(t *testing.T) {
 	h := newHarness(t)
 	server := h.serveConfigs()
-	h.storeFrom("/example.toml", exampleConfig)
+	h.storeFrom("/example.toml", testkit.ExampleConfig)
 	h.storeFrom("/other.toml", otherConfig)
-	server.publish("/example.toml", exampleConfig)
+	server.publish("/example.toml", testkit.ExampleConfig)
 	server.publish("/other.toml", otherConfig)
 	h.connectedTo("lab")
 
@@ -293,7 +302,7 @@ func TestRefreshFetchesOnlyThePathwaysFile(t *testing.T) {
 func TestRefreshSkipsFilesNotFromAnAddress(t *testing.T) {
 	h := newHarness(t)
 	server := h.serveConfigs()
-	// The harness stored exampleConfig from standard input. A file from a
+	// The harness stored testkit.ExampleConfig from standard input. A file from a
 	// path, and a file with no recorded source, are not fetched either.
 	file := filepath.Join(t.TempDir(), "other.toml")
 	if err := os.WriteFile(file, []byte(otherConfig), 0o644); err != nil {
@@ -335,13 +344,13 @@ func TestConfigAddedIsNotFetchedAgain(t *testing.T) {
 	}
 }
 
-// dropCampus is exampleConfig without the pathway campus.
-var dropCampus = strings.Replace(exampleConfig, exampleConfig[strings.Index(exampleConfig, "[[pathway]]\nid = \"campus\""):strings.Index(exampleConfig, "[[pathway]]\nid = \"remote\"")], "", 1)
+// dropCampus is testkit.ExampleConfig without the pathway campus.
+var dropCampus = strings.Replace(testkit.ExampleConfig, testkit.ExampleConfig[strings.Index(testkit.ExampleConfig, "[[pathway]]\nid = \"campus\""):strings.Index(testkit.ExampleConfig, "[[pathway]]\nid = \"remote\"")], "", 1)
 
 func TestDroppedPathwayNamedByFlagStops(t *testing.T) {
 	h := newHarness(t)
 	server := h.serveConfigs()
-	h.storeFrom("/example.toml", exampleConfig)
+	h.storeFrom("/example.toml", testkit.ExampleConfig)
 	h.store(otherConfig)
 	h.connectedTo("campus")
 	before := h.record()
@@ -396,7 +405,7 @@ func TestDroppedPathwayWithOneLeftIsReplacedWithoutAsking(t *testing.T) {
 func TestDroppedPathwayWithSeveralLeftAsks(t *testing.T) {
 	h := newHarness(t)
 	server := h.serveConfigs()
-	h.storeFrom("/example.toml", exampleConfig)
+	h.storeFrom("/example.toml", testkit.ExampleConfig)
 	h.storeFrom("/other.toml", otherConfig)
 	server.publish("/other.toml", otherConfig)
 	h.connectedTo("campus")
@@ -423,7 +432,7 @@ func TestDroppedPathwayWithSeveralLeftAsks(t *testing.T) {
 func TestDroppedPathwayWithoutAnAnswerChangesNothing(t *testing.T) {
 	h := newHarness(t)
 	server := h.serveConfigs()
-	h.storeFrom("/example.toml", exampleConfig)
+	h.storeFrom("/example.toml", testkit.ExampleConfig)
 	h.store(otherConfig)
 	h.connectedTo("campus")
 	h.terminal()
@@ -443,10 +452,10 @@ func TestDroppedPathwayWithoutAnAnswerChangesNothing(t *testing.T) {
 func TestRefreshedSettingsReconnectDirectPathway(t *testing.T) {
 	h := newHarness(t)
 	server := h.serveConfigs()
-	h.storeFrom("/example.toml", exampleConfig)
+	h.storeFrom("/example.toml", testkit.ExampleConfig)
 	h.connectedTo("campus")
 	before := h.emailFile()
-	server.publish("/example.toml", strings.Replace(exampleConfig, "https://sky.example.org", "https://sky2.example.org", 1))
+	server.publish("/example.toml", strings.Replace(testkit.ExampleConfig, "https://sky.example.org", "https://sky2.example.org", 1))
 
 	if err := h.login(Options{Replace: true}); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
@@ -490,8 +499,8 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 	h := newTeleportHarness(t)
 	server := h.serveConfigs()
 	h.noFiles()
-	h.storeFrom("/example.toml", exampleConfig)
-	server.publish("/example.toml", exampleConfig)
+	h.storeFrom("/example.toml", testkit.ExampleConfig)
+	server.publish("/example.toml", testkit.ExampleConfig)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("teleport login: %v\n%s", err, h.out.String())
 	}
@@ -501,7 +510,7 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 	}
 	h.tshCalls()
 
-	server.publish("/example.toml", strings.Replace(exampleConfig, `app = "skypilot"`, `app = "skypilot2"`, 1))
+	server.publish("/example.toml", strings.Replace(testkit.ExampleConfig, `app = "skypilot"`, `app = "skypilot2"`, 1))
 	stateDir, err := axondir.New(h.home).StateDir()
 	if err != nil {
 		t.Fatal(err)
@@ -537,7 +546,7 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 func TestRefreshOfAnEmptyFileNamesTheAddress(t *testing.T) {
 	h := newHarness(t)
 	server := h.serveConfigs()
-	h.storeFrom("/example.toml?token=s3cret", exampleConfig)
+	h.storeFrom("/example.toml?token=s3cret", testkit.ExampleConfig)
 	h.connectedTo("campus")
 	server.publish("/example.toml", "# nothing but a comment\n")
 
@@ -549,7 +558,7 @@ func TestRefreshOfAnEmptyFileNamesTheAddress(t *testing.T) {
 	if got := h.errOut.String(); got != want {
 		t.Errorf("warnings = %q, want %q", got, want)
 	}
-	if h.stored("example") != exampleConfig {
+	if h.stored("example") != testkit.ExampleConfig {
 		t.Error("the stored file changed")
 	}
 }
@@ -558,7 +567,7 @@ func TestRefreshOfAnEmptyFileNamesTheAddress(t *testing.T) {
 func TestRefreshFailureHidesTheToken(t *testing.T) {
 	h := newHarness(t)
 	server := h.serveConfigs()
-	h.storeFrom("/example.toml?token=s3cret", exampleConfig)
+	h.storeFrom("/example.toml?token=s3cret", testkit.ExampleConfig)
 	h.connectedTo("campus")
 	server.fail("/example.toml", http.StatusInternalServerError)
 

@@ -159,6 +159,40 @@ The site holds no organization detail, under the rule in
 [What stays out](#what-stays-out). It links to SkyPilot's documentation
 only from the page of the `sky` command group.
 
+## Tests
+
+No test reaches a real service. The tests run on contributors' own
+machines, where real logins, clients and browsers are live, so every test
+that runs a program runs it inside a fence that keeps them out of reach.
+The fence is written once, in `internal/testkit`, a package that only test
+files import and that is never part of the `axon` binary:
+
+- A package under `internal/` whose tests run programs other than the test
+  binary itself calls `testkit.Fence` or `testkit.Main` from its
+  `TestMain`. For the rest of the test process, `HOME` is an empty
+  temporary directory and `PATH` a temporary directory that holds only the
+  tools the package names, such as `sh` and `sleep`, so no real `tsh`,
+  `sky` or browser opener can be found. A test binary that a fenced test
+  starts again, as a helper process, keeps the fence and the `HOME` its
+  parent gave it.
+- A test at the repository root that runs the built `axon` starts it with
+  `testkit.Command`: its `HOME` is the directory the test passes, its
+  `PATH` an empty temporary directory, and it runs in a new session, with
+  no controlling terminal. `testkit.DeadProxy` adds a proxy where nothing
+  listens, so that no HTTP or HTTPS request reaches a server. The tests of
+  `install.sh` run it with a `PATH` of fakes and of the tools it needs.
+- Fakes stand in for the real tools: the fake Teleport client,
+  `internal/testkit/faketsh`, which a package builds through Go's build
+  cache into the fence's directory and runs by its path, and fakes the
+  tests write into temporary directories. A test's own servers listen on
+  the loopback address.
+
+A test that deliberately does something real, such as a download, is
+switched on by an environment variable and is off by default:
+`AXON_REAL_INSTALL=1` for the smoke test and `TestRealInstall`,
+`AXON_REAL_UPDATE=1` for `TestRealUpdate`, and `AXON_REAL_DOWNLOAD=1` for
+`TestInstallFromGitHub`.
+
 ## Continuous integration
 
 Every job runs on a standard GitHub-hosted runner. The release is built for

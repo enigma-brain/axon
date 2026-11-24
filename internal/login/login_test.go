@@ -21,6 +21,7 @@ import (
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/skyclient"
+	"github.com/enigma-brain/axon/internal/testkit"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
@@ -67,9 +68,12 @@ type fakeClient struct {
 	fail map[string]error
 }
 
-func (c *fakeClient) Version() (string, bool, error) { return c.version, c.installed, nil }
+// The fake's methods have the signatures of sky.Connector's client
+// fields, so that a Connector takes them as they are.
 
-func (c *fakeClient) Ensure(_ context.Context, v string, _ io.Writer) (string, string, error) {
+func (c *fakeClient) Version(axondir.Dir) (string, bool, error) { return c.version, c.installed, nil }
+
+func (c *fakeClient) Ensure(_ context.Context, _ axondir.Dir, v string, _ io.Writer) (string, string, error) {
 	if err := c.fail[v]; err != nil {
 		return "", "", err
 	}
@@ -84,40 +88,12 @@ func (c *fakeClient) Ensure(_ context.Context, v string, _ io.Writer) (string, s
 	return from, v, nil
 }
 
-func (c *fakeClient) Path() (string, error) {
+func (c *fakeClient) Path(axondir.Dir) (string, error) {
 	if p, ok := c.paths[c.version]; ok {
 		return p, nil
 	}
 	return c.sky, nil
 }
-
-// exampleConfig is the config file the harness stores: a direct
-// pathway, campus, and a teleport pathway, remote. Every detail is made up.
-const exampleConfig = `format = 2
-id = "example"
-
-[[pathway]]
-id = "campus"
-kind = "direct"
-name = "Campus"
-description = "Single sign-on in a browser. Needs the campus network."
-unreachable_hint = "Connect to the campus VPN and retry."
-
-[pathway.sky]
-endpoint = "https://sky.example.org"
-
-[[pathway]]
-id = "remote"
-kind = "teleport"
-name = "Remote"
-description = "Works from anywhere."
-
-[pathway.teleport]
-proxy = "teleport.example.org"
-
-[pathway.sky]
-app = "skypilot"
-`
 
 // harness is one login against a fake sky and a fake API server.
 type harness struct {
@@ -162,13 +138,11 @@ func newHarness(t *testing.T) *harness {
 		dir: dir,
 		sky: sky.Connector{
 			Dir:           dir,
-			ClientVersion: func(axondir.Dir) (string, bool, error) { return h.client.Version() },
-			EnsureClient: func(ctx context.Context, _ axondir.Dir, v string, progress io.Writer) (string, string, error) {
-				return h.client.Ensure(ctx, v, progress)
-			},
-			ClientPath: func(axondir.Dir) (string, error) { return h.client.Path() },
-			Health:     apiserver.Fetch,
-			CookieFile: h.cookieFile,
+			ClientVersion: h.client.Version,
+			EnsureClient:  h.client.Ensure,
+			ClientPath:    h.client.Path,
+			Health:        apiserver.Fetch,
+			CookieFile:    h.cookieFile,
 			Endpoint: func(p configfile.Pathway) string {
 				if p.Kind == configfile.KindTeleport {
 					return "http://127.0.0.1:" + strconv.Itoa(testPort)
@@ -199,7 +173,7 @@ func newHarness(t *testing.T) *harness {
 			},
 		},
 	}
-	h.store(exampleConfig)
+	h.store(testkit.ExampleConfig)
 	return h
 }
 
@@ -654,7 +628,7 @@ func TestLoginPutsBackAnInterruptedUpdate(t *testing.T) {
 	if want := fmt.Sprintf(msgPutBack, path); !strings.Contains(h.out.String(), want) {
 		t.Errorf("output does not say the file was put back:\n%s", h.out.String())
 	}
-	if got, _ := os.ReadFile(path); string(got) != exampleConfig {
+	if got, _ := os.ReadFile(path); string(got) != testkit.ExampleConfig {
 		t.Errorf("stored file = %q, want the previous copy", got)
 	}
 	if _, err := os.Stat(path + ".previous"); !os.IsNotExist(err) {

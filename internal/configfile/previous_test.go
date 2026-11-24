@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // updated returns a store holding the file "a" at revision 1, and the
@@ -67,7 +68,7 @@ func TestAFailedUpdatePutsThePreviousFileBack(t *testing.T) {
 				if step == "writing the new record" {
 					target = recordOf(home, "a")
 				}
-				before := snapshot(t, filepath.Join(home, ".axon"))
+				before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
 				replaceFile = func(p string, data []byte) error {
 					if p == target && !failed {
 						failed = true
@@ -86,7 +87,7 @@ func TestAFailedUpdatePutsThePreviousFileBack(t *testing.T) {
 				if keptWhileWriting != before[s.Path("a")] {
 					t.Errorf("previous copy during the update = %q, want the stored file", keptWhileWriting)
 				}
-				if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
+				if after := testkit.Snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
 					t.Errorf("a failed update left changes:\nbefore %v\nafter  %v", before, after)
 				}
 			})
@@ -252,14 +253,14 @@ func TestRecoverKeepsTheCopyWhenTheRecordCannotBeRead(t *testing.T) {
 // file is replaced.
 func TestAnUpdateStopsWhenTheCopyCannotBeSynced(t *testing.T) {
 	s, home, newer := updated(t)
-	before := snapshot(t, filepath.Join(home, ".axon"))
+	before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
 	real := syncDir
 	syncDir = func(string) error { return errors.New("injected failure") }
 	t.Cleanup(func() { syncDir = real })
 	if _, err := addFile(s, newer, mustSource(t, "-")); err == nil || !strings.Contains(err.Error(), "injected failure") {
 		t.Fatalf("Add = %v, want the injected failure", err)
 	}
-	if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
+	if after := testkit.Snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
 		t.Errorf("a stopped update left changes:\nbefore %v\nafter  %v", before, after)
 	}
 }

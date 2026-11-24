@@ -10,23 +10,14 @@ import (
 	"syscall"
 	"testing"
 	"testing/iotest"
+
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 func newDir(t *testing.T) (Dir, string) {
 	t.Helper()
 	home := t.TempDir()
 	return New(home), home
-}
-
-func assertMode(t *testing.T, path string, want fs.FileMode) {
-	t.Helper()
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := info.Mode().Perm(); got != want {
-		t.Errorf("%s has mode %o, want %o", path, got, want)
-	}
 }
 
 func TestNewIsUnderHome(t *testing.T) {
@@ -61,13 +52,13 @@ func TestDirectoriesCreatedOnFirstUse(t *testing.T) {
 		if want := filepath.Join(home, ".axon", name); path != want {
 			t.Errorf("%s dir = %q, want %q", name, path, want)
 		}
-		assertMode(t, path, 0o700)
+		testkit.AssertMode(t, path, 0o700)
 		// A second call finds the directory in place.
 		if again, err := get(); err != nil || again != path {
 			t.Errorf("second call = %q, %v", again, err)
 		}
 	}
-	assertMode(t, d.Root(), 0o700)
+	testkit.AssertMode(t, d.Root(), 0o700)
 }
 
 func TestDirectoryThatIsAFile(t *testing.T) {
@@ -102,8 +93,8 @@ func TestPathwayRoundTrip(t *testing.T) {
 			t.Fatalf("Pathway() = %q, %v, %v, want %q", got, ok, err, want)
 		}
 	}
-	assertMode(t, d.SettingsPath(), 0o600)
-	assertMode(t, d.Root(), 0o700)
+	testkit.AssertMode(t, d.SettingsPath(), 0o600)
+	testkit.AssertMode(t, d.Root(), 0o700)
 
 	data, err := os.ReadFile(d.SettingsPath())
 	if err != nil {
@@ -167,8 +158,8 @@ func TestEmailRoundTrip(t *testing.T) {
 		t.Fatalf("Email() = %q, %v, %v", got, ok, err)
 	}
 	path := filepath.Join(home, ".axon", "state", "email")
-	assertMode(t, path, 0o600)
-	assertMode(t, filepath.Dir(path), 0o700)
+	testkit.AssertMode(t, path, 0o600)
+	testkit.AssertMode(t, filepath.Dir(path), 0o700)
 }
 
 func TestSetEmailRejectsBlank(t *testing.T) {
@@ -195,7 +186,7 @@ func TestReplaceFile(t *testing.T) {
 			t.Errorf("content = %q, want %q", got, content)
 		}
 	}
-	assertMode(t, path, 0o600)
+	testkit.AssertMode(t, path, 0o600)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -211,7 +202,7 @@ func TestReplaceFileMode(t *testing.T) {
 		if err := ReplaceFile(path, strings.NewReader("x"), mode); err != nil {
 			t.Fatal(err)
 		}
-		assertMode(t, path, mode)
+		testkit.AssertMode(t, path, mode)
 	}
 }
 
@@ -239,7 +230,7 @@ func TestReplaceFileKeepModeFollowLink(t *testing.T) {
 	if got, err := os.ReadFile(target); err != nil || string(got) != "new" {
 		t.Errorf("target = %q, %v; want new", got, err)
 	}
-	assertMode(t, target, 0o640)
+	testkit.AssertMode(t, target, 0o640)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -270,7 +261,7 @@ func TestReplaceFileReplacesALink(t *testing.T) {
 	if got, _ := os.ReadFile(target); string(got) != "old" {
 		t.Errorf("target = %q, want it unchanged", got)
 	}
-	assertMode(t, link, 0o600)
+	testkit.AssertMode(t, link, 0o600)
 }
 
 // KeepMode needs the file to exist.
