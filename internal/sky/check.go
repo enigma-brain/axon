@@ -34,8 +34,8 @@ const (
 	notRestarted = "Couldn't restart the Teleport tunnel. Run `axon login`."
 )
 
-// probes are what the check asks about the world. The real ones are in
-// realProbes; tests replace them.
+// probes are what the check asks about the world. realProbes returns the
+// real ones; tests build their own.
 type probes struct {
 	// endpoint returns the URL the health request goes to on a pathway.
 	endpoint func(configfile.Pathway) string
@@ -62,27 +62,26 @@ type probes struct {
 	startTunnel func(ctx context.Context, stateDir, tshPath, proxy, app string) error
 }
 
-var realProbes = probes{
-	endpoint: Endpoint,
-	health:   apiserver.Fetch,
-	cookieFile: func(home string) string {
-		return CookieFile(home, os.Getenv)
-	},
-	clientVersion: skyclient.Version,
-	findTsh:       tsh.Find,
-	sessionValid:  tsh.SessionValid,
-	checkTunnel: func(ctx context.Context, stateDir, proxy, app string) error {
-		// Checking needs no tsh: only a start runs it.
-		_, err := tunnel.New(stateDir, "", proxy, app, tunnel.Port).Check(ctx)
-		return err
-	},
-	startTunnel: func(ctx context.Context, stateDir, tshPath, proxy, app string) error {
-		return tunnel.New(stateDir, tshPath, proxy, app, tunnel.Port).Start(ctx)
-	},
+func realProbes() probes {
+	return probes{
+		endpoint: Endpoint,
+		health:   apiserver.Fetch,
+		cookieFile: func(home string) string {
+			return CookieFile(home, os.Getenv)
+		},
+		clientVersion: skyclient.Version,
+		findTsh:       tsh.Find,
+		sessionValid:  tsh.SessionValid,
+		checkTunnel: func(ctx context.Context, stateDir, proxy, app string) error {
+			// Checking needs no tsh: only a start runs it.
+			_, err := tunnel.New(stateDir, "", proxy, app, tunnel.Port).Check(ctx)
+			return err
+		},
+		startTunnel: func(ctx context.Context, stateDir, tshPath, proxy, app string) error {
+			return tunnel.New(stateDir, tshPath, proxy, app, tunnel.Port).Start(ctx)
+		},
+	}
 }
-
-// check holds the probes checkConnection uses.
-var check = realProbes
 
 // checkConnection checks the connection to the API server before a command runs,
 // repairs what needs no action from the user, and otherwise returns an
@@ -97,7 +96,7 @@ var check = realProbes
 // once before the health request, and the installed client's version, so
 // that the command runs with the same ones. The pathway counts as connected only while its settings for
 // machines are the ones axon login recorded when it connected it.
-func checkConnection(ctx context.Context, dir axondir.Dir, w io.Writer) (configfile.Pathway, string, string, error) {
+func (d deps) checkConnection(ctx context.Context, dir axondir.Dir, w io.Writer) (configfile.Pathway, string, string, error) {
 	pw, err := activePathway(dir)
 	if err != nil {
 		return configfile.Pathway{}, "", "", err
@@ -109,7 +108,7 @@ func checkConnection(ctx context.Context, dir axondir.Dir, w io.Writer) (configf
 	if !hasEmail {
 		return configfile.Pathway{}, "", "", ErrNoLogin
 	}
-	version, err := check.run(ctx, dir, pw, w)
+	version, err := d.check.run(ctx, dir, pw, w)
 	if err != nil {
 		return configfile.Pathway{}, "", "", err
 	}

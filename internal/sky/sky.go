@@ -21,7 +21,7 @@ import (
 // Run runs axon sky with args for the user whose axon directory is dir. w
 // receives what the connection check repairs.
 func Run(ctx context.Context, dir axondir.Dir, w io.Writer, args []string) error {
-	return dispatch(ctx, dir, w, args)
+	return defaults().dispatch(ctx, dir, w, args)
 }
 
 // refusals are the sky api commands axon sky refuses, with the reason each
@@ -36,14 +36,14 @@ var refusals = map[string]string{
 
 // dispatch refuses args, runs sky's own help, or forwards args to sky after
 // the connection check. w receives what the check repairs.
-func dispatch(ctx context.Context, dir axondir.Dir, w io.Writer, args []string) error {
+func (d deps) dispatch(ctx context.Context, dir axondir.Dir, w io.Writer, args []string) error {
 	if err := refusal(args); err != nil {
 		return err
 	}
 	if wantsHelp(args) {
-		return help(dir, args)
+		return d.help(dir, args)
 	}
-	err := forward(ctx, w, dir, args)
+	err := d.forward(ctx, w, dir, args)
 	if errors.Is(err, ErrNoLogin) && hasHelpFlag(args) {
 		return fmt.Errorf("%w %s", err, msgHelpHint)
 	}
@@ -148,13 +148,13 @@ func isBareOption(a string) bool {
 // help replaces the axon process with sky's own help for args. It needs the
 // client and no login, so it runs no connection check, and runs sky against
 // an endpoint where nothing answers.
-func help(dir axondir.Dir, args []string) error {
-	path, err := skyPath(dir)
+func (d deps) help(dir axondir.Dir, args []string) error {
+	path, err := d.skyPath(dir)
 	if errors.Is(err, skyclient.ErrNotInstalled) {
 		return errNoClient
 	}
 	if err != nil {
 		return fmt.Errorf("find the SkyPilot client: %w", err)
 	}
-	return run(path, args, helpEnviron(os.Environ()))
+	return d.exec(path, args, helpEnviron(os.Environ()))
 }

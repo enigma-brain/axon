@@ -201,13 +201,13 @@ func (w *world) probes() probes {
 func runChecked(t *testing.T, p string, w *world) (*[]call, string, error) {
 	t.Helper()
 	dir := login(t, p, "ada@example.org")
-	calls := capture(t)
-	check = w.probes()
-	_, errOut, err := runSky("status")
+	c := capture(t)
+	c.d.check = w.probes()
+	errOut, err := c.run("status")
 	if _, statErr := os.Stat(filepath.Join(dir.Root(), "tools")); !errors.Is(statErr, os.ErrNotExist) {
 		t.Errorf("something was written under ~/.axon/tools: %v", statErr)
 	}
-	return calls, errOut, err
+	return &c.calls, errOut, err
 }
 
 func restarts(errOut string) int {
@@ -441,10 +441,10 @@ func TestCheckSendsCookiesOnlyToADirectEndpoint(t *testing.T) {
 				t.Fatal(err)
 			}
 			login(t, tc.pathway, "ada@example.org")
-			capture(t)
-			check = w.probes()
-			check.cookieFile = func(string) string { return jar }
-			if _, _, err := runSky("status"); err != nil {
+			c := capture(t)
+			c.d.check = w.probes()
+			c.d.check.cookieFile = func(string) string { return jar }
+			if _, err := c.run("status"); err != nil {
 				t.Fatal(err)
 			}
 			w.server.mu.Lock()
@@ -460,15 +460,15 @@ func TestCheckSendsCookiesOnlyToADirectEndpoint(t *testing.T) {
 func TestCheckStopsWithoutAClient(t *testing.T) {
 	w := newWorld(t)
 	login(t, "campus", "ada@example.org")
-	calls := capture(t)
-	check = w.probes()
-	check.clientVersion = func(axondir.Dir) (string, bool, error) { return "", false, nil }
-	_, _, err := runSky("status")
+	c := capture(t)
+	c.d.check = w.probes()
+	c.d.check.clientVersion = func(axondir.Dir) (string, bool, error) { return "", false, nil }
+	_, err := c.run("status")
 	if err == nil || err.Error() != "the SkyPilot client is not installed. Run `axon login` first." {
 		t.Errorf("err = %v", err)
 	}
-	if len(*calls) != 0 || w.server.count() != 0 {
-		t.Errorf("sky ran %d times and %d requests were made, want none", len(*calls), w.server.count())
+	if len(c.calls) != 0 || w.server.count() != 0 {
+		t.Errorf("sky ran %d times and %d requests were made, want none", len(c.calls), w.server.count())
 	}
 }
 
@@ -671,7 +671,7 @@ func TestStopExitsNonZeroWithTheMessage(t *testing.T) {
 // not reach the command: it runs with the email the check read.
 func TestCommandRunsWithTheCheckedEmail(t *testing.T) {
 	dir := login(t, "campus", "ada@example.org")
-	calls := capture(t)
+	c := capture(t)
 	p := connectedProbes()
 	health := p.health
 	p.health = func(ctx context.Context, endpoint string, opts apiserver.Options) (apiserver.Health, error) {
@@ -680,12 +680,12 @@ func TestCommandRunsWithTheCheckedEmail(t *testing.T) {
 		}
 		return health(ctx, endpoint, opts)
 	}
-	check = p
-	if _, _, err := runSky("status"); err != nil {
+	c.d.check = p
+	if _, err := c.run("status"); err != nil {
 		t.Fatal(err)
 	}
-	if len(*calls) != 1 || !slices.Contains((*calls)[0].env, userVar+"=ada@example.org") {
-		t.Errorf("sky ran with %v, want SKYPILOT_USER=ada@example.org", *calls)
+	if len(c.calls) != 1 || !slices.Contains(c.calls[0].env, userVar+"=ada@example.org") {
+		t.Errorf("sky ran with %v, want SKYPILOT_USER=ada@example.org", c.calls)
 	}
 }
 
@@ -740,7 +740,7 @@ func TestCheckStopsWhenCancelled(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := login(t, tc.pathway, "ada@example.org")
-			calls := capture(t)
+			c := capture(t)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			p := connectedProbes()
@@ -751,15 +751,15 @@ func TestCheckStopsWhenCancelled(t *testing.T) {
 				return errors.New("the tunnel did not start")
 			}
 			tc.setup(&p, cancel)
-			check = p
-			_, _, _, err := checkConnection(ctx, dir, io.Discard)
+			c.d.check = p
+			_, _, _, err := c.d.checkConnection(ctx, dir, io.Discard)
 			if !errors.Is(err, context.Canceled) {
 				t.Errorf("checkConnection returned %v, want the cancellation", err)
 			}
 			if starts != tc.starts {
 				t.Errorf("the tunnel was started %d times, want %d", starts, tc.starts)
 			}
-			if len(*calls) != 0 {
+			if len(c.calls) != 0 {
 				t.Error("sky ran")
 			}
 		})
