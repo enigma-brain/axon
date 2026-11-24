@@ -130,7 +130,7 @@ func (s Source) IsAddress() bool { return s.kind == sourceAddress }
 func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
 	switch src.kind {
 	case sourceStdin:
-		data, err := readLimited(stdin)
+		data, err := readUntilDone(ctx, stdin)
 		if err != nil {
 			return nil, fmt.Errorf("read the config file from standard input: %w", err)
 		}
@@ -227,6 +227,30 @@ func (e badRedirect) Error() string { return "redirected to an address that is n
 func (e badRedirect) Unwrap() error { return e.err }
 
 // readLimited reads r to its end, refusing more than MaxSize bytes.
+// readUntilDone reads r as readLimited does, and returns ctx's error as soon
+// as ctx ends, without waiting for the input to end. A read that ctx cut
+// short is left running; it ends when the input does or axon exits.
+func readUntilDone(ctx context.Context, r io.Reader) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	type result struct {
+		data []byte
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		data, err := readLimited(r)
+		done <- result{data, err}
+	}()
+	select {
+	case res := <-done:
+		return res.data, res.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 func readLimited(r io.Reader) ([]byte, error) {
 	data, err := io.ReadAll(io.LimitReader(r, MaxSize+1))
 	if err != nil {

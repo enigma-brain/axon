@@ -388,3 +388,55 @@ func TestInterruptLogout(t *testing.T) {
 		t.Errorf("the record of the connection is gone (%v), want it kept for a retry", err)
 	}
 }
+
+// TestLogoutThatFinishesStaysASuccess cancels axon logout during its last
+// remote step, which still succeeds: every step is done, so logout
+// succeeds and removes the records.
+func TestLogoutThatFinishesStaysASuccess(t *testing.T) {
+	h := newTeleportHarness(t)
+	if err := h.run("remote"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	lo := newLogout(h.harness, fakeTsh)
+	lo.tshLogout = func(context.Context, string, string) error {
+		cancel()
+		return nil
+	}
+	var out, errOut bytes.Buffer
+	if err := lo.run(ctx, LogoutOptions{Out: &out, Err: &errOut}); err != nil {
+		t.Fatalf("logout returned %v, want success\n%s", err, errOut.String())
+	}
+	if _, ok, _ := connected.Read(axondir.New(h.home)); ok {
+		t.Error("the record of the connection is kept, want it removed")
+	}
+}
+
+// TestInterruptWhileTheConfigFileIsReadFromStandardInput cancels axon login
+// --config - while standard input stays open and sends nothing.
+func TestInterruptWhileTheConfigFileIsReadFromStandardInput(t *testing.T) {
+	h := newHarness(t)
+	before := h.stored("example")
+	h.interruptAfter(Options{Config: "-", In: silentInput(t)}, 100*time.Millisecond)
+	if after := h.stored("example"); after != before {
+		t.Errorf("the stored file changed:\n%s", after)
+	}
+}
+
+// interruptAfter runs one login with opts, cancelled after d, and fails the
+// test unless it stopped with the cancellation, promptly.
+func (h *harness) interruptAfter(opts Options, d time.Duration) {
+	h.t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	time.AfterFunc(d, cancel)
+	opts.Out, opts.Err = &h.out, &h.errOut
+	start := time.Now()
+	if err := h.l.run(ctx, opts); !errors.Is(err, context.Canceled) {
+		h.t.Fatalf("login returned %v, want the cancellation", err)
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		h.t.Errorf("login took %s to stop", took)
+	}
+}

@@ -202,7 +202,8 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 		}
 	}
 
-	if err := ctx.Err(); err != nil {
+	// A logout whose steps all succeeded is done, interrupted or not.
+	if err := ctx.Err(); failed && err != nil {
 		return err
 	}
 	fmt.Fprintf(opts.Out, lineKept+"\n", lo.dir.ConfigsPath())
