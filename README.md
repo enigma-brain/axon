@@ -472,8 +472,9 @@ with:
 
     AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
 
-CI runs it on Linux when a change touches `internal/skyclient/` or the
-workflow, and the Mac suite runs it on macOS on Apple silicon and on Intel.
+No workflow runs it. CI and the Mac suite install the client for real
+through the smoke test, below, which also runs the installed `sky
+--version`.
 
 ### The smoke test
 

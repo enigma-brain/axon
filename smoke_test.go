@@ -31,7 +31,8 @@ endpoint = "https://127.0.0.1:1"
 
 // TestSmokeLogin runs axon as a user would, in an empty home directory:
 // axon login --config <file> stores the file, installs the SkyPilot client for
-// real, and stops where the login would open a browser. The install
+// real, and stops where the login would open a browser; then the installed
+// client runs sky --version. The install
 // downloads a few hundred megabytes, so the test runs only when
 // AXON_REAL_INSTALL=1.
 //
@@ -113,5 +114,20 @@ func TestSmokeLogin(t *testing.T) {
 		if e.Name() != ".axon" {
 			t.Errorf("axon login created %s outside ~/.axon", e.Name())
 		}
+	}
+
+	// The installed client runs and reports the version axon installed.
+	// This comes after the check above, since sky creates ~/.sky when it
+	// first runs.
+	cmd := exec.Command(sky, "--version")
+	cmd.Env = []string{"HOME=" + home, "PATH=" + t.TempDir()}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	skyOut, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("sky --version: %v\n%s", err, skyOut)
+	}
+	t.Logf("sky --version: %s", bytes.TrimSpace(skyOut))
+	if !strings.Contains(string(skyOut), skyclient.DefaultVersion) {
+		t.Errorf("sky --version printed %q, want version %s", skyOut, skyclient.DefaultVersion)
 	}
 }

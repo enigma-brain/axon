@@ -5,10 +5,10 @@ name: Mac
 #
 #   gh workflow run mac.yml --ref <branch>
 #
-# It runs build and test on macOS on Apple silicon, and every real install,
-# the smoke test and the real update on macOS on Apple silicon and on Intel,
-# whatever the branch changes. CONTRIBUTING.md, under "Continuous
-# integration", says when to run it.
+# It runs build and test on macOS on Apple silicon, and the smoke test and
+# the real update on macOS on Apple silicon and on Intel, whatever the branch
+# changes. The jobs are defined in go.yml, which CI calls on Linux.
+# CONTRIBUTING.md, under "Continuous integration", says when to run it.
 on:
   workflow_dispatch:
 
@@ -17,49 +17,22 @@ permissions:
 
 jobs:
   test:
-    name: Build and test (macos-latest)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-      - name: Check formatting
-        run: |
-          unformatted=$(gofmt -l .)
-          if [ -n "$unformatted" ]; then
-            echo "These files need gofmt:"
-            echo "$unformatted"
-            exit 1
-          fi
-      - name: Build
-        run: go build ./...
-      - name: Vet
-        run: go vet ./...
-      - name: Test
-        run: go test -race ./...
+    name: Build and test
+    uses: ./.github/workflows/go.yml
+    with:
+      runner: macos-latest
+      test: true
 
   real:
-    name: Real installs, smoke test and real update (${{ matrix.os }})
+    name: Smoke test and real update
     strategy:
       fail-fast: false
       matrix:
         # macOS on Apple silicon (macos-latest) and macOS on Intel
         # (macos-15-intel).
         os: [macos-latest, macos-15-intel]
-    runs-on: ${{ matrix.os }}
-    env:
-      AXON_REAL_INSTALL: "1"
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-      - name: Install the SkyPilot client into an empty home and run sky --version
-        run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
-      - name: Run axon login with an example config file in an empty home
-        run: go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
-      - name: Update an old axon to the latest release with axon update
-        env:
-          AXON_REAL_UPDATE: "1"
-        run: go test -count=1 -timeout 10m -run '^TestRealUpdate$' -v .
+    uses: ./.github/workflows/go.yml
+    with:
+      runner: ${{ matrix.os }}
+      real: true
+      update: true

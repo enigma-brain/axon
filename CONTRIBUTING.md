@@ -173,14 +173,13 @@ which a maintainer starts by hand.
 A job in CI that downloads real software or builds the release runs only
 when the paths it tests have changed. In `.github/workflows/ci.yml`, the
 first job reads the change, the pull request's diff or the commits a push to
-`main` added, and sets three flags:
+`main` added, and sets two flags:
 
 - **code**: any `.go` file, `go.mod`, `go.sum`, anything under `internal/`,
   `install.sh`, `.goreleaser.yaml`, anything under `.github/release-gate/`,
-  `release.yml`, or `ci.yml` itself;
-- **skyclient**: anything under `internal/skyclient/`, or `ci.yml`;
-- **update**: anything under `internal/update/`, `update_test.go`, or
-  `ci.yml`.
+  `release.yml`, `go.yml`, or `ci.yml` itself;
+- **update**: anything under `internal/update/`, `update_test.go`,
+  `go.yml`, or `ci.yml`.
 
 When the change cannot be read, as on the first push of a branch, every
 flag is set. A change to documentation alone sets none.
@@ -190,29 +189,55 @@ flag is set. A change to documentation alone sets none.
 | CI | Build and test: `gofmt`, build, vet, `go test -race` | `ubuntu-latest` | For every pull request and push to `main` |
 | CI | `shellcheck` on `install.sh` and the release gate's `curl` | `ubuntu-latest` | When **code** |
 | CI | GoReleaser in snapshot mode, checking the archives | `ubuntu-latest` | When **code** |
-| CI | The smoke test | `ubuntu-latest` | When **code** |
-| CI | The real install of the SkyPilot client | `ubuntu-latest`, in the smoke test's job | When **skyclient** |
+| CI | The smoke test, which installs the SkyPilot client for real and runs `sky --version` | `ubuntu-latest` | When **code** |
 | CI | The real update: an old `axon` runs `axon update` against the latest release | `ubuntu-latest`, in the smoke test's job | When **update** |
 | Docs | The site build | `ubuntu-latest` | For every pull request that touches `docs/site` or `docs.yml` |
-| Pages | The site build and publishing | `ubuntu-latest` | For every push to `main` |
+| Pages | The site build and publishing | `ubuntu-latest` | For every push to `main` that touches `docs/site` or `pages.yml`, and when started by hand |
 | Release | GoReleaser builds the release as a draft | `ubuntu-latest` | For every pushed tag `v*` |
 | Release | The gate: the release's `install.sh`, `axon --version` and the smoke test against the installed binary, and `axon update` from an old `axon` to the draft | All three | After the draft is built |
 | Release | Publishing the draft | `ubuntu-latest` | When the gate passed on all three |
 | Release | The install line and `axon --version`, and `axon update --version <tag>` from an old `axon`, against the published release | `ubuntu-latest` | After the release is published |
 | Mac | Build and test | `macos-latest` | When started by hand |
-| Mac | The real install of the SkyPilot client, the smoke test, and the real update | `macos-latest` and `macos-15-intel` | When started by hand |
+| Mac | The smoke test and the real update | `macos-latest` and `macos-15-intel` | When started by hand |
 
 A job that does not run is reported as skipped, which a required check
 accepts.
+
+Build and test, and the job that runs the smoke test and the real update,
+are defined once, in the reusable workflow `.github/workflows/go.yml`. It
+takes the runner as an input, and CI and the Mac suite call it.
 
 The smoke test, `TestSmokeLogin` in `smoke_test.go`, runs `axon` as a user
 would, in an empty home directory with an empty `PATH`: `axon login --config`
 adds a made-up config file, installs the SkyPilot client for real, and
 stops at the endpoint's reachability check, the step before the browser
 login. The endpoint is on the loopback address where nothing listens, so the
-test reaches no server. It runs only with `AXON_REAL_INSTALL=1`, as the real
-installs do, and runs the binary `AXON_SMOKE_BIN` names instead of building
-one when that is set.
+test reaches no server. It then runs the installed client's `sky --version`
+and checks the version. It runs only with `AXON_REAL_INSTALL=1`, and runs the
+binary `AXON_SMOKE_BIN` names instead of building one when that is set. It is
+the one real install of the SkyPilot client in a run.
+
+`TestRealInstall` in `internal/skyclient/real_install_test.go` also installs
+the client for real, and checks as well that a second install at the same
+version downloads nothing. No workflow runs it; it runs by hand with
+`AXON_REAL_INSTALL=1 go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient`.
+
+### Pinned actions
+
+Every action a workflow uses is referenced by the full commit SHA of a
+release, with the release's tag in a comment beside it, and the release
+build uses one exact version of GoReleaser. A pin moves only by a change
+to the workflow files. To update an action, pick its release tag and
+resolve the tag to the commit it points to; for an annotated tag, that
+commit is not the tag's own SHA:
+
+    git ls-remote https://github.com/<owner>/<action> 'refs/tags/<tag>^{}'
+
+When that prints nothing, the tag is lightweight, and `refs/tags/<tag>`
+gives the commit. Then replace the SHA and the comment everywhere the action
+is used. To update GoReleaser, change `version:` on the GoReleaser step in
+`release.yml` and in `ci.yml`'s snapshot job together, so that CI builds
+with the version the release uses.
 
 ### The Mac suite
 
