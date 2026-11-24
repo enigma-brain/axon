@@ -54,7 +54,7 @@ it against the release's checksums. It needs `curl` and `sha256sum` or
 `~/.local/bin` is not on your `PATH`, it prints the line to add to your
 shell's startup file.
 
-To update `axon`, run the same line again.
+To update `axon`, run `axon update`, as [Updating](#updating) describes.
 
 To install a named version, download that release's install script and set
 `AXON_VERSION` for it. A pre-release is installed this way because GitHub
@@ -83,6 +83,31 @@ The same two steps install a named version:
 
 The install script exits non-zero, with a message that names what could not
 be downloaded or verified, when the installation fails.
+
+### Updating
+
+    axon update
+
+`axon update` downloads the latest release for your platform, checks it
+against the release's `checksums.txt`, and replaces the `axon` you ran with it
+in one step, by renaming the new binary over the old one. It prints the
+version you had and the one it installed. When you already have the latest
+release, it says so and changes nothing. It changes only the binary: `~/.axon`,
+the login and the clients `axon` installed stay as they are.
+
+`axon update --version <version>` installs a named release instead, such as
+a pre-release or an older release, with or without the leading `v`. Without
+`--version`, an `axon` newer than the latest release is left as it is, and a
+pre-release updates to its final release.
+
+A failure at any step, such as no network, a checksum mismatch or a
+directory it cannot write, leaves the old `axon` in place, and the message
+says what failed and what to do. A build from source reports the version
+`dev` and is refused; install a release with the install line instead.
+
+`axon` contacts its releases only when you run `axon update`. Running the
+install line again also updates `axon`, and is the way to update a release
+older than the command.
 
 ## Organizations
 
@@ -456,8 +481,12 @@ and the workflow checks the installed version and runs the smoke test
 against the installed binary. Only when all three pass is the draft
 published. A tag with a pre-release part, such as `v1.2.3-rc.1`, is
 published as a pre-release, which the install line does not pick up unless
-`AXON_VERSION` names it. Once the release is published, the workflow runs
-the install line on Linux and checks the installed version.
+`AXON_VERSION` names it. The gate also builds an `axon` of version `0.0.0`
+from the tag's commit, with the draft's files served on the loopback address
+as its releases, and checks that `axon update` replaces it with the
+release's binary. Once the release is published, the workflow runs the
+install line on Linux and checks the installed version, and updates an old
+`axon` to the tag from GitHub with `axon update --version`.
 [CONTRIBUTING.md](CONTRIBUTING.md#the-release-gate) says what a maintainer
 does when a check fails.
 
@@ -470,6 +499,19 @@ each archive and `checksums.txt` are built, and runs `shellcheck` on
 `install_test.go` runs `install.sh` under `sh` with a fake `gh` and `uname`,
 and is part of `go test ./...`.
 
+The tests of `axon update` in `internal/update` serve made-up releases on the
+loopback address and reach no real server. `update_test.go` holds the two
+that run the built binary and are off by default: `TestReleaseUpdate`, which
+the release gate runs with `AXON_UPDATE_GATE_DIR` and
+`AXON_UPDATE_GATE_TAG`, and `TestRealUpdate`, which updates an `axon` of
+version `0.0.0` from the real releases on GitHub:
+
+    AXON_REAL_UPDATE=1 go test -count=1 -run '^TestRealUpdate$' -v .
+
+`AXON_UPDATE_TO=<tag>` makes it install that release with `--version`
+instead of the latest. CI runs it on Linux when `internal/update/` or
+`update_test.go` changes.
+
 ### Layout
 
 | Path | Holds |
@@ -477,7 +519,8 @@ and is part of `go test ./...`.
 | `main.go` | The entry point. Sends every failure through `internal/fail`. |
 | `install.sh` | The install script that the install line runs. |
 | `.goreleaser.yaml` | How a release is built. |
-| `internal/cli` | The command tree: `login`, `logout` and `sky`. |
+| `internal/cli` | The command tree: `login`, `logout`, `sky` and `update`. |
+| `internal/update` | `axon update`: finding a release, verifying its archive, and replacing the running binary. |
 | `internal/fail` | Prints failures to standard error, prefixed `axon:`, and exits non-zero. |
 | `internal/orgfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/orgs/`. |
 | `internal/axondir` | `~/.axon`: the configuration file, `tools/` and `state/`. |

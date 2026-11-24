@@ -8,6 +8,7 @@ import (
 
 	"github.com/enigma-brain/axon/internal/login"
 	"github.com/enigma-brain/axon/internal/sky"
+	"github.com/enigma-brain/axon/internal/update"
 )
 
 // NewRoot returns the axon command, which reports version for --version.
@@ -24,7 +25,7 @@ func NewRoot(version string) *cobra.Command {
 	root.CompletionOptions.DisableDefaultCmd = true
 	root.SetHelpCommand(&cobra.Command{Use: "no-help", Hidden: true})
 
-	root.AddCommand(newLogin(), newLogout(), sky.Command())
+	root.AddCommand(newLogin(), newLogout(), sky.Command(), newUpdate(version))
 	return root
 }
 
@@ -81,4 +82,32 @@ again.`,
 			})
 		},
 	}
+}
+
+func newUpdate(current string) *cobra.Command {
+	var version string
+	cmd := &cobra.Command{
+		Use:   "update",
+		Short: "Update axon to the latest release",
+		Long: `Update axon to the latest release.
+
+Downloads the latest release of axon for this machine, checks it against the
+release's checksums, and replaces the axon you ran with it in one step. When
+axon is already the latest release, nothing changes. --version installs a
+named release instead, such as a pre-release or an older release.
+
+Only the axon binary changes: your config files, login and the clients axon
+installed are kept. axon looks for a new release only when you run this
+command.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return update.Run(cmd.Context(), update.Options{
+				Current: current,
+				Version: version,
+				Out:     cmd.OutOrStdout(),
+			})
+		},
+	}
+	cmd.Flags().StringVar(&version, "version", "", "install this release instead of the latest, such as 1.2.3 or 1.2.3-rc.1")
+	return cmd
 }

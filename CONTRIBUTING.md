@@ -173,12 +173,14 @@ which a maintainer starts by hand.
 A job in CI that downloads real software or builds the release runs only
 when the paths it tests have changed. In `.github/workflows/ci.yml`, the
 first job reads the change, the pull request's diff or the commits a push to
-`main` added, and sets two flags:
+`main` added, and sets three flags:
 
 - **code**: any `.go` file, `go.mod`, `go.sum`, anything under `internal/`,
   `install.sh`, `.goreleaser.yaml`, anything under `.github/release-gate/`
   or `ci.yml` itself;
-- **skyclient**: anything under `internal/skyclient/`, or `ci.yml`.
+- **skyclient**: anything under `internal/skyclient/`, or `ci.yml`;
+- **update**: anything under `internal/update/`, `update_test.go`, or
+  `ci.yml`.
 
 When the change cannot be read, as on the first push of a branch, every
 flag is set. A change to documentation alone sets none.
@@ -190,12 +192,13 @@ flag is set. A change to documentation alone sets none.
 | CI | GoReleaser in snapshot mode, checking the archives | `ubuntu-latest` | When **code** |
 | CI | The smoke test | `ubuntu-latest` | When **code** |
 | CI | The real install of the SkyPilot client | `ubuntu-latest`, in the smoke test's job | When **skyclient** |
+| CI | The real update: an old `axon` runs `axon update` against the latest release | `ubuntu-latest`, in the smoke test's job | When **update** |
 | Docs | The site build | `ubuntu-latest` | For every pull request that touches `docs/site` or `docs.yml` |
 | Pages | The site build and publishing | `ubuntu-latest` | For every push to `main` |
 | Release | GoReleaser builds the release as a draft | `ubuntu-latest` | For every pushed tag `v*` |
-| Release | The gate: the release's `install.sh`, `axon --version` and the smoke test against the installed binary | All three | After the draft is built |
+| Release | The gate: the release's `install.sh`, `axon --version` and the smoke test against the installed binary, and `axon update` from an old `axon` to the draft | All three | After the draft is built |
 | Release | Publishing the draft | `ubuntu-latest` | When the gate passed on all three |
-| Release | The install line and `axon --version` against the published release | `ubuntu-latest` | After the release is published |
+| Release | The install line and `axon --version`, and `axon update --version <tag>` from an old `axon`, against the published release | `ubuntu-latest` | After the release is published |
 | Mac | Build and test | `macos-latest` | When started by hand |
 | Mac | The real install of the SkyPilot client, and the smoke test | `macos-latest` and `macos-15-intel` | When started by hand |
 
@@ -236,10 +239,17 @@ own `install.sh` runs unchanged with `AXON_VERSION` set to the tag and a
 stand-in for `curl`, `.github/release-gate/curl`, first on `PATH`: it
 serves this tag's files from the artifact and fails for any other address.
 The job then checks `axon --version` and runs the smoke test against the
-binary `install.sh` installed. When the gate passes on all three, the draft
+binary `install.sh` installed. Then it runs `TestReleaseUpdate` in
+`update_test.go`: an `axon` built from the tag's commit as version `0.0.0`,
+whose release address is set at build time to a server on the loopback
+address that serves the draft's files as GitHub serves a release, runs
+`axon update --version <tag>` and `axon update`, and each must end with the
+release's binary in its place. When the gate passes on all three, the draft
 is published: a full release is marked as the latest unless a published
 full release has a higher version, and a pre-release never is. Last, the
-install line runs on Linux against the published release.
+install line runs on Linux against the published release, and so does
+`TestRealUpdate`, with `AXON_REAL_UPDATE=1`, which updates an old `axon` to
+the tag from GitHub.
 
 When a gate job fails, nothing is published and the workflow fails, with a
 note in the run summary. A maintainer reads the failing job's log. A failure

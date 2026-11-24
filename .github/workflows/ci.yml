@@ -21,6 +21,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       skyclient: ${{ steps.filter.outputs.skyclient }}
+      update: ${{ steps.filter.outputs.update }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -55,14 +56,16 @@ jobs:
 
           matches() { echo "$changed" | grep -qE "$1"; }
           workflow='^\.github/workflows/ci\.yml$'
-          code=false skyclient=false
+          code=false skyclient=false update=false
           if matches "\.go\$|^go\.(mod|sum)\$|^internal/|^install\.sh\$|^\.goreleaser\.yaml\$|^\.github/release-gate/|$workflow"; then
             code=true
           fi
           if matches "^internal/skyclient/|$workflow"; then skyclient=true; fi
+          if matches "^internal/update/|^update_test\.go\$|$workflow"; then update=true; fi
           {
             echo "code=$code"
             echo "skyclient=$skyclient"
+            echo "update=$update"
           } >> "$GITHUB_OUTPUT"
 
   test:
@@ -164,3 +167,8 @@ jobs:
         run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
       - name: Run axon login with an example config file in an empty home
         run: go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
+      - name: Update an old axon to the latest release with axon update
+        if: needs.changes.outputs.update == 'true'
+        env:
+          AXON_REAL_UPDATE: "1"
+        run: go test -count=1 -timeout 10m -run '^TestRealUpdate$' -v .

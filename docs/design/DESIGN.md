@@ -180,7 +180,8 @@ stays as it was.
 The config files are trusted input: they decide which servers the
 user's logins and requests go to. Apart from the hosts the active pathway
 names and the address its file is fetched from, `axon` contacts only the
-download sources of the tools it installs for its own use.
+download sources of the tools it installs for its own use, and its own
+releases when the user runs `axon update`.
 
 ### Adding a config file
 
@@ -350,6 +351,7 @@ With no terminal, it stops with a message that names `--sky-endpoint`,
 | `axon login [--config <source>] [--pathway <id>] [--sky-endpoint <address> \| --teleport-proxy <address> [--sky-app <name>]] [--name <name>] [--replace]` | Adds a config file when `--config` is given, or makes a hand-made pathway, determines the pathway, establishes its session, and connects every command group. |
 | `axon logout` | Logs out of every command group and the pathway's session, and removes the records of the connection. |
 | `axon sky [args]` | Checks the connection, then runs `axon`'s own SkyPilot client with the same arguments. |
+| `axon update [--version <version>]` | Replaces the running `axon` with the latest release, or with the release `--version` names. |
 | `axon --version` | Prints the version of `axon`. |
 | `axon --help` | Lists the commands. |
 
@@ -793,8 +795,8 @@ build.
 
 A release is built by GoReleaser in GitHub Actions when a version tag is
 pushed, and holds the archives, a checksum file and `install.sh`. A
-release is published only after its archives install and run on every
-platform it is built for. The binaries are not signed or notarized.
+release is published only after its archives install, update an older
+`axon` and run on every platform it is built for. The binaries are not signed or notarized.
 
 A user installs `axon` with one line, which downloads `install.sh` from the
 latest release with `curl` and runs it [{D!}](decisions/install-method.md):
@@ -810,7 +812,45 @@ pre-release.
 
 Installing requires `curl` and `sha256sum` or `shasum`.
 
-Updating `axon` is running the same line again.
+### Updating axon
+
+`axon update` updates `axon` to the latest release
+[{D!}](decisions/self-update.md). It is built into `axon` and follows the
+rules of `install.sh`: the latest release is the one GitHub serves as the
+latest, which is never a pre-release; the archive for the laptop's platform
+and the checksum file come from that one release; and the archive is
+verified against the checksum file before anything is written.
+
+`axon update --version <version>` installs the named release instead, a
+pre-release or an older release included. The version is accepted with or
+without its leading `v`.
+
+Versions compare by semantic versioning, so a pre-release updates to its
+final release. When the running version is the one to install, `axon update`
+says so and changes nothing. Without `--version`, a running version newer
+than the latest release is left as it is, and `axon update` names the command
+that installs the latest.
+
+`axon update` replaces the file it runs from, following a symbolic link to
+the file it names, and nothing else. `~/.axon`, the login and the clients
+`axon` installed are left as they are. It writes the new binary beside the
+old one, runs it to check that it reports the expected version, and renames
+it over the old one, so the binary is replaced in one step. A failure at any
+step, such as no network, no archive for the platform, a checksum mismatch
+or a directory it cannot write, leaves the old binary in place, and the
+message names the step, says that the old version is unchanged, and gives
+the next action.
+
+A development build, whose version is not a release version, has no version
+to compare: `axon update` refuses to replace it and gives the install line.
+
+`axon` contacts its releases only when `axon update` runs. No other command
+looks for a new release, and nothing reports that one exists.
+
+Running the install line again also updates `axon`.
+
+Each member of an organization chooses which version of `axon` to run
+[{Q?}](questions/organization-axon-version.md).
 
 An organization's setup for its members is the install line followed by
 `axon login`, with the server's address, or with `--config <source>` for an

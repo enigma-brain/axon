@@ -63,7 +63,7 @@ func run(t *testing.T, args ...string) (string, error) {
 	return out.String(), err
 }
 
-func TestHelpListsLoginLogoutAndSky(t *testing.T) {
+func TestHelpListsTheCommands(t *testing.T) {
 	out, err := run(t, "--help")
 	if err != nil {
 		t.Fatal(err)
@@ -79,8 +79,8 @@ func TestHelpListsLoginLogoutAndSky(t *testing.T) {
 			names = append(names, f[0])
 		}
 	}
-	if got := strings.Join(names, " "); got != "login logout sky" {
-		t.Errorf("help lists %q, want %q", got, "login logout sky")
+	if got, want := strings.Join(names, " "), "login logout sky update"; got != want {
+		t.Errorf("help lists %q, want %q", got, want)
 	}
 }
 
@@ -99,6 +99,39 @@ func TestVersion(t *testing.T) {
 	}
 	if out != "axon 1.2.3\n" {
 		t.Errorf("--version printed %q", out)
+	}
+}
+
+func TestUpdateHelpNamesItsFlag(t *testing.T) {
+	out, err := run(t, "update", "--help")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Update axon to the latest release", "checksums", "--version", "1.2.3-rc.1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("update --help lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// The root's --version still prints the version; the update command's own
+// --version names a release.
+func TestUpdateVersionFlagIsTheCommands(t *testing.T) {
+	_, err := run(t, "update", "--version")
+	if err == nil || !strings.Contains(err.Error(), "flag needs an argument: --version") {
+		t.Errorf("update --version: err = %v", err)
+	}
+}
+
+func TestUpdateOfADevelopmentBuildIsRefused(t *testing.T) {
+	root := NewRoot("dev")
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetArgs([]string{"update"})
+	err := root.ExecuteContext(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "development build (dev)") {
+		t.Errorf("update of dev: err = %v", err)
 	}
 }
 

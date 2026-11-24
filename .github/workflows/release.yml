@@ -8,10 +8,12 @@ name: Release
 #   2. gate:    on one runner per platform the release is built for, the
 #               release's install.sh installs this tag's archive from the
 #               same files, and axon --version and the smoke test run
-#               against the installed binary.
+#               against the installed binary; and an old axon built from
+#               this commit runs axon update against the same files.
 #   3. publish: only when the gate passed on every platform, the draft is
 #               published.
-#   4. check:   the install line runs against the published release.
+#   4. check:   the install line, and axon update from an old axon, run
+#               against the published release.
 #
 # The release is built for the tag whose push started the run, which
 # GoReleaser is told explicitly rather than left to find in git. So a final
@@ -112,6 +114,19 @@ jobs:
         env:
           AXON_REAL_INSTALL: "1"
         run: AXON_SMOKE_BIN="$HOME/.local/bin/axon" go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
+      - name: Update an old axon to the draft with axon update
+        env:
+          AXON_UPDATE_GATE_DIR: ${{ runner.temp }}/release-files
+          AXON_UPDATE_GATE_TAG: ${{ github.ref_name }}
+        run: |
+          # An axon built from this commit as version 0.0.0, with the draft's
+          # files served on the loopback address as its releases, updates
+          # itself to this tag, by name and as the latest release. The test
+          # skips when its variables are missing, so its passes are checked
+          # by name.
+          go test -count=1 -timeout 10m -run '^TestReleaseUpdate$' -v . | tee update.log
+          grep -q -- '--- PASS: TestReleaseUpdate/named' update.log
+          grep -q -- '--- PASS: TestReleaseUpdate/latest' update.log
       - name: Report that the release stays a draft
         if: failure()
         run: |
@@ -187,3 +202,15 @@ jobs:
             echo "axon --version printed \"$got\", want \"$want\""
             exit 1
           fi
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Update an old axon to the published release with axon update
+        shell: bash
+        env:
+          AXON_REAL_UPDATE: "1"
+          AXON_UPDATE_TO: ${{ github.ref_name }}
+        run: |
+          go test -count=1 -timeout 10m -run '^TestRealUpdate$' -v . | tee update.log
+          grep -q -- '--- PASS: TestRealUpdate' update.log
