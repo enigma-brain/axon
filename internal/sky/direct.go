@@ -68,13 +68,14 @@ func (c Connector) browserLogin(ctx context.Context, opts Options, skyPath, endp
 	// The client reads Ctrl-C as a request to log in another way, so it
 	// runs apart from the terminal and axon stops it. With no input, the
 	// client's last way, a token pasted at a prompt, ends at once.
-	interrupt.StopGroup(ctx, cmd, WaitDelay)
+	end := interrupt.StopGroup(ctx, cmd, WaitDelay)
 	var seen scanWriter
 	cmd.Stdout = io.MultiWriter(opts.Out, &seen)
 	cmd.Stderr = io.MultiWriter(opts.Err, &seen)
 
 	fmt.Fprintf(opts.Out, "sky: logging in to %s in your browser\n", endpoint)
 	runErr := cmd.Run()
+	end()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return false, fmt.Errorf("the login was not completed in the browser within %s. %s", formatWait(c.LoginWait), notCompletedHint)
 	}

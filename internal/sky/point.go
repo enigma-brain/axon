@@ -72,12 +72,13 @@ func (c Connector) skyLogin(ctx context.Context, opts Options, skyPath, endpoint
 	// The client runs apart from the terminal, as the browser login's
 	// does, and writes through pipes, since a group that is not the
 	// terminal's can be stopped for writing to it.
-	interrupt.StopGroup(ctx, cmd, WaitDelay)
+	end := interrupt.StopGroup(ctx, cmd, WaitDelay)
 	cmd.Stdout = struct{ io.Writer }{opts.Out}
 	cmd.Stderr = struct{ io.Writer }{opts.Err}
 
 	fmt.Fprintf(opts.Out, "sky: pointing the SkyPilot client at %s\n", endpoint)
 	runErr := cmd.Run()
+	end()
 	// The caller's own cancellation or deadline comes first; the message
 	// about the wait is only for the wait login sets here.
 	if err := parent.Err(); err != nil {

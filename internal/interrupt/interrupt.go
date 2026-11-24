@@ -149,27 +149,34 @@ func Stop(ctx context.Context, cmd *exec.Cmd, grace time.Duration) {
 //     killed.
 //
 // When the program has not exited grace after ctx ended, it is killed, and
-// its output is no longer waited for; whatever is left of its group is
-// killed then too.
-func StopGroup(ctx context.Context, cmd *exec.Cmd, grace time.Duration) {
+// its output is no longer waited for.
+//
+// StopGroup returns end, which the caller calls once cmd's Wait or Run has
+// returned. When ctx ended, end kills whatever is left of the group, such as
+// a child that ignored SIGTERM, so that nothing the program started outlives
+// it.
+func StopGroup(ctx context.Context, cmd *exec.Cmd, grace time.Duration) (end func()) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.Setpgid = true
 	cmd.WaitDelay = grace
 	cmd.Cancel = func() error {
-		// The group's ID is the program's own process ID.
-		group := -cmd.Process.Pid
 		sig := syscall.SIGKILL
 		if _, ok := Signal(ctx); ok {
 			sig = syscall.SIGTERM
-			time.AfterFunc(grace, func() { syscall.Kill(group, syscall.SIGKILL) })
 		}
-		err := syscall.Kill(group, sig)
+		// The group's ID is the program's own process ID.
+		err := syscall.Kill(-cmd.Process.Pid, sig)
 		if errors.Is(err, syscall.ESRCH) {
 			return os.ErrProcessDone
 		}
 		return err
+	}
+	return func() {
+		if ctx.Err() != nil && cmd.Process != nil {
+			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
 	}
 }
 
