@@ -258,6 +258,21 @@ the addition is stored. When `axon` stops in between, such a file is left in
 `~/.axon/orgs/` or `~/.axon/state/orgs/`; `axon` never reads it, and it is
 safe to delete.
 
+A stored config file that an update replaces is first kept beside itself
+with the suffix `.previous`, as a hard link or as a copy written to disk,
+and stays in place until the new file replaces it in one step. When the
+update fails, the copy is renamed back over the stored file; once the new
+file and its record are stored, the copy is deleted. When `axon` stops in
+between, the next `axon login` decides by the checksum in the record:
+
+- The record matches the stored file: the copy is deleted.
+- The record matches the copy and not the stored file: the copy is put
+  back, and `axon` says so in one line.
+- The stored file is missing: the copy is put back, and `axon` says so in
+  one line.
+- Otherwise, as with a record that holds no checksum: the stored file is
+  kept and the copy is deleted.
+
 ### Hand-made pathways
 
 A user without a config file makes a pathway at `axon login`
