@@ -13,6 +13,7 @@ import (
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/tsh"
+	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
 // v010Record is a record of the connected pathway as axon v0.1.0 wrote it.
@@ -47,6 +48,9 @@ func newLogout(h *harness, tshPath string) *logout {
 			return tshPath, nil
 		},
 		tshLogout: tsh.Logout,
+		newTunnel: func(stateDir, proxy, app string) *tunnel.Tunnel {
+			return h.l.teleport.newTunnel(stateDir, "", proxy, app)
+		},
 	}
 }
 
@@ -534,5 +538,27 @@ func TestSkyConfigPath(t *testing.T) {
 		if got := skyConfigPath("/home/ada", env(v)); got != want {
 			t.Errorf("SKYPILOT_GLOBAL_CONFIG=%q: %q, want %q", v, got, want)
 		}
+	}
+}
+
+func TestLogoutStopsTunnelWithNoRecord(t *testing.T) {
+	h := newMetaHarness(t)
+	if err := h.run("remote"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	if !h.tunnelStatus().Healthy {
+		t.Fatal("the tunnel is not up after the login")
+	}
+	h.removeTunnelRecord()
+
+	r := (&logoutRun{lo: newLogout(h.harness, fakeTsh)}).run()
+	if r.err != nil {
+		t.Fatalf("logout: %v\n%s", r.err, r.errOut.String())
+	}
+	if !strings.Contains(r.out.String(), "sky: stopping the Teleport tunnel on port 46581") {
+		t.Errorf("output %q does not say the tunnel stopped", r.out.String())
+	}
+	if st := h.tunnelStatus(); st.Running {
+		t.Errorf("tunnel %+v still runs after logout", st)
 	}
 }

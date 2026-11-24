@@ -177,7 +177,7 @@ func (h *metaHarness) tshCalls() []string {
 	return strings.Split(strings.TrimSpace(string(data)), "\n")
 }
 
-func (h *metaHarness) endpoint() string { return "http://localhost:" + strconv.Itoa(testPort) }
+func (h *metaHarness) endpoint() string { return "http://127.0.0.1:" + strconv.Itoa(testPort) }
 
 func (h *metaHarness) proxyCall() string {
 	return fmt.Sprintf("--proxy=teleport.example.org proxy app skypilot --port %d", testPort)
@@ -297,6 +297,77 @@ func TestTeleportPortHeld(t *testing.T) {
 	}
 	if h.skyRuns() != 0 {
 		t.Error("sky ran although the tunnel did not start")
+	}
+	if calls := h.tshCalls(); contains(calls, "--proxy=teleport.example.org apps login skypilot") {
+		t.Errorf("tsh calls %q include the application login, which the held port makes pointless", calls)
+	}
+}
+
+// removeTunnelRecord deletes the tunnel's record, as a lost record or a
+// tunnel started by hand leaves things.
+func (h *metaHarness) removeTunnelRecord() {
+	h.t.Helper()
+	if err := os.Remove(filepath.Join(h.home, ".axon", "state", "tunnel.json")); err != nil {
+		h.t.Fatal(err)
+	}
+}
+
+func TestTeleportRecordsHealthyTunnelWithNoRecord(t *testing.T) {
+	h := newMetaHarness(t)
+	if err := h.run("remote"); err != nil {
+		t.Fatalf("first login: %v", err)
+	}
+	st := h.tunnelStatus()
+	h.removeTunnelRecord()
+
+	if err := h.run("remote"); err != nil {
+		t.Fatalf("second login: %v\n%s", err, h.out.String())
+	}
+	if after := h.tunnelStatus(); !after.Healthy || after.PID != st.PID {
+		t.Fatalf("tunnel after = %+v, want the same process %d serving", after, st.PID)
+	}
+	if running, err := tunnel.RecordedRunning(filepath.Join(h.home, ".axon", "state")); err != nil || !running {
+		t.Fatalf("recorded tunnel running = %v, %v, want the tunnel recorded", running, err)
+	}
+
+	// The record lets a switch of pathway stop it.
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("direct login: %v\n%s", err, h.out.String())
+	}
+	waitUntil(t, func() bool { return syscall.Kill(st.PID, 0) != nil })
+}
+
+// TestTeleportMovesTheOldEndpoint logs in as an earlier axon left the
+// laptop, with the client pointed at http://localhost. The next login
+// points it at 127.0.0.1 without a Teleport login in the browser.
+func TestTeleportMovesTheOldEndpoint(t *testing.T) {
+	h := newMetaHarness(t)
+	if err := h.run("remote"); err != nil {
+		t.Fatalf("first login: %v", err)
+	}
+	old := "http://localhost:" + strconv.Itoa(testPort)
+	if err := os.WriteFile(h.l.teleport.skyConfig, []byte("api_server:\n  endpoint: "+old+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runs := h.skyRuns()
+	h.tshCalls()
+
+	if err := h.run("remote"); err != nil {
+		t.Fatalf("second login: %v\n%s", err, h.out.String())
+	}
+	if n := h.skyRuns() - runs; n != 1 {
+		t.Fatalf("sky ran %d times, want 1", n)
+	}
+	args, _ := os.ReadFile(filepath.Join(h.skyDir, "args"))
+	lines := strings.Split(strings.TrimSpace(string(args)), "\n")
+	if got, want := lines[len(lines)-1], "api login -e "+h.endpoint(); got != want {
+		t.Errorf("sky args = %q, want %q", got, want)
+	}
+	if stored, err := storedEndpoint(h.l.teleport.skyConfig); err != nil || stored != h.endpoint() {
+		t.Errorf("stored endpoint = %q, %v, want %q", stored, err, h.endpoint())
+	}
+	if calls := h.tshCalls(); contains(calls, "login --proxy=teleport.example.org") {
+		t.Errorf("tsh calls %q include a Teleport login", calls)
 	}
 }
 
@@ -490,10 +561,13 @@ func TestTeleportTunnelExitsPrintsLog(t *testing.T) {
 }
 
 func TestTeleportTunnelRunsWithoutAnswerReportsServer(t *testing.T) {
-	if testing.Short() {
-		t.Skip("waits the full start timeout")
-	}
 	h := newMetaHarness(t)
+	newTunnel := h.l.teleport.newTunnel
+	h.l.teleport.newTunnel = func(stateDir, tshPath, proxy, app string) *tunnel.Tunnel {
+		tn := newTunnel(stateDir, tshPath, proxy, app)
+		tn.SetStartTimeout(500 * time.Millisecond)
+		return tn
+	}
 	h.writeTsh("proxy-mode", "refuse")
 	err := h.run("remote")
 	if !errors.Is(err, errNotAnswering) {

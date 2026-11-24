@@ -164,7 +164,7 @@ func newHarness(t *testing.T) *harness {
 		cookieFile: h.cookieFile,
 		endpoint: func(p configfile.Pathway) string {
 			if p.Kind == configfile.KindTeleport {
-				return "http://localhost:" + strconv.Itoa(testPort)
+				return "http://127.0.0.1:" + strconv.Itoa(testPort)
 			}
 			return h.directURL
 		},
