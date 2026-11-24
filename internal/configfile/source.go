@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/download"
@@ -22,16 +21,7 @@ import (
 // MaxSize is the largest config file read from any source, in bytes.
 const MaxSize = 1 << 20
 
-var (
-	// fetchTimeout limits a fetch from an address, from the request to the
-	// end of the body.
-	fetchTimeout = 30 * time.Second
-	// transport carries fetches from an address. Tests replace it with one
-	// that trusts their local TLS server.
-	transport http.RoundTripper = http.DefaultTransport
-
-	schemePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*://`)
-)
+var schemePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*://`)
 
 type sourceKind int
 
@@ -117,6 +107,10 @@ func (s Source) IsAddress() bool { return s.kind == sourceAddress }
 // source gives them. stdin is read for the standard-input source. A file
 // larger than MaxSize is refused. Every error names the source.
 func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
+	return defaults().read(ctx, src, stdin)
+}
+
+func (d deps) read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
 	switch src.kind {
 	case sourceStdin:
 		data, err := readUntilDone(ctx, stdin)
@@ -125,7 +119,7 @@ func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
 		}
 		return data, nil
 	case sourceAddress:
-		return fetch(ctx, src.value, src.String())
+		return d.fetch(ctx, src.value, src.String())
 	case sourcePath:
 		f, err := os.Open(src.value)
 		if err != nil {
@@ -143,13 +137,13 @@ func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
 
 // fetch gets address without credentials, cookies or a Referer, following
 // redirects only to https addresses. Errors name the address as shown.
-func fetch(ctx context.Context, address, shown string) ([]byte, error) {
+func (d deps) fetch(ctx context.Context, address, shown string) ([]byte, error) {
 	fail := func(err error) error {
 		return fmt.Errorf("fetch %s: %w", shown, err)
 	}
 	client := &http.Client{
-		Transport: transport,
-		Timeout:   fetchTimeout,
+		Transport: d.transport,
+		Timeout:   d.fetchTimeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			// net/http sets the Referer to the address redirected from,
 			// query string included, which can hold a token.

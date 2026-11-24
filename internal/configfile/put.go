@@ -23,7 +23,7 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 	if id != "" && f.ID != id {
 		return File{}, false, &CheckError{Field: "id", Check: fmt.Sprintf("is %q, not %q, the id of the stored file", f.ID, id)}
 	}
-	unlock, err := lockStore(s.dir)
+	unlock, err := s.d.lockStore(s.dir)
 	if err != nil {
 		return File{}, false, err
 	}
@@ -148,9 +148,9 @@ func (s Store) applyPut(p putPlan) error {
 	// Each file to remove is first renamed aside, beside itself, and
 	// deleted only once everything else has succeeded, so its content stays
 	// on disk until then.
-	u := &putUndo{path: p.path, replace: p.replace}
+	u := &putUndo{d: s.d, path: p.path, replace: p.replace}
 	if p.replace {
-		if err := keepPrevious(p.path); err != nil {
+		if err := s.d.keepPrevious(p.path); err != nil {
 			return err
 		}
 	} else {
@@ -159,7 +159,7 @@ func (s Store) applyPut(p putPlan) error {
 	sf, err := saveFile(s.recordPath(p.file.ID))
 	if err != nil {
 		if p.replace {
-			removeFile(p.path + previousExt)
+			s.d.removeFile(p.path + previousExt)
 		}
 		return err
 	}
@@ -167,7 +167,7 @@ func (s Store) applyPut(p putPlan) error {
 
 	for _, id := range p.remove {
 		for _, path := range []string{s.Path(id), s.recordPath(id)} {
-			err := renameFile(path, path+removingExt)
+			err := s.d.renameFile(path, path+removingExt)
 			if errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
@@ -177,7 +177,7 @@ func (s Store) applyPut(p putPlan) error {
 			u.aside = append(u.aside, path)
 		}
 	}
-	if err := replaceFile(p.path, p.data); err != nil {
+	if err := s.d.replaceFile(p.path, p.data); err != nil {
 		return u.undo(err)
 	}
 	if err := s.writeRecord(p.file.ID, p.origin, p.data); err != nil {
@@ -190,6 +190,8 @@ func (s Store) applyPut(p putPlan) error {
 // putUndo is what a put has changed so far, so that a failure can put it
 // all back.
 type putUndo struct {
+	// d holds the file operations the put makes.
+	d deps
 	// path is the stored file's path. When replace is set, a stored file
 	// was in place there and is kept at path+previousExt.
 	path    string
@@ -205,22 +207,22 @@ type putUndo struct {
 func (u *putUndo) undo(err error) error {
 	var undone []string
 	for i := len(u.aside) - 1; i >= 0; i-- {
-		if undo := renameFile(u.aside[i]+removingExt, u.aside[i]); undo != nil {
+		if undo := u.d.renameFile(u.aside[i]+removingExt, u.aside[i]); undo != nil {
 			undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", u.aside[i], u.aside[i]+removingExt, axondir.UnwrapPath(undo)))
 		}
 	}
 	if u.replace {
-		if undo := renameFile(u.path+previousExt, u.path); undo != nil {
+		if undo := u.d.renameFile(u.path+previousExt, u.path); undo != nil {
 			undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", u.path, u.path+previousExt, axondir.UnwrapPath(undo)))
 		} else {
 			// Before the new file is written, the copy is a hard link to
 			// the stored file itself, and renaming one link over the
 			// other leaves both.
-			removeFile(u.path + previousExt)
+			u.d.removeFile(u.path + previousExt)
 		}
 	}
 	for i := len(u.saved) - 1; i >= 0; i-- {
-		if undo := u.saved[i].restore(); undo != nil {
+		if undo := u.saved[i].restore(u.d); undo != nil {
 			undone = append(undone, fmt.Sprintf("%s could not be restored: %v", u.saved[i].path, undo))
 		}
 	}
@@ -237,9 +239,9 @@ func (u *putUndo) undo(err error) error {
 // stored file.
 func (u *putUndo) finish() {
 	for _, p := range u.aside {
-		removeFile(p + removingExt)
+		u.d.removeFile(p + removingExt)
 	}
 	if u.replace {
-		removeFile(u.path + previousExt)
+		u.d.removeFile(u.path + previousExt)
 	}
 }

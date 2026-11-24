@@ -38,8 +38,7 @@ func TestParseRevision(t *testing.T) {
 func TestRecordHoldsTimeAndFingerprint(t *testing.T) {
 	s, home := newStore(t)
 	at := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
-	now = func() time.Time { return at }
-	t.Cleanup(func() { now = time.Now })
+	s.d.now = func() time.Time { return at }
 
 	add(t, s, campusFile, "https://example.org/campus.toml")
 	rec, ok, err := s.Record("example-campus")
@@ -260,8 +259,8 @@ func clashing(t *testing.T, s Store) ([]byte, File) {
 }
 
 // failOn makes the named step fail for path.
-func failOn(t *testing.T, step *func(string, string) error, path string) {
-	t.Helper()
+// failOn makes step, a store's rename or link, fail when it moves path.
+func failOn(step *func(string, string) error, path string) {
 	real := *step
 	*step = func(from, to string) error {
 		if from == path {
@@ -269,18 +268,16 @@ func failOn(t *testing.T, step *func(string, string) error, path string) {
 		}
 		return real(from, to)
 	}
-	t.Cleanup(func() { *step = real })
 }
 
-func failReplaceOn(t *testing.T, path string) {
-	t.Helper()
-	replaceFile = func(p string, data []byte) error {
+// failReplaceOn makes s fail to replace path.
+func failReplaceOn(s *Store, path string) {
+	s.d.replaceFile = func(p string, data []byte) error {
 		if p == path {
 			return errors.New("injected failure")
 		}
 		return writeFile(p, data)
 	}
-	t.Cleanup(func() { replaceFile = writeFile })
 }
 
 // A put that fails, before or after the file to remove is set aside,
@@ -288,23 +285,23 @@ func failReplaceOn(t *testing.T, path string) {
 func TestPutRestoresEverythingWhenAStepFails(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		fail func(t *testing.T, home string, s Store)
+		fail func(t *testing.T, home string, s *Store)
 	}{
-		{"setting aside the old record", func(t *testing.T, home string, s Store) {
-			failOn(t, &renameFile, filepath.Join(home, ".axon", "state", "configs", "a.toml"))
+		{"setting aside the old record", func(t *testing.T, home string, s *Store) {
+			failOn(&s.d.renameFile, filepath.Join(home, ".axon", "state", "configs", "a.toml"))
 		}},
-		{"writing the new file", func(t *testing.T, home string, s Store) {
-			failReplaceOn(t, s.Path("b"))
+		{"writing the new file", func(t *testing.T, home string, s *Store) {
+			failReplaceOn(s, s.Path("b"))
 		}},
-		{"writing the new record", func(t *testing.T, home string, s Store) {
-			failReplaceOn(t, filepath.Join(home, ".axon", "state", "configs", "b.toml"))
+		{"writing the new record", func(t *testing.T, home string, s *Store) {
+			failReplaceOn(s, filepath.Join(home, ".axon", "state", "configs", "b.toml"))
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, home := newStore(t)
 			added, old := clashing(t, s)
 			before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
-			tc.fail(t, home, s)
+			tc.fail(t, home, &s)
 			_, err := s.Put(added, PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{old}})
 			if err == nil || !strings.Contains(err.Error(), "injected failure") {
 				t.Fatalf("Put = %v, want the injected failure", err)
@@ -322,8 +319,8 @@ func TestRollbackContinuesAfterAStepFails(t *testing.T) {
 	s, home := newStore(t)
 	added, old := clashing(t, s)
 	original, _ := os.ReadFile(s.Path("a"))
-	failReplaceOn(t, filepath.Join(home, ".axon", "state", "configs", "b.toml"))
-	failOn(t, &renameFile, s.Path("a")+removingExt)
+	failReplaceOn(&s, filepath.Join(home, ".axon", "state", "configs", "b.toml"))
+	failOn(&s.d.renameFile, s.Path("a")+removingExt)
 	_, err := s.Put(added, PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{old}})
 	if err == nil || !strings.Contains(err.Error(), s.Path("a")+" could not be put back from "+s.Path("a")+removingExt) {
 		t.Fatalf("Put = %v, want the file named", err)

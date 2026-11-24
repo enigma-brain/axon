@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -28,20 +29,56 @@ const fileExt = ".toml"
 // <id>.toml in its records directory.
 type Store struct {
 	dir axondir.Dir
+	d   deps
 }
 
 // NewStore returns the store in dir. It creates nothing.
-func NewStore(dir axondir.Dir) Store { return Store{dir: dir} }
+func NewStore(dir axondir.Dir) Store { return Store{dir: dir, d: defaults()} }
+
+// deps are what the package depends on outside its arguments: the file
+// operations a change of the store makes, its clock, and how a config file
+// is fetched from an address. NewStore and Read use defaults(); tests build
+// their own, to make a step fail or to see it.
+type deps struct {
+	// lockStore takes the exclusive lock on changing the stored config
+	// files, waiting while another process or goroutine holds it, and
+	// returns the function that releases it.
+	lockStore func(axondir.Dir) (func(), error)
+	// syncDir syncs a directory.
+	syncDir func(string) error
+	// removeFile removes a file, renameFile renames one, linkFile links
+	// one and replaceFile replaces one.
+	removeFile  func(string) error
+	renameFile  func(string, string) error
+	linkFile    func(string, string) error
+	replaceFile func(string, []byte) error
+	// now is the clock a record's time is read from.
+	now func() time.Time
+	// fetchTimeout limits a fetch from an address, from the request to the
+	// last byte of the answer.
+	fetchTimeout time.Duration
+	// transport carries fetches from an address.
+	transport http.RoundTripper
+}
+
+func defaults() deps {
+	return deps{
+		lockStore:    axondir.Dir.Lock,
+		syncDir:      axondir.SyncDir,
+		removeFile:   os.Remove,
+		renameFile:   os.Rename,
+		linkFile:     os.Link,
+		replaceFile:  writeFile,
+		now:          time.Now,
+		fetchTimeout: 30 * time.Second,
+		transport:    http.DefaultTransport,
+	}
+}
 
 // Path returns the path of the stored file with the given id.
 func (s Store) Path(id string) string {
 	return filepath.Join(s.dir.ConfigsPath(), id+fileExt)
 }
-
-// lockStore takes the exclusive lock on changing the stored config files,
-// waiting while another process or goroutine holds it, and returns the
-// function that releases it. Tests replace it to see whether it is taken.
-var lockStore = axondir.Dir.Lock
 
 // Problem is a stored file that List left out, and why.
 type Problem struct {
@@ -323,26 +360,23 @@ const previousExt = ".previous"
 // path+previousExt: by a hard link, or, where linking fails, by a copy
 // synced to disk. The directory is synced too, so the copy's name is on
 // disk before the stored file is replaced. The stored file stays in place.
-func keepPrevious(path string) error {
+func (d deps) keepPrevious(path string) error {
 	aside := path + previousExt
-	if err := removeFile(aside); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := d.removeFile(aside); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("keep %s: %w", path, axondir.UnwrapPath(err))
 	}
-	if linkFile(path, aside) != nil {
+	if d.linkFile(path, aside) != nil {
 		if err := copyFile(path, aside); err != nil {
-			removeFile(aside)
+			d.removeFile(aside)
 			return fmt.Errorf("keep %s: %w", path, axondir.UnwrapPath(err))
 		}
 	}
-	if err := syncDir(filepath.Dir(path)); err != nil {
-		removeFile(aside)
+	if err := d.syncDir(filepath.Dir(path)); err != nil {
+		d.removeFile(aside)
 		return fmt.Errorf("keep %s: %w", path, axondir.UnwrapPath(err))
 	}
 	return nil
 }
-
-// syncDir syncs a directory. Tests replace it to make a step fail.
-var syncDir = axondir.SyncDir
 
 // copyFile copies the regular file from to a new file to, with the same
 // permissions, and syncs the copy to disk.
@@ -393,7 +427,7 @@ func (s Store) Recover() ([]string, error) {
 	if err != nil || !found {
 		return nil, err
 	}
-	unlock, err := lockStore(s.dir)
+	unlock, err := s.d.lockStore(s.dir)
 	if err != nil {
 		return nil, err
 	}
@@ -464,7 +498,7 @@ func (s Store) tidy() error {
 				continue
 			}
 			path := filepath.Join(dir, e.Name())
-			if err := removeFile(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			if err := s.d.removeFile(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return fmt.Errorf("remove %s: %w", path, axondir.UnwrapPath(err))
 			}
 		}
@@ -513,7 +547,7 @@ func (s Store) recoverPrevious() ([]string, error) {
 			return restored, err
 		}
 		if back {
-			if err := renameFile(path+previousExt, path); err != nil {
+			if err := s.d.renameFile(path+previousExt, path); err != nil {
 				return restored, fmt.Errorf("put back %s from %s: %w", path, path+previousExt, axondir.UnwrapPath(err))
 			}
 			restored = append(restored, path)
@@ -521,7 +555,7 @@ func (s Store) recoverPrevious() ([]string, error) {
 		}
 		// A copy that stays would later bring back a stored file that a
 		// put removed, so a failure to delete it stops recovery.
-		if err := removeFile(path + previousExt); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := s.d.removeFile(path + previousExt); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return restored, fmt.Errorf("remove %s: %w", path+previousExt, axondir.UnwrapPath(err))
 		}
 	}
@@ -581,25 +615,16 @@ func saveFile(path string) (savedFile, error) {
 	return savedFile{path: path, data: data, existed: true}, nil
 }
 
-// restore puts the file back as it was saved.
-func (f savedFile) restore() error {
+// restore puts the file back as it was saved, with d's file operations.
+func (f savedFile) restore(d deps) error {
 	if f.existed {
-		return replaceFile(f.path, f.data)
+		return d.replaceFile(f.path, f.data)
 	}
-	if err := removeFile(f.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := d.removeFile(f.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	return nil
 }
-
-// removeFile removes a file, renameFile renames one, linkFile links one
-// and replaceFile replaces one. Tests replace them to make a step fail.
-var (
-	removeFile  = os.Remove
-	renameFile  = os.Rename
-	linkFile    = os.Link
-	replaceFile = writeFile
-)
 
 // writeFile replaces path with data, readable by the user only.
 func writeFile(path string, data []byte) error {
@@ -622,7 +647,7 @@ func (s Store) writeRecord(id string, origin Origin, data []byte) error {
 	}
 	rec := record{
 		HandMade: origin.HandMade,
-		StoredAt: now().UTC().Format(time.RFC3339),
+		StoredAt: s.d.now().UTC().Format(time.RFC3339),
 		SHA256:   fingerprint(data),
 	}
 	if !origin.HandMade {
@@ -632,11 +657,8 @@ func (s Store) writeRecord(id string, origin Origin, data []byte) error {
 	if err := toml.NewEncoder(&buf).Encode(rec); err != nil {
 		return fmt.Errorf("record the source of %s: %w", id, err)
 	}
-	return replaceFile(filepath.Join(dir, id+fileExt), buf.Bytes())
+	return s.d.replaceFile(filepath.Join(dir, id+fileExt), buf.Bytes())
 }
-
-// now is the clock a record's time is read from. Tests replace it.
-var now = time.Now
 
 // Record returns what is recorded about the stored file id. The boolean is
 // false when nothing is recorded.

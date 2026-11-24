@@ -59,8 +59,7 @@ func TestAFailedUpdatePutsThePreviousFileBack(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				s, home, newer := updated(t)
 				if !link {
-					linkFile = func(string, string) error { return errors.New("no links here") }
-					t.Cleanup(func() { linkFile = os.Link })
+					s.d.linkFile = func(string, string) error { return errors.New("no links here") }
 				}
 				var keptWhileWriting string
 				failed := false
@@ -69,7 +68,7 @@ func TestAFailedUpdatePutsThePreviousFileBack(t *testing.T) {
 					target = recordOf(home, "a")
 				}
 				before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
-				replaceFile = func(p string, data []byte) error {
+				s.d.replaceFile = func(p string, data []byte) error {
 					if p == target && !failed {
 						failed = true
 						kept, _ := os.ReadFile(s.Path("a") + previousExt)
@@ -78,7 +77,6 @@ func TestAFailedUpdatePutsThePreviousFileBack(t *testing.T) {
 					}
 					return writeFile(p, data)
 				}
-				t.Cleanup(func() { replaceFile = writeFile })
 
 				_, err := addFile(s, newer, mustSource(t, "-"))
 				if err == nil || !strings.Contains(err.Error(), "injected failure") {
@@ -101,8 +99,8 @@ func TestAFailedUpdatePutsThePreviousFileBack(t *testing.T) {
 func TestAFailedPutBackLeavesThePreviousFileOnDisk(t *testing.T) {
 	s, home, newer := updated(t)
 	original, _ := os.ReadFile(s.Path("a"))
-	failReplaceOn(t, recordOf(home, "a"))
-	failOn(t, &renameFile, s.Path("a")+previousExt)
+	failReplaceOn(&s, recordOf(home, "a"))
+	failOn(&s.d.renameFile, s.Path("a")+previousExt)
 	_, err := addFile(s, newer, mustSource(t, "-"))
 	if err == nil || !strings.Contains(err.Error(), s.Path("a")+" could not be put back from "+s.Path("a")+previousExt) {
 		t.Fatalf("Add = %v, want the file named", err)
@@ -111,8 +109,7 @@ func TestAFailedPutBackLeavesThePreviousFileOnDisk(t *testing.T) {
 		t.Errorf("previous copy = %q, want the stored file", data)
 	}
 
-	renameFile = os.Rename
-	replaceFile = writeFile
+	s.d = defaults()
 	restored, err := s.Recover()
 	if err != nil || !reflect.DeepEqual(restored, []string{s.Path("a")}) {
 		t.Fatalf("Recover = %v, %v, want the file put back", restored, err)
@@ -254,9 +251,7 @@ func TestRecoverKeepsTheCopyWhenTheRecordCannotBeRead(t *testing.T) {
 func TestAnUpdateStopsWhenTheCopyCannotBeSynced(t *testing.T) {
 	s, home, newer := updated(t)
 	before := testkit.Snapshot(t, filepath.Join(home, ".axon"))
-	real := syncDir
-	syncDir = func(string) error { return errors.New("injected failure") }
-	t.Cleanup(func() { syncDir = real })
+	s.d.syncDir = func(string) error { return errors.New("injected failure") }
 	if _, err := addFile(s, newer, mustSource(t, "-")); err == nil || !strings.Contains(err.Error(), "injected failure") {
 		t.Fatalf("Add = %v, want the injected failure", err)
 	}
@@ -271,13 +266,12 @@ func TestRecoverStopsWhenTheCopyCannotBeDeleted(t *testing.T) {
 	s, home, newer := updated(t)
 	old, _ := os.ReadFile(s.Path("a"))
 	leftover(t, s, home, newer, old, newer)
-	removeFile = func(p string) error {
+	s.d.removeFile = func(p string) error {
 		if p == s.Path("a")+previousExt {
 			return errors.New("injected failure")
 		}
 		return os.Remove(p)
 	}
-	t.Cleanup(func() { removeFile = os.Remove })
 	if _, err := s.Recover(); err == nil || !strings.Contains(err.Error(), "injected failure") {
 		t.Fatalf("Recover = %v, want the injected failure", err)
 	}

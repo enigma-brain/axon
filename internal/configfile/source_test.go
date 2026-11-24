@@ -14,16 +14,15 @@ import (
 	"time"
 )
 
-// tlsServer starts a local TLS server running h and points fetches at it
-// for the rest of the test.
-func tlsServer(t *testing.T, h http.HandlerFunc) *httptest.Server {
+// tlsServer starts a local TLS server running h, and returns it and the
+// deps whose fetches trust it.
+func tlsServer(t *testing.T, h http.HandlerFunc) (*httptest.Server, deps) {
 	t.Helper()
 	srv := httptest.NewTLSServer(h)
 	t.Cleanup(srv.Close)
-	old := transport
-	transport = srv.Client().Transport
-	t.Cleanup(func() { transport = old })
-	return srv
+	d := defaults()
+	d.transport = srv.Client().Transport
+	return srv, d
 }
 
 func mustSource(t *testing.T, s string) Source {
@@ -151,11 +150,11 @@ func TestReadAddressFailureHidesTheSecret(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var gotQuery string
-			srv := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
+			srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 				gotQuery = r.URL.RawQuery
 				tt.handler(w, r)
 			})
-			_, err := Read(context.Background(), mustSource(t, srv.URL+"/axon.toml?"+secret), nil)
+			_, err := d.read(context.Background(), mustSource(t, srv.URL+"/axon.toml?"+secret), nil)
 			if err == nil {
 				t.Fatal("Read succeeded")
 			}
@@ -203,14 +202,14 @@ func TestReadPath(t *testing.T) {
 
 func TestReadAddress(t *testing.T) {
 	var gotCookie, gotAuth string
-	srv := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		gotCookie, gotAuth = r.Header.Get("Cookie"), r.Header.Get("Authorization")
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: "x"})
 		w.Write([]byte(campusFile))
 	})
 	src := mustSource(t, srv.URL+"/axon.toml")
 	for range 2 {
-		data, err := Read(context.Background(), src, nil)
+		data, err := d.read(context.Background(), src, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -224,14 +223,14 @@ func TestReadAddress(t *testing.T) {
 }
 
 func TestReadAddressFollowsHTTPSRedirect(t *testing.T) {
-	srv := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/old" {
 			http.Redirect(w, r, "/new", http.StatusFound)
 			return
 		}
 		w.Write([]byte(remoteFile))
 	})
-	data, err := Read(context.Background(), mustSource(t, srv.URL+"/old"), nil)
+	data, err := d.read(context.Background(), mustSource(t, srv.URL+"/old"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +243,7 @@ func TestReadAddressFollowsHTTPSRedirect(t *testing.T) {
 // redirected to it, whose query string can hold a token.
 func TestReadAddressRedirectSendsNoReferer(t *testing.T) {
 	referer := "unset"
-	srv := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/old" {
 			http.Redirect(w, r, "/new", http.StatusFound)
 			return
@@ -252,7 +251,7 @@ func TestReadAddressRedirectSendsNoReferer(t *testing.T) {
 		referer = r.Header.Get("Referer")
 		w.Write([]byte(remoteFile))
 	})
-	if _, err := Read(context.Background(), mustSource(t, srv.URL+"/old?token=secret"), nil); err != nil {
+	if _, err := d.read(context.Background(), mustSource(t, srv.URL+"/old?token=secret"), nil); err != nil {
 		t.Fatal(err)
 	}
 	if referer != "" {
@@ -263,7 +262,7 @@ func TestReadAddressRedirectSendsNoReferer(t *testing.T) {
 // A status line the server makes up is printed without control or format
 // characters.
 func TestReadAddressStatusCleaned(t *testing.T) {
-	srv := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		conn, buf, err := w.(http.Hijacker).Hijack()
 		if err != nil {
 			t.Error(err)
@@ -273,7 +272,7 @@ func TestReadAddressStatusCleaned(t *testing.T) {
 		buf.WriteString("HTTP/1.1 500 Bad\x1b[2J\u202eanswer\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
 		buf.Flush()
 	})
-	_, err := Read(context.Background(), mustSource(t, srv.URL+"/axon.toml"), nil)
+	_, err := d.read(context.Background(), mustSource(t, srv.URL+"/axon.toml"), nil)
 	if err == nil {
 		t.Fatal("no error")
 	}
@@ -301,9 +300,9 @@ func TestReadAddressFailures(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := tlsServer(t, tt.handler)
+			srv, d := tlsServer(t, tt.handler)
 			address := srv.URL + "/axon.toml"
-			_, err := Read(context.Background(), mustSource(t, address), nil)
+			_, err := d.read(context.Background(), mustSource(t, address), nil)
 			if err == nil {
 				t.Fatal("Read succeeded")
 			}
@@ -316,19 +315,17 @@ func TestReadAddressFailures(t *testing.T) {
 
 func TestReadAddressTimeLimit(t *testing.T) {
 	release := make(chan struct{})
-	srv := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-release:
 		case <-r.Context().Done():
 		}
 	})
 	defer close(release)
-	old := fetchTimeout
-	fetchTimeout = 50 * time.Millisecond
-	t.Cleanup(func() { fetchTimeout = old })
+	d.fetchTimeout = 50 * time.Millisecond
 
 	address := srv.URL + "/axon.toml"
-	_, err := Read(context.Background(), mustSource(t, address), nil)
+	_, err := d.read(context.Background(), mustSource(t, address), nil)
 	if err == nil {
 		t.Fatal("Read succeeded")
 	}
@@ -340,17 +337,16 @@ func TestReadAddressTimeLimit(t *testing.T) {
 // A failed request gives the short reason after the address, as every other
 // network failure does.
 func TestReadAddressShortReason(t *testing.T) {
-	old := transport
-	transport = &http.Transport{
+	d := defaults()
+	d.transport = &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			host, _, _ := net.SplitHostPort(addr)
 			return nil, &net.OpError{Op: "dial", Net: network, Err: &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}}
 		},
 	}
-	t.Cleanup(func() { transport = old })
 
 	address := "https://campus.example.invalid/axon.toml"
-	_, err := Read(context.Background(), mustSource(t, address), nil)
+	_, err := d.read(context.Background(), mustSource(t, address), nil)
 	if want := "fetch " + address + ": no such host"; err == nil || err.Error() != want {
 		t.Errorf("Read = %v, want %q", err, want)
 	}
@@ -359,12 +355,12 @@ func TestReadAddressShortReason(t *testing.T) {
 // A redirect to an address that does not parse is named as such, without
 // the address, which can hold a token.
 func TestReadAddressInvalidRedirectMessage(t *testing.T) {
-	srv := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", "/%zz?token=s3cret")
 		w.WriteHeader(http.StatusFound)
 	})
 	address := srv.URL + "/axon.toml"
-	_, err := Read(context.Background(), mustSource(t, address), nil)
+	_, err := d.read(context.Background(), mustSource(t, address), nil)
 	if want := "fetch " + address + ": redirected to an address that is not valid"; err == nil || err.Error() != want {
 		t.Errorf("Read = %v, want %q", err, want)
 	}
