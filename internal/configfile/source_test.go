@@ -239,6 +239,48 @@ func TestReadAddressFollowsHTTPSRedirect(t *testing.T) {
 	}
 }
 
+// A redirect target is not told, by a Referer, the address that
+// redirected to it, whose query string can hold a token.
+func TestReadAddressRedirectSendsNoReferer(t *testing.T) {
+	referer := "unset"
+	srv := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/old" {
+			http.Redirect(w, r, "/new", http.StatusFound)
+			return
+		}
+		referer = r.Header.Get("Referer")
+		w.Write([]byte(remoteFile))
+	})
+	if _, err := Read(context.Background(), mustSource(t, srv.URL+"/old?token=secret"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if referer != "" {
+		t.Errorf("the redirect target got Referer %q", referer)
+	}
+}
+
+// A status line the server makes up is printed without control or format
+// characters.
+func TestReadAddressStatusCleaned(t *testing.T) {
+	srv := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		conn, buf, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer conn.Close()
+		buf.WriteString("HTTP/1.1 500 Bad\x1b[2J\u202eanswer\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+		buf.Flush()
+	})
+	_, err := Read(context.Background(), mustSource(t, srv.URL+"/axon.toml"), nil)
+	if err == nil {
+		t.Fatal("no error")
+	}
+	if msg := err.Error(); !strings.Contains(msg, "500 Bad[2Janswer") || strings.ContainsAny(msg, "\x1b\u202e") {
+		t.Errorf("error = %q", msg)
+	}
+}
+
 func TestReadAddressFailures(t *testing.T) {
 	big := bytes.Repeat([]byte("#"), MaxSize+1)
 	tests := []struct {

@@ -37,6 +37,11 @@ identifiers must be different across every file a laptop holds.
 The address is fetched without credentials, and must start with `https://`. It
 matters for updates: a file added from an address is fetched again at each
 login, so a change you publish reaches your members at their next login. A
+change to where a member's pathway goes, its kind, address, proxy or
+application, or a file that drops that pathway, asks the member first, with
+no as the default; see
+[When your organization changes its file](/axon/logging-in/#when-your-organization-changes-its-file).
+A redirect from the address carries no `Referer` to its target. A
 file from a path or standard input is read once; a member updates it by
 running `axon login --config` again with the new file.
 
@@ -164,15 +169,17 @@ Then one `[[pathway]]` entry for each pathway. Every pathway has these:
 | `unreachable_hint` | No | A sentence `axon` prints after `Can't reach <host>.` when a host the pathway names does not answer. |
 
 `name`, `description` and `unreachable_hint` are text for people. `axon` prints
-them as written, and never builds a sentence out of any other field.
+them as written, and never builds a sentence out of any other field. They hold
+no control character, such as a line break or a tab, and no Unicode format
+character, such as a bidirectional override or a zero-width space.
 
 A direct pathway has one more table, and a Teleport pathway two:
 
 | Field | Kind | Required | Holds |
 |---|---|---|---|
-| `sky.endpoint` | `direct` | Yes | The SkyPilot API server's `https` address. |
+| `sky.endpoint` | `direct` | Yes | The SkyPilot API server's `https` address, with no user name, password, query string or fragment. |
 | `teleport.proxy` | `teleport` | Yes | Your Teleport proxy: a hostname, optionally with a port. |
-| `sky.app` | `teleport` | Yes | The name of the Teleport application that serves the SkyPilot API server. |
+| `sky.app` | `teleport` | Yes | The name of the Teleport application that serves the SkyPilot API server. It does not start with `-` and holds no white space. |
 
 A table that does not belong to the pathway's kind, such as `teleport` on a
 direct pathway, is refused.
@@ -186,8 +193,13 @@ direct pathway, is refused.
 - it has at least one pathway;
 - every pathway has an `id` of the allowed characters, a `kind` of `direct` or
   `teleport`, a `name` and a `description`;
-- every `direct` pathway has `sky.endpoint`, and it is an `https` address;
-- every `teleport` pathway has `teleport.proxy` and `sky.app`;
+- every `direct` pathway has `sky.endpoint`, and it is an `https` address with
+  no user name, password, query string or fragment;
+- every `teleport` pathway has `teleport.proxy` and `sky.app`, and `sky.app`
+  does not start with `-` and holds no white space;
+- no `name`, `description`, `unreachable_hint`, `sky.app` or `sky.endpoint`
+  holds a control character or a Unicode format character, in `sky.endpoint`
+  whether written out or percent-encoded in its host or path;
 - `revision`, when present, is a whole number, 0 or more;
 - it has no field or table that this page does not list;
 - no pathway identifier appears twice in it;
@@ -199,8 +211,9 @@ field and the check, and nothing changes. When a member adds the file with
 
 ```text
 axon: add the config file: pathway "campus": name: is required and must be text
-axon: add the config file: pathway "campus": sky.endpoint: must be an https address
-axon: add the config file: color: not a field of a config file
+axon: add the config file: pathway "campus": sky.endpoint: must be an https address, without a user name, password, query string or fragment
+axon: add the config file: pathway "campus": description: must not hold control characters or Unicode format characters
+axon: add the config file: "color": not a field of a config file
 axon: add the config file: format: must be 2
 axon: add the config file: standard input is empty.
 axon: add the config file: the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.

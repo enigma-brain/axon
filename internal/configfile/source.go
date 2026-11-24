@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/enigma-brain/axon/internal/termtext"
 )
 
 // MaxSize is the largest config file read from any source, in bytes.
@@ -148,8 +150,8 @@ func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
 	return nil, errors.New("read the config file: no source given")
 }
 
-// fetch gets address without credentials or cookies, following redirects
-// only to https addresses. Errors name the address as shown.
+// fetch gets address without credentials, cookies or a Referer, following
+// redirects only to https addresses. Errors name the address as shown.
 func fetch(ctx context.Context, address, shown string) ([]byte, error) {
 	fail := func(err error) error {
 		var uerr *url.Error
@@ -167,6 +169,9 @@ func fetch(ctx context.Context, address, shown string) ([]byte, error) {
 		Transport: transport,
 		Timeout:   fetchTimeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// net/http sets the Referer to the address redirected from,
+			// query string included, which can hold a token.
+			req.Header.Del("Referer")
 			if req.URL.Scheme != "https" {
 				return fmt.Errorf("redirected to %s, which is not an https address", printable(req.URL))
 			}
@@ -189,7 +194,7 @@ func fetch(ctx context.Context, address, shown string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fail(fmt.Errorf("the server answered %s", resp.Status))
+		return nil, fail(fmt.Errorf("the server answered %s", termtext.Clean(resp.Status)))
 	}
 	data, err := readLimited(resp.Body)
 	if err != nil {
