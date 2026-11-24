@@ -223,6 +223,28 @@ func TestBinary(t *testing.T) {
 		}
 	})
 
+	t.Run("config list", func(t *testing.T) {
+		h := t.TempDir()
+		out, stderr, err := runAxon(t, bin, h, nil, "config", "list")
+		if err != nil || stderr != "" || !strings.Contains(out, "Run `axon login` to add a pathway.") {
+			t.Errorf("config list with nothing stored = %q, %q, %v", out, stderr, err)
+		}
+		if _, err := os.Stat(filepath.Join(h, ".axon")); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("config list created ~/.axon: %v", err)
+		}
+
+		stores(t, h, "example-campus", campusFile)
+		stores(t, h, "example-older", formatOneFile)
+		out, stderr, err = runAxon(t, bin, h, nil, "config", "list")
+		wantFailure(t, "config list", err)
+		if !strings.Contains(out, "    Campus  --pathway campus\n") || !strings.Contains(out, "example-older.toml\n  cannot be read: the file is in an older format.") {
+			t.Errorf("config list:\n%s", out)
+		}
+		if stderr != "axon: 1 stored file could not be read; the listing names it and the reason\n" {
+			t.Errorf("config list: stderr = %q", stderr)
+		}
+	})
+
 	t.Run("one file with one pathway", func(t *testing.T) {
 		h := home(t)
 		stores(t, h, "example-campus", campusFile)
