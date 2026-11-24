@@ -310,18 +310,9 @@ func TestStartFailsWhenTunnelExits(t *testing.T) {
 	}
 }
 
-// shortStart shortens the wait for a started tunnel to serve for the rest
-// of the test.
-func shortStart(t *testing.T) {
-	t.Helper()
-	saved := startTimeout
-	startTimeout = 500 * time.Millisecond
-	t.Cleanup(func() { startTimeout = saved })
-}
-
 func TestStartFailsWhenTunnelDoesNotServe(t *testing.T) {
-	shortStart(t)
 	tn := newTestTunnel(t)
+	tn.SetStartTimeout(500 * time.Millisecond)
 	t.Setenv("FAKETSH_MODE", "refuse")
 	err := tn.Start(context.Background())
 	if err == nil {
@@ -351,8 +342,8 @@ func TestStartErrorSaysWhetherTheTunnelExited(t *testing.T) {
 		{"refuse", false, "Proxying connections"},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
-			shortStart(t)
 			tn := newTestTunnel(t)
+			tn.SetStartTimeout(500 * time.Millisecond)
 			t.Setenv("FAKETSH_MODE", tc.mode)
 			err := tn.Start(context.Background())
 			var se *StartError
@@ -644,7 +635,7 @@ func TestHealthDoesNotFollowRedirect(t *testing.T) {
 
 // TestHealthTiedToAnsweringAddress puts the tunnel and another server on
 // the same port at different loopback addresses. The tunnel is up only when
-// the health request to localhost reaches the tunnel's address.
+// the health request to 127.0.0.1 reaches the tunnel's address.
 func TestHealthTiedToAnsweringAddress(t *testing.T) {
 	probe, err := net.Listen("tcp", "[::1]:0")
 	if err != nil {
@@ -673,8 +664,8 @@ func TestHealthTiedToAnsweringAddress(t *testing.T) {
 				return err == nil && len(ls) == 2
 			})
 
-			// Whichever address localhost reaches first, the tunnel answers
-			// 503 and the other server 200, so the tunnel is never healthy.
+			// The tunnel answers 503 and the other server 200, so whichever
+			// listens on 127.0.0.1, the tunnel is not healthy.
 			st, err := tn.Status(context.Background())
 			if err != nil {
 				t.Fatal(err)

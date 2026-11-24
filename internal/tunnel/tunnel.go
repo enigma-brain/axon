@@ -52,7 +52,10 @@ const (
 	fileMode fs.FileMode = 0o600
 
 	// pollInterval is the pause between health requests while starting.
-	pollInterval = 250 * time.Millisecond
+	// A request to a tunnel that does not listen yet is refused at once,
+	// and the listeners are looked up only once one answers, so a short
+	// pause costs little.
+	pollInterval = 50 * time.Millisecond
 	// probeTimeout bounds one health request.
 	probeTimeout = 2 * time.Second
 	// logTailLines is how many of the log's last lines a failed start
@@ -60,15 +63,17 @@ const (
 	logTailLines = 20
 )
 
-// startTimeout bounds the wait for a started tunnel to serve. stopTimeout
-// is how long a tunnel has to exit after SIGTERM before it is sent SIGKILL,
-// and killTimeout how long after SIGKILL. sendSignal sends a signal. Tests
-// change them.
+// startTimeout bounds the wait for a started tunnel to serve, unless
+// SetStartTimeout changes it for one tunnel.
+const startTimeout = 10 * time.Second
+
+// stopTimeout is how long a tunnel has to exit after SIGTERM before it is
+// sent SIGKILL, and killTimeout how long after SIGKILL. sendSignal sends a
+// signal. Tests change them.
 var (
-	startTimeout = 10 * time.Second
-	stopTimeout  = 3 * time.Second
-	killTimeout  = time.Second
-	sendSignal   = syscall.Kill
+	stopTimeout = 3 * time.Second
+	killTimeout = time.Second
+	sendSignal  = syscall.Kill
 )
 
 // Status holds two separate facts about the tunnel, so that a failed tunnel
@@ -119,6 +124,8 @@ type Tunnel struct {
 	proxy, app string
 	// port is the local port, Port outside tests.
 	port int
+	// startTimeout bounds the wait for a started tunnel to serve.
+	startTimeout time.Duration
 }
 
 // New returns the tunnel to the Teleport application app through the
@@ -130,8 +137,12 @@ func New(stateDir, tshPath, proxy, app string) *Tunnel {
 // NewOnPort is New with the tunnel listening on port. Outside tests the
 // port is Port; tests pass a free one.
 func NewOnPort(stateDir, tshPath, proxy, app string, port int) *Tunnel {
-	return &Tunnel{stateDir: stateDir, tshPath: tshPath, proxy: proxy, app: app, port: port}
+	return &Tunnel{stateDir: stateDir, tshPath: tshPath, proxy: proxy, app: app, port: port, startTimeout: startTimeout}
 }
+
+// SetStartTimeout sets how long Start waits for a started tunnel to serve.
+// Outside tests it is 10 seconds.
+func (t *Tunnel) SetStartTimeout(d time.Duration) { t.startTimeout = d }
 
 // args returns the tunnel's arguments after the program name.
 func (t *Tunnel) args() []string {
@@ -492,11 +503,11 @@ func (t *Tunnel) launch(ctx context.Context) error {
 		return err
 	}
 
-	deadline := time.NewTimer(startTimeout)
+	deadline := time.NewTimer(t.startTimeout)
 	defer deadline.Stop()
 	tick := time.NewTicker(pollInterval)
 	defer tick.Stop()
-	reason := fmt.Sprintf("it did not answer on %s within %s", t.healthURL(), startTimeout)
+	reason := fmt.Sprintf("it did not answer on %s within %s", t.healthURL(), t.startTimeout)
 	exitedFirst := false
 	for {
 		if t.serves(ctx, pid) {
@@ -612,7 +623,7 @@ func terminate(pid int, exited <-chan struct{}, same func() bool) {
 			if time.Now().After(deadline) {
 				return false
 			}
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
 		return true
 	}
