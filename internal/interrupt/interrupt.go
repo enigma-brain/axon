@@ -26,7 +26,16 @@ type Error struct {
 	Signal os.Signal
 }
 
-func (e *Error) Error() string { return fmt.Sprintf("interrupted by %v", e.Signal) }
+func (e *Error) Error() string {
+	if n, ok := e.Signal.(syscall.Signal); ok {
+		return "interrupted by " + unix.SignalName(n)
+	}
+	return fmt.Sprintf("interrupted by %v", e.Signal)
+}
+
+// Is reports a cancellation by a signal as a cancellation, so that an error
+// that carries the cause, as one from net/http does, still reads as one.
+func (e *Error) Is(target error) bool { return target == context.Canceled }
 
 // signals are the signals that interrupt a command.
 var signals = []os.Signal{syscall.SIGINT, syscall.SIGTERM}

@@ -145,6 +145,16 @@ func TestExitEndsBySignal(t *testing.T) {
 	}
 }
 
+func TestErrorIsACancellation(t *testing.T) {
+	err := fmt.Errorf("download: %w", &Error{Signal: syscall.SIGINT})
+	if !errors.Is(err, context.Canceled) {
+		t.Error("an interrupt is not a cancellation")
+	}
+	if got := (&Error{Signal: syscall.SIGTERM}).Error(); got != "interrupted by SIGTERM" {
+		t.Errorf("Error() = %q", got)
+	}
+}
+
 func TestReport(t *testing.T) {
 	var buf bytes.Buffer
 	Report(&buf)
