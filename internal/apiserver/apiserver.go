@@ -109,12 +109,12 @@ func Fetch(ctx context.Context, endpoint string, opts Options) (Health, error) {
 			// The caller cancelled; that is not a fact about the server.
 			return Health{}, ctxErr
 		}
-		return Health{}, fmt.Errorf("%w: %v", ErrUnreachable, err)
+		return Health{}, fmt.Errorf("%w: %w", ErrUnreachable, err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxHealthBodyInBytes))
 	if err != nil {
-		return Health{}, fmt.Errorf("%w: read the health answer: %v", ErrUnreachable, err)
+		return Health{}, fmt.Errorf("%w: read the health answer: %w", ErrUnreachable, err)
 	}
 
 	switch {

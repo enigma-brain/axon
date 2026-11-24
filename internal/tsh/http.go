@@ -18,7 +18,7 @@ var stallTimeout = 30 * time.Second
 // longer than stallTimeout. Closing the body releases the timer.
 func get(ctx context.Context, url string) (*http.Response, error) {
 	ctx, cancel := context.WithCancelCause(ctx)
-	stalled := fmt.Errorf("GET %s: no data for %s", url, stallTimeout)
+	stalled := &stallError{url: url, after: stallTimeout}
 	timer := time.AfterFunc(stallTimeout, func() { cancel(stalled) })
 	stop := func() {
 		timer.Stop()
@@ -32,7 +32,7 @@ func get(ctx context.Context, url string) (*http.Response, error) {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		stop()
-		if context.Cause(ctx) == stalled {
+		if context.Cause(ctx) == error(stalled) {
 			return nil, stalled
 		}
 		return nil, err
@@ -40,19 +40,38 @@ func get(ctx context.Context, url string) (*http.Response, error) {
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
 		stop()
-		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
+		return nil, &statusError{url: url, status: resp.Status}
 	}
 	timer.Reset(stallTimeout)
 	resp.Body = &stallBody{ReadCloser: resp.Body, ctx: ctx, stalled: stalled, timer: timer, stop: stop}
 	return resp, nil
 }
 
+// statusError is an answer whose status is not OK: the server answered.
+type statusError struct {
+	url, status string
+}
+
+func (e *statusError) Error() string { return fmt.Sprintf("GET %s: %s", e.url, e.status) }
+
+// stallError is a request cancelled because it waited longer than
+// stallTimeout. It is a timeout.
+type stallError struct {
+	url   string
+	after time.Duration
+}
+
+func (e *stallError) Error() string { return fmt.Sprintf("GET %s: no data for %s", e.url, e.after) }
+
+// Timeout reports that the request ran out of time.
+func (e *stallError) Timeout() bool { return true }
+
 // stallBody restarts its request's stall timer on every read that returns
 // data, and reports a stall as such rather than as a cancellation.
 type stallBody struct {
 	io.ReadCloser
 	ctx     context.Context
-	stalled error
+	stalled *stallError
 	timer   *time.Timer
 	stop    func()
 }
@@ -62,7 +81,7 @@ func (b *stallBody) Read(p []byte) (int, error) {
 	if n > 0 {
 		b.timer.Reset(stallTimeout)
 	}
-	if err != nil && context.Cause(b.ctx) == b.stalled {
+	if err != nil && context.Cause(b.ctx) == error(b.stalled) {
 		return n, b.stalled
 	}
 	return n, err

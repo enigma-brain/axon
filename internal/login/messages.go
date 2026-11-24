@@ -104,6 +104,13 @@ const (
 	msgPathwayClashNoTerminal = "it clashes with the stored pathway %q in %s, and there is no terminal to ask whether to replace it. Run the command again with --replace to replace it."
 )
 
+// A config file that holds nothing.
+const (
+	// The source: the path, the address, or msgStdin.
+	msgConfigEmpty = "%s is empty."
+	msgStdin       = "standard input"
+)
+
 // Revisions.
 const (
 	// The stored file's path, the stored revision and the new one.

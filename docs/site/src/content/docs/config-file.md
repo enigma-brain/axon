@@ -202,6 +202,7 @@ axon: add the config file: pathway "campus": name: is required and must be text
 axon: add the config file: pathway "campus": sky.endpoint: must be an https address
 axon: add the config file: color: not a field of a config file
 axon: add the config file: format: must be 2
+axon: add the config file: standard input is empty.
 axon: add the config file: the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.
 ```
 
