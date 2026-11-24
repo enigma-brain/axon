@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/enigma-brain/axon/internal/axondir"
 )
 
 // withRevision returns data with a top-level revision n after its id.
@@ -278,9 +276,9 @@ func failReplaceOn(t *testing.T, path string) {
 		if p == path {
 			return errors.New("injected failure")
 		}
-		return axondir.ReplaceFile(p, data)
+		return writeFile(p, data)
 	}
-	t.Cleanup(func() { replaceFile = axondir.ReplaceFile })
+	t.Cleanup(func() { replaceFile = writeFile })
 }
 
 // A put that fails, before or after the file to remove is set aside,

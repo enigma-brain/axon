@@ -10,27 +10,23 @@
 package update
 
 import (
-	"archive/tar"
 	"bufio"
 	"bytes"
-	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/download"
 	"github.com/enigma-brain/axon/internal/netreason"
 	"golang.org/x/mod/semver"
 )
@@ -55,13 +51,15 @@ const (
 	maxChecksums = 1 << 20
 	// maxArchive bounds the size of a release archive.
 	maxArchive = 256 << 20
-	// maxBinary bounds the size of the axon binary inside the archive.
-	maxBinary = 512 << 20
-	// requestTimeout bounds each request, from sending it to reading the
-	// last byte of the answer, so a stalled download ends.
-	requestTimeout = 5 * time.Minute
 	// runTimeout bounds the run of the new binary's --version.
 	runTimeout = 30 * time.Second
+)
+
+var (
+	// maxBinary bounds the size of the axon binary inside the archive.
+	maxBinary int64 = 512 << 20
+	// stallTimeout ends a download when no data arrives for this long.
+	stallTimeout = download.DefaultStall
 )
 
 // Options are the inputs of an update.
@@ -98,7 +96,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	client := newClient(base)
+	client := download.Client()
 
 	var tag string
 	if opts.Version != "" {
@@ -147,39 +145,42 @@ func Run(ctx context.Context, opts Options) error {
 
 	name := fmt.Sprintf("axon_%s_%s.tar.gz", version, platform)
 	release := base.JoinPath("releases", "download", tag)
-	fmt.Fprintf(opts.Out, "Downloading axon %s for %s from %s\n", version, platform, redact(base))
+	fmt.Fprintf(opts.Out, "Downloading axon %s for %s from %s\n", version, platform, download.Redact(base))
 
 	retry := "Check your network connection and run `axon update` again."
 	if opts.Version != "" {
 		retry = fmt.Sprintf("Check your network connection and run `axon update --version %s` again.", opts.Version)
 	}
 
-	sums, status, err := get(ctx, client, release.JoinPath("checksums.txt"), maxChecksums)
-	if status == http.StatusNotFound {
+	var sums bytes.Buffer
+	err = fetch(ctx, release.JoinPath("checksums.txt"), &sums, maxChecksums, "")
+	var status *download.StatusError
+	if errors.As(err, &status) && status.Code == http.StatusNotFound {
 		if opts.Version != "" {
-			return fmt.Errorf("there is no release %s of axon. Check the version, and find the releases at %s/releases. %s", tag, redact(base), unchanged)
+			return fmt.Errorf("there is no release %s of axon. Check the version, and find the releases at %s/releases. %s", tag, download.Redact(base), unchanged)
 		}
 		return fmt.Errorf("release %s has no checksums.txt, so its archive cannot be verified. %s", tag, unchanged)
 	}
 	if err != nil {
 		return fmt.Errorf("could not download checksums.txt of release %s: %v. %s %s", tag, err, unchanged, retry)
 	}
-	want, ok := checksumFor(sums, name)
+	want, ok := checksumFor(sums.Bytes(), name)
 	if !ok {
 		return fmt.Errorf("release %s has no archive for %s, so it cannot be installed on this machine. %s", tag, platform, unchanged)
 	}
 
-	archive, _, err := get(ctx, client, release.JoinPath(name), maxArchive)
+	var archive bytes.Buffer
+	err = fetch(ctx, release.JoinPath(name), &archive, maxArchive, want)
+	var mismatch *download.ChecksumError
+	if errors.As(err, &mismatch) {
+		return fmt.Errorf("the checksum of %s does not match checksums.txt of release %s (expected %s, got %s). Nothing was changed: %s Run `axon update` again, and report the release if it fails the same way.", name, tag, mismatch.Want, mismatch.Got, unchanged)
+	}
 	if err != nil {
 		return fmt.Errorf("could not download %s of release %s: %v. %s %s", name, tag, err, unchanged, retry)
 	}
-	sum := sha256.Sum256(archive)
-	if got := hex.EncodeToString(sum[:]); got != want {
-		return fmt.Errorf("the checksum of %s does not match checksums.txt of release %s (expected %s, got %s). Nothing was changed: %s Run `axon update` again, and report the release if it fails the same way.", name, tag, want, got, unchanged)
-	}
 
 	dir := filepath.Dir(exe)
-	staged, err := stage(archive, dir)
+	staged, err := stage(archive.Bytes(), dir)
 	if err != nil {
 		var noBinary errNoBinary
 		if errors.As(err, &noBinary) {
@@ -213,63 +214,10 @@ func Run(ctx context.Context, opts Options) error {
 // loopback address, which only a test build sets.
 func parseRepoURL(raw string) (*url.URL, error) {
 	u, err := url.Parse(raw)
-	if err == nil && u.Host != "" && (u.Scheme == "https" || (u.Scheme == "http" && isLoopback(u))) {
+	if err == nil && u.Host != "" && (u.Scheme == "https" || (u.Scheme == "http" && download.IsLoopback(u))) {
 		return u, nil
 	}
 	return nil, fmt.Errorf("this axon was built with %q as its release address, which is neither https nor the loopback address. Install a release with the install line:\n\n    %s", raw, InstallLine)
-}
-
-// isLoopback reports whether u's host is a loopback IP address.
-func isLoopback(u *url.URL) bool {
-	ip := net.ParseIP(u.Hostname())
-	return ip != nil && ip.IsLoopback()
-}
-
-// allowed reports whether a request to u may be sent: https always, and
-// http only to the loopback address when the repository address is itself
-// http on the loopback address.
-func allowed(base, u *url.URL) bool {
-	switch u.Scheme {
-	case "https":
-		return true
-	case "http":
-		return base.Scheme == "http" && isLoopback(u)
-	}
-	return false
-}
-
-// redact returns u without any user information, for messages.
-func redact(u *url.URL) string {
-	c := *u
-	c.User = nil
-	return c.String()
-}
-
-// newClient returns a client that follows redirects only to allowed
-// addresses and bounds each request.
-func newClient(base *url.URL) *http.Client {
-	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		TLSHandshakeTimeout:   30 * time.Second,
-		ResponseHeaderTimeout: 60 * time.Second,
-	}
-	return &http.Client{
-		Transport: transport,
-		Timeout:   requestTimeout,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return errors.New("too many redirects")
-			}
-			if !allowed(base, req.URL) {
-				return fmt.Errorf("redirected to %s, which is not https", redact(req.URL))
-			}
-			return nil
-		},
-	}
 }
 
 // maxRedirects is the most redirects latestTag follows to find the latest
@@ -282,7 +230,7 @@ const maxRedirects = 10
 // latest.
 func latestTag(ctx context.Context, client *http.Client, base *url.URL) (string, error) {
 	latest := base.JoinPath("releases", "latest")
-	noRelease := fmt.Errorf("no release of axon was found at %s. Name one with --version, such as `axon update --version 1.2.3`.", redact(latest))
+	noRelease := fmt.Errorf("no release of axon was found at %s. Name one with --version, such as `axon update --version 1.2.3`.", download.Redact(latest))
 
 	// Follow the redirects one at a time, on the host of latest, until one
 	// names a release tag: a repository that was renamed or moved
@@ -301,13 +249,13 @@ func latestTag(ctx context.Context, client *http.Client, base *url.URL) (string,
 		}
 		resp, err := c.Do(req)
 		if err != nil {
-			return "", fmt.Errorf("could not look up the latest release at %s: %v. Check your network connection and run `axon update` again.", redact(latest), netError{err})
+			return "", fmt.Errorf("could not look up the latest release at %s: %v. Check your network connection and run `axon update` again.", download.Redact(latest), netError{err})
 		}
 		resp.Body.Close()
 		loc := resp.Header.Get("Location")
 		if resp.StatusCode < 300 || resp.StatusCode > 399 || loc == "" {
 			if resp.StatusCode >= 500 {
-				return "", fmt.Errorf("could not look up the latest release at %s: %s. Run `axon update` again later.", redact(latest), resp.Status)
+				return "", fmt.Errorf("could not look up the latest release at %s: %s. Run `axon update` again later.", download.Redact(latest), resp.Status)
 			}
 			return "", noRelease
 		}
@@ -331,29 +279,19 @@ func latestTag(ctx context.Context, client *http.Client, base *url.URL) (string,
 	return tag, nil
 }
 
-// get downloads u, reading at most limit bytes, and returns the body and the
-// HTTP status. A status other than 200 is an error.
-func get(ctx context.Context, client *http.Client, u *url.URL, limit int64) ([]byte, int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return nil, 0, err
+// fetch downloads u into w, reading at most limit bytes, and checks the
+// SHA-256 sum when it is not empty. A failed request's error is its short
+// reason, such as "connection refused" or "timed out", since the messages
+// already name what was requested.
+func fetch(ctx context.Context, u *url.URL, w io.Writer, limit int64, sum string) error {
+	err := download.Fetch(ctx, u.String(), w, download.Options{Limit: limit, Stall: stallTimeout, SHA256: sum})
+	var status *download.StatusError
+	var tooLarge *download.TooLargeError
+	var mismatch *download.ChecksumError
+	if err == nil || errors.As(err, &status) || errors.As(err, &tooLarge) || errors.As(err, &mismatch) {
+		return err
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, 0, netError{err}
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, resp.StatusCode, fmt.Errorf("%s answered %s", redact(u), resp.Status)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
-	if err != nil {
-		return nil, resp.StatusCode, netError{err}
-	}
-	if int64(len(body)) > limit {
-		return nil, resp.StatusCode, fmt.Errorf("%s is larger than %d bytes", redact(u), limit)
-	}
-	return body, resp.StatusCode, nil
+	return netError{err}
 }
 
 // netError is a failed request. Its message is the short reason, such as
@@ -399,55 +337,28 @@ func (errNoBinary) Error() string { return "the archive holds no axon binary" }
 // regular file named axon, whatever directory the archive puts it in, is
 // written; every other entry is ignored. On failure nothing is left in dir.
 func stage(archive []byte, dir string) (string, error) {
-	gz, err := gzip.NewReader(bytes.NewReader(archive))
+	bin, err := download.ExtractFile(bytes.NewReader(archive), "axon", maxBinary)
+	if errors.Is(err, download.ErrNotInArchive) {
+		return "", errNoBinary{}
+	}
 	if err != nil {
-		return "", fmt.Errorf("read the archive: %w", err)
+		return "", err
 	}
-	tr := tar.NewReader(gz)
-	for {
-		hdr, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			return "", errNoBinary{}
-		}
-		if err != nil {
-			return "", fmt.Errorf("read the archive: %w", err)
-		}
-		if hdr.Typeflag != tar.TypeReg || path.Base(hdr.Name) != "axon" {
-			continue
-		}
-		return writeStaged(dir, tr)
-	}
-}
-
-// writeStaged copies r into a new hidden file in dir, with mode 0755.
-func writeStaged(dir string, r io.Reader) (staged string, err error) {
+	// Reserve a name no other update uses, then write the binary to it.
 	f, err := os.CreateTemp(dir, ".axon-update-*")
 	if err != nil {
 		return "", err
 	}
-	defer func() {
-		if err != nil {
-			f.Close()
-			os.Remove(f.Name())
-		}
-	}()
-	n, err := io.Copy(f, io.LimitReader(r, maxBinary+1))
-	if err != nil {
-		return "", err
-	}
-	if n > maxBinary {
-		return "", fmt.Errorf("the axon binary in the archive is larger than %d bytes", maxBinary)
-	}
-	if err := f.Chmod(0o755); err != nil {
-		return "", err
-	}
-	if err := f.Sync(); err != nil {
-		return "", err
-	}
+	staged := f.Name()
 	if err := f.Close(); err != nil {
+		os.Remove(staged)
 		return "", err
 	}
-	return f.Name(), nil
+	if err := axondir.ReplaceFile(staged, bin, 0o755); err != nil {
+		os.Remove(staged)
+		return "", err
+	}
+	return staged, nil
 }
 
 // runVersion runs bin --version and returns what it printed, trimmed.

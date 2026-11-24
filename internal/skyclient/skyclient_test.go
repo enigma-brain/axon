@@ -868,27 +868,6 @@ func TestDamagedVersionRecordIsNoClient(t *testing.T) {
 	}
 }
 
-func TestReplaceFileLeavesNoTemporaryFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "current")
-	for _, content := range []string{"0.13.0\n", "0.14.0\n"} {
-		if err := writeFile(path, content); err != nil {
-			t.Fatal(err)
-		}
-		data, err := os.ReadFile(path)
-		if err != nil || string(data) != content {
-			t.Errorf("file = %q, %v; want %q", data, err, content)
-		}
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(entries) != 1 {
-		t.Errorf("directory holds %d entries, want only the file", len(entries))
-	}
-}
-
 func TestClientEnvDropsPythonVars(t *testing.T) {
 	env := []string{
 		"PATH=/usr/bin",

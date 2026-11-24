@@ -75,9 +75,9 @@ func TestAFailedUpdatePutsThePreviousFileBack(t *testing.T) {
 						keptWhileWriting = string(kept)
 						return errors.New("injected failure")
 					}
-					return axondir.ReplaceFile(p, data)
+					return writeFile(p, data)
 				}
-				t.Cleanup(func() { replaceFile = axondir.ReplaceFile })
+				t.Cleanup(func() { replaceFile = writeFile })
 
 				_, err := addFile(s, newer, mustSource(t, "-"))
 				if err == nil || !strings.Contains(err.Error(), "injected failure") {
@@ -111,7 +111,7 @@ func TestAFailedPutBackLeavesThePreviousFileOnDisk(t *testing.T) {
 	}
 
 	renameFile = os.Rename
-	replaceFile = axondir.ReplaceFile
+	replaceFile = writeFile
 	restored, err := s.Recover()
 	if err != nil || !reflect.DeepEqual(restored, []string{s.Path("a")}) {
 		t.Fatalf("Recover = %v, %v, want the file put back", restored, err)

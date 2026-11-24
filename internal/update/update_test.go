@@ -15,6 +15,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/enigma-brain/axon/internal/download"
 )
 
 // The tests serve made-up releases from an httptest server on the loopback
@@ -534,22 +537,69 @@ func TestSymlinkedBinary(t *testing.T) {
 	}
 }
 
-func TestRedirectToPlainHTTPIsRefused(t *testing.T) {
-	// A repository address on https that redirects a download to http.
-	plain := httptest.NewServer(http.NotFoundHandler())
-	t.Cleanup(plain.Close)
-	tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, plain.URL+r.URL.Path, http.StatusFound)
+// A download that stalls ends with the short reason.
+func TestStalledDownload(t *testing.T) {
+	old := stallTimeout
+	stallTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { stallTimeout = old })
+	repo := &fakeRepo{latest: "v0.5.0"}
+	repo.addRelease(t, "0.5.0")
+	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
+	serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/"+name) {
+			w.Header().Set("Content-Length", "1000")
+			w.Write([]byte("partial"))
+			w.(http.Flusher).Flush()
+			select {
+			case <-r.Context().Done():
+			case <-t.Context().Done():
+			}
+			return
+		}
+		repo.ServeHTTP(w, r)
 	}))
-	t.Cleanup(tlsSrv.Close)
-	base, err := parseRepoURL(tlsSrv.URL)
-	if err != nil {
-		t.Fatal(err)
+	exe := installed(t, "0.4.0")
+
+	_, err := runUpdate(t, "0.4.0", "", exe)
+	wantErr(t, err, "could not download "+name+" of release v0.5.0: timed out. axon 0.4.0 is unchanged. Check your network connection and run `axon update` again.")
+	assertUnchanged(t, exe, "0.4.0")
+}
+
+// A binary that cannot be written in full leaves nothing in the directory:
+// neither the reserved name nor a temporary file.
+func TestStagingFailureLeavesNothing(t *testing.T) {
+	// noise is content gzip cannot shrink, so a cut archive is cut in the
+	// binary's body, after its header.
+	noise := make([]byte, 0, 64<<10)
+	for seed := sha256.Sum256(nil); len(noise) < cap(noise); seed = sha256.Sum256(seed[:]) {
+		noise = append(noise, seed[:]...)
 	}
-	client := newClient(base)
-	client.Transport = tlsSrv.Client().Transport
-	_, _, err = get(context.Background(), client, base.JoinPath("x"), 10)
-	wantErr(t, err, "not https")
+	whole := tarGz(t, map[string][]byte{"axon": noise})
+	for _, tc := range []struct {
+		name    string
+		archive []byte
+		limit   int64
+		want    string
+	}{
+		{"too large", whole, 1 << 10, "axon in the archive is larger than 1024 bytes"},
+		{"cut short", whole[:len(whole)*3/4], 512 << 20, "read the archive"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			old := maxBinary
+			maxBinary = tc.limit
+			t.Cleanup(func() { maxBinary = old })
+			repo := &fakeRepo{latest: "v0.5.0"}
+			name := "axon_0.5.0_" + testPlatform + ".tar.gz"
+			repo.setArchive("0.5.0", name, tc.archive, tc.archive)
+			serve(t, repo)
+			exe := installed(t, "0.4.0")
+
+			_, err := runUpdate(t, "0.4.0", "", exe)
+			// The failure comes after the staged name was reserved.
+			wantErr(t, err, "could not unpack "+name, "/.axon-update-", tc.want, "axon 0.4.0 is unchanged.")
+			assertUnchanged(t, exe, "0.4.0")
+		})
+	}
 }
 
 func TestRepoURLMustBeHTTPSOrLoopback(t *testing.T) {
@@ -593,7 +643,7 @@ func TestLatestTagFollowsAMovedRepository(t *testing.T) {
 	t.Cleanup(srv.Close)
 	base, _ := url.Parse(srv.URL + "/old/axon")
 
-	tag, err := latestTag(context.Background(), newClient(base), base)
+	tag, err := latestTag(context.Background(), download.Client(), base)
 	if err != nil || tag != "v1.2.3" {
 		t.Errorf("latestTag = %q, %v; want v1.2.3", tag, err)
 	}
@@ -620,7 +670,7 @@ func TestLatestTagStopsOffTheHostAndAfterTooManyRedirects(t *testing.T) {
 
 	for _, repo := range []string{"away", "loop"} {
 		base, _ := url.Parse(srv.URL + "/" + repo + "/axon")
-		_, err := latestTag(context.Background(), newClient(base), base)
+		_, err := latestTag(context.Background(), download.Client(), base)
 		wantErr(t, err, "no release of axon was found")
 	}
 	if hops != maxRedirects {

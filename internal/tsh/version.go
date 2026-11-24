@@ -4,15 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/enigma-brain/axon/internal/netreason"
+	"github.com/enigma-brain/axon/internal/termtext"
 )
 
 // pingURL returns where the proxy at proxy, a host or host:port, reports
@@ -22,9 +24,19 @@ var pingURL = func(proxy string) string {
 }
 
 // versionPattern accepts a Teleport release version such as 18.11.7 or
-// 17.0.0-aa. It starts with a digit, so it is never "." or "..", and holds
-// no path separator.
+// 17.0.0-aa.
 var versionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*$`)
+
+// pingTimeout bounds the request for the proxy's version, from sending it
+// to reading its answer.
+var pingTimeout = 30 * time.Second
+
+// statusError is an answer whose status is not OK: the server answered.
+type statusError struct {
+	url, status string
+}
+
+func (e *statusError) Error() string { return fmt.Sprintf("GET %s: %s", e.url, e.status) }
 
 // proxyVersion reads the version the proxy at proxy reports.
 func proxyVersion(ctx context.Context, proxy string) (string, error) {
@@ -32,17 +44,23 @@ func proxyVersion(ctx context.Context, proxy string) (string, error) {
 	fail := func(err error) (string, error) {
 		return "", fmt.Errorf("read the Teleport proxy's version at %s: %w", ping, err)
 	}
-	resp, err := get(ctx, ping)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ping, nil)
 	if err != nil {
-		// An answer that is not OK, or a request the caller cancelled, is
-		// not a proxy that can't be reached.
-		var answered *statusError
-		if errors.As(err, &answered) || ctx.Err() != nil {
+		return fail(err)
+	}
+	resp, err := (&http.Client{Timeout: pingTimeout}).Do(req)
+	if err != nil {
+		// A request the caller cancelled is not a proxy that can't be
+		// reached.
+		if ctx.Err() != nil {
 			return fail(err)
 		}
 		return "", &UnreachableError{Proxy: proxy, Err: err}
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fail(&statusError{url: ping, status: termtext.Clean(resp.Status)})
+	}
 	var reply struct {
 		ServerVersion string `json:"server_version"`
 	}

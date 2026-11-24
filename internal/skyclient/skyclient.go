@@ -298,7 +298,7 @@ func removeOthers(dir string, keep ...string) {
 
 // writeFile replaces path with data, readable by the user only.
 func writeFile(path, data string) error {
-	return replaceFile(path, strings.NewReader(data), 0o600)
+	return axondir.ReplaceFile(path, strings.NewReader(data), 0o600)
 }
 
 func isExecutable(path string) bool {

@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -132,7 +133,7 @@ func (d Dir) SetPathway(id string) error {
 	if err := toml.NewEncoder(&buf).Encode(settings{Pathway: id}); err != nil {
 		return fmt.Errorf("write %s: %w", d.SettingsPath(), err)
 	}
-	return ReplaceFile(d.SettingsPath(), buf.Bytes())
+	return ReplaceFile(d.SettingsPath(), &buf, fileMode)
 }
 
 // Email returns the recorded email of the logged-in user. The boolean is
@@ -160,7 +161,7 @@ func (d Dir) SetEmail(email string) error {
 	if err != nil {
 		return err
 	}
-	return ReplaceFile(filepath.Join(dir, emailFile), []byte(email+"\n"))
+	return ReplaceFile(filepath.Join(dir, emailFile), strings.NewReader(email+"\n"), fileMode)
 }
 
 // RemoveEmail deletes the recorded email, when there is one.
@@ -194,37 +195,79 @@ func (d Dir) ensure(sub string) (string, error) {
 	return path, nil
 }
 
-// ReplaceFile replaces path with data, readable by the user only. It writes
-// a temporary file in the same directory and renames it over path, so a
-// reader never sees a partial file. It syncs the file before the rename and
-// the directory after it, so a replacement that returns is on disk. The
-// directory must exist.
-func ReplaceFile(path string, data []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+// ReplaceOption changes how ReplaceFile treats the file it replaces.
+type ReplaceOption func(*replaceOptions)
+
+type replaceOptions struct {
+	keepMode   bool
+	followLink bool
+}
+
+// KeepMode gives the new file the permissions of the file it replaces, in
+// place of the mode ReplaceFile is given. It is for a file another program
+// owns, whose permissions the user may have set. The file must exist.
+func KeepMode() ReplaceOption { return func(o *replaceOptions) { o.keepMode = true } }
+
+// FollowLink replaces the file a symbolic link at path points to, so the
+// link stays. Without it, a link at path is itself replaced by the file.
+func FollowLink() ReplaceOption { return func(o *replaceOptions) { o.followLink = true } }
+
+// ReplaceFile replaces path with what r holds, with the permissions perm. It
+// writes a temporary file in the same directory and renames it over path,
+// so a reader never sees a partial file. It syncs the file before the rename
+// and the directory after it, so a replacement that returns is on disk. A
+// failure before the rename leaves path as it was; a failure to sync the
+// directory comes after it, so path holds the new content but it may not
+// survive a crash. Either way no temporary file remains, and the error reads
+// "write <path>: <cause>", wrapping only the cause. The directory must
+// exist.
+func ReplaceFile(path string, r io.Reader, perm fs.FileMode, opts ...ReplaceOption) error {
+	var o replaceOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	fail := func(err error) error { return fmt.Errorf("write %s: %w", path, err) }
+	target := path
+	if o.followLink {
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return fail(UnwrapPath(err))
+		}
+		target = resolved
+	}
+	if o.keepMode {
+		info, err := os.Stat(target)
+		if err != nil {
+			return fail(UnwrapPath(err))
+		}
+		perm = info.Mode().Perm()
+	}
+	dir := filepath.Dir(target)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(target)+".*")
 	if err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
+		return fail(err)
 	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(data); err != nil {
+	defer os.Remove(tmp.Name()) // A no-op once the rename succeeds.
+	if err := tmp.Chmod(perm); err != nil {
 		tmp.Close()
-		return fmt.Errorf("write %s: %w", path, err)
+		return fail(err)
 	}
-	if err := tmp.Chmod(fileMode); err != nil {
+	if _, err := io.Copy(tmp, r); err != nil {
 		tmp.Close()
-		return fmt.Errorf("write %s: %w", path, err)
+		return fail(err)
 	}
 	if err := tmp.Sync(); err != nil {
 		tmp.Close()
-		return fmt.Errorf("write %s: %w", path, err)
+		return fail(err)
 	}
 	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
+		return fail(err)
 	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
+	if err := os.Rename(tmp.Name(), target); err != nil {
+		return fail(err)
 	}
-	if err := SyncDir(filepath.Dir(path)); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
+	if err := SyncDir(dir); err != nil {
+		return fail(err)
 	}
 	return nil
 }

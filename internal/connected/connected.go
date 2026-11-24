@@ -88,7 +88,7 @@ func Write(dir axondir.Dir, p configfile.Pathway) error {
 	if err := toml.NewEncoder(&buf).Encode(Of(p)); err != nil {
 		return fmt.Errorf("write %s: %w", Path(dir), err)
 	}
-	return axondir.ReplaceFile(Path(dir), buf.Bytes())
+	return axondir.ReplaceFile(Path(dir), &buf, 0o600)
 }
 
 // Is reports whether the record in dir is p with its present settings for
