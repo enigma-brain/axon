@@ -204,7 +204,7 @@ func TestNoTSHOnPathStops(t *testing.T) {
 func TestStalledProxyStops(t *testing.T) {
 	f := newFixture(t)
 	f.putOnPath("18.11.7")
-	setVar(t, &stallTimeout, 200*time.Millisecond)
+	setVar(t, &pingTimeout, 200*time.Millisecond)
 	release := make(chan struct{})
 	stall := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-release }))
 	// Cleanups run last first: the handlers are released before the server
