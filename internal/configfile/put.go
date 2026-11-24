@@ -38,7 +38,10 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 	if !p.write {
 		return f, false, nil
 	}
-	return s.applyPut(p)
+	if err := s.applyPut(p); err != nil {
+		return File{}, false, err
+	}
+	return f, true, nil
 }
 
 // putPlan is what a put does to the stored files, decided before any of it
@@ -132,10 +135,9 @@ func (s Store) planPut(f File, data []byte, opts PutOptions, id string) (putPlan
 
 // applyPut carries out p, which planPut returned with the store's lock still
 // held, as one transaction.
-func (s Store) applyPut(p putPlan) (File, bool, error) {
-	f, data, path, hadPrevious := p.file, p.data, p.path, p.replace
+func (s Store) applyPut(p putPlan) error {
 	if _, err := s.dir.ConfigsDir(); err != nil {
-		return File{}, false, err
+		return err
 	}
 	// A failure at any step puts everything back, so the stored files and
 	// records end either all as they were or all as they are meant to
@@ -146,80 +148,98 @@ func (s Store) applyPut(p putPlan) (File, bool, error) {
 	// Each file to remove is first renamed aside, beside itself, and
 	// deleted only once everything else has succeeded, so its content stays
 	// on disk until then.
-	var saved []savedFile
-	if hadPrevious {
-		if err := keepPrevious(path); err != nil {
-			return File{}, false, err
+	u := &putUndo{path: p.path, replace: p.replace}
+	if p.replace {
+		if err := keepPrevious(p.path); err != nil {
+			return err
 		}
 	} else {
-		saved = append(saved, savedFile{path: path})
+		u.saved = append(u.saved, savedFile{path: p.path})
 	}
-	sf, err := saveFile(s.recordPath(f.ID))
+	sf, err := saveFile(s.recordPath(p.file.ID))
 	if err != nil {
-		if hadPrevious {
-			removeFile(path + previousExt)
+		if p.replace {
+			removeFile(p.path + previousExt)
 		}
-		return File{}, false, err
+		return err
 	}
-	saved = append(saved, sf)
-	var aside []string // paths renamed aside, each now at path+removingExt
-	fail := func(err error) (File, bool, error) {
-		// Every step is undone, even after one fails, and each failure is
-		// reported.
-		var undone []string
-		for i := len(aside) - 1; i >= 0; i-- {
-			if undo := renameFile(aside[i]+removingExt, aside[i]); undo != nil {
-				undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", aside[i], aside[i]+removingExt, axondir.UnwrapPath(undo)))
-			}
-		}
-		if hadPrevious {
-			if undo := renameFile(path+previousExt, path); undo != nil {
-				undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", path, path+previousExt, axondir.UnwrapPath(undo)))
-			} else {
-				// Before the new file is written, the copy is a hard
-				// link to the stored file itself, and renaming one link
-				// over the other leaves both.
-				removeFile(path + previousExt)
-			}
-		}
-		for i := len(saved) - 1; i >= 0; i-- {
-			if undo := saved[i].restore(); undo != nil {
-				undone = append(undone, fmt.Sprintf("%s could not be restored: %v", saved[i].path, undo))
-			}
-		}
-		if len(undone) > 0 {
-			return File{}, false, fmt.Errorf("%w; and %s", err, strings.Join(undone, "; "))
-		}
-		return File{}, false, err
-	}
+	u.saved = append(u.saved, sf)
 
 	for _, id := range p.remove {
-		for _, p := range []string{s.Path(id), s.recordPath(id)} {
-			err := renameFile(p, p+removingExt)
+		for _, path := range []string{s.Path(id), s.recordPath(id)} {
+			err := renameFile(path, path+removingExt)
 			if errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
 			if err != nil {
-				return fail(fmt.Errorf("remove %s: %w", p, axondir.UnwrapPath(err)))
+				return u.undo(fmt.Errorf("remove %s: %w", path, axondir.UnwrapPath(err)))
 			}
-			aside = append(aside, p)
+			u.aside = append(u.aside, path)
 		}
 	}
-	if err := replaceFile(path, data); err != nil {
-		return fail(err)
+	if err := replaceFile(p.path, p.data); err != nil {
+		return u.undo(err)
 	}
-	if err := s.writeRecord(f.ID, p.origin, data); err != nil {
-		return fail(err)
+	if err := s.writeRecord(p.file.ID, p.origin, p.data); err != nil {
+		return u.undo(err)
 	}
-	// The put has succeeded. A file left aside because its deletion
-	// fails is ignored by every reader, and is safe to delete; a previous
-	// copy left behind is deleted by the next recovery, since the record
-	// matches the stored file.
-	for _, p := range aside {
+	u.finish()
+	return nil
+}
+
+// putUndo is what a put has changed so far, so that a failure can put it
+// all back.
+type putUndo struct {
+	// path is the stored file's path. When replace is set, a stored file
+	// was in place there and is kept at path+previousExt.
+	path    string
+	replace bool
+	// saved holds the content of files before the put changed them.
+	saved []savedFile
+	// aside holds the paths renamed aside, each now at path+removingExt.
+	aside []string
+}
+
+// undo puts back every step, even after one fails, and returns err with
+// each failure to put a step back.
+func (u *putUndo) undo(err error) error {
+	var undone []string
+	for i := len(u.aside) - 1; i >= 0; i-- {
+		if undo := renameFile(u.aside[i]+removingExt, u.aside[i]); undo != nil {
+			undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", u.aside[i], u.aside[i]+removingExt, axondir.UnwrapPath(undo)))
+		}
+	}
+	if u.replace {
+		if undo := renameFile(u.path+previousExt, u.path); undo != nil {
+			undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", u.path, u.path+previousExt, axondir.UnwrapPath(undo)))
+		} else {
+			// Before the new file is written, the copy is a hard link to
+			// the stored file itself, and renaming one link over the
+			// other leaves both.
+			removeFile(u.path + previousExt)
+		}
+	}
+	for i := len(u.saved) - 1; i >= 0; i-- {
+		if undo := u.saved[i].restore(); undo != nil {
+			undone = append(undone, fmt.Sprintf("%s could not be restored: %v", u.saved[i].path, undo))
+		}
+	}
+	if len(undone) > 0 {
+		return fmt.Errorf("%w; and %s", err, strings.Join(undone, "; "))
+	}
+	return err
+}
+
+// finish deletes, once the put has succeeded, the files renamed aside and
+// the previous copy. A file left aside because its deletion fails is
+// ignored by every reader, and is safe to delete; a previous copy left
+// behind is deleted by the next recovery, since the record matches the
+// stored file.
+func (u *putUndo) finish() {
+	for _, p := range u.aside {
 		removeFile(p + removingExt)
 	}
-	if hadPrevious {
-		removeFile(path + previousExt)
+	if u.replace {
+		removeFile(u.path + previousExt)
 	}
-	return f, true, nil
 }
