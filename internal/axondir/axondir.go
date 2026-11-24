@@ -212,10 +212,12 @@ func FollowLink() ReplaceOption { return func(o *replaceOptions) { o.followLink 
 // ReplaceFile replaces path with what r holds, with the permissions perm. It
 // writes a temporary file in the same directory and renames it over path,
 // so a reader never sees a partial file. It syncs the file before the rename
-// and the directory after it, so a replacement that returns is on disk. On
-// failure path is left as it was and no temporary file remains, and the
-// error reads "write <path>: <cause>", wrapping only the cause. The
-// directory must exist.
+// and the directory after it, so a replacement that returns is on disk. A
+// failure before the rename leaves path as it was; a failure to sync the
+// directory comes after it, so path holds the new content but it may not
+// survive a crash. Either way no temporary file remains, and the error reads
+// "write <path>: <cause>", wrapping only the cause. The directory must
+// exist.
 func ReplaceFile(path string, r io.Reader, perm fs.FileMode, opts ...ReplaceOption) error {
 	var o replaceOptions
 	for _, opt := range opts {

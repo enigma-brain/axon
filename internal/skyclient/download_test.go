@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -54,21 +55,27 @@ func TestEnsureStalledDownloadSaysSo(t *testing.T) {
 	}
 }
 
-// An install interrupted part way through uv's download stops at once and
-// leaves neither uv nor the partial archive.
+// An install interrupted part way through uv's download, once part of the
+// archive is written, stops at once and leaves neither uv nor the partial
+// archive.
 func TestEnsureCancelledMidDownloadLeavesNothing(t *testing.T) {
 	f := newFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	uvBaseURL = serve(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "1000")
-		w.Write([]byte("partial"))
+		w.Write(bytes.Repeat([]byte("x"), 300))
 		w.(http.Flusher).Flush()
-		cancel()
 		hang(t, r)
 	})
+	// The progress report passes 25% only once the client has written 250
+	// bytes of the archive, and the install is cancelled there.
+	progress := &cancelAt{mark: "25%", cancel: cancel}
 
 	start := time.Now()
-	_, _, err := Ensure(ctx, f.dir, "0.13.0", nil)
+	_, _, err := Ensure(ctx, f.dir, "0.13.0", progress)
+	if !progress.seen {
+		t.Fatalf("the download was not cancelled part way through; progress: %q, error: %v", progress.buf.String(), err)
+	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Ensure error = %v, want it cancelled", err)
 	}
@@ -88,6 +95,23 @@ func TestEnsureCancelledMidDownloadLeavesNothing(t *testing.T) {
 			t.Errorf("%s is left in %s", e.Name(), uvRoot)
 		}
 	}
+}
+
+// cancelAt records what is written to it, and cancels once mark appears.
+type cancelAt struct {
+	mark   string
+	cancel context.CancelFunc
+	buf    bytes.Buffer
+	seen   bool
+}
+
+func (c *cancelAt) Write(p []byte) (int, error) {
+	c.buf.Write(p)
+	if !c.seen && strings.Contains(c.buf.String(), c.mark) {
+		c.seen = true
+		c.cancel()
+	}
+	return len(p), nil
 }
 
 func TestQuarters(t *testing.T) {

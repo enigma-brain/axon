@@ -253,6 +253,33 @@ func TestFetchFollowsRedirectsOnLoopbackHTTP(t *testing.T) {
 	}
 }
 
+// A redirect does not hand the next server the address redirected from,
+// whose query string can hold a token.
+func TestFetchSendsNoRefererOnARedirect(t *testing.T) {
+	referer := "unset"
+	to := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		referer = r.Header.Get("Referer")
+		io.WriteString(w, "content")
+	})
+	from := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, to+"/file", http.StatusFound)
+	})
+	if err := Fetch(context.Background(), from+"/file?token=secret", io.Discard, Options{Limit: 1 << 20}); err != nil {
+		t.Fatal(err)
+	}
+	if referer != "" {
+		t.Errorf("the redirected request carried Referer %q", referer)
+	}
+}
+
+// An address that does not parse is not printed, since it can hold a token.
+func TestFetchInvalidAddress(t *testing.T) {
+	err := Fetch(context.Background(), "https://example.org/%zz?token=secret", io.Discard, Options{Limit: 1 << 20})
+	if err == nil || strings.Contains(err.Error(), "secret") {
+		t.Errorf("Fetch = %v, want an error without the address", err)
+	}
+}
+
 func TestFetchRefusesARedirectAwayFromHTTPS(t *testing.T) {
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "http://example.org/file?token=secret", http.StatusFound)

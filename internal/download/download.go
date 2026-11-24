@@ -58,6 +58,9 @@ func Client() *http.Client {
 	return &http.Client{
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// net/http sets the Referer to the address redirected from,
+			// query string included, which can hold a token.
+			req.Header.Del("Referer")
 			if len(via) >= maxRedirects {
 				return fmt.Errorf("stopped after %d redirects", maxRedirects)
 			}
@@ -160,8 +163,10 @@ func (e *ChecksumError) Error() string {
 // limit, *TooLargeError when the body exceeds opts.Limit, and
 // *ChecksumError when opts.SHA256 is set and the body does not match it.
 // Other failures, including a cancelled ctx, are the HTTP client's,
-// without the address it quotes. Whatever was written to w before a failure is the
-// caller's to discard. Every wait ends as soon as ctx is done.
+// without the address it quotes. Whatever was written to w before a failure
+// is the caller's to discard. Every wait on the network ends as soon as ctx
+// is done; w and opts.Progress are called on the same goroutine, so they
+// must return for Fetch to return.
 func Fetch(ctx context.Context, rawURL string, w io.Writer, opts Options) error {
 	after := opts.Stall
 	if after <= 0 {
@@ -191,7 +196,8 @@ func Fetch(ctx context.Context, rawURL string, w io.Writer, opts Options) error 
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return err
+		// The error quotes the address, which can hold a token.
+		return fmt.Errorf("%s is not a valid address", redactRaw(rawURL))
 	}
 	resp, err := Client().Do(req)
 	if err != nil {
