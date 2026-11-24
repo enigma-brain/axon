@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -581,5 +582,82 @@ func TestCommandRunsWithTheCheckedEmail(t *testing.T) {
 	}
 	if len(*calls) != 1 || !slices.Contains((*calls)[0].env, userVar+"=ada@example.org") {
 		t.Errorf("sky ran with %v, want SKYPILOT_USER=ada@example.org", *calls)
+	}
+}
+
+// TestCheckStopsWhenCancelled cancels the check at each step that waits,
+// and checks that it stops with the cancellation and repairs nothing more.
+func TestCheckStopsWhenCancelled(t *testing.T) {
+	failed := errors.New("the request failed")
+	for _, tc := range []struct {
+		name    string
+		pathway string
+		// setup makes one step cancel the check, by cancel, and fail.
+		setup  func(p *probes, cancel func())
+		starts int
+	}{
+		{
+			name: "direct: during the health request", pathway: "campus",
+			setup: func(p *probes, cancel func()) {
+				p.health = func(context.Context, string, apiserver.Options) (apiserver.Health, error) {
+					cancel()
+					return apiserver.Health{}, failed
+				}
+			},
+		},
+		{
+			name: "teleport: during the health request, with no restart", pathway: "remote",
+			setup: func(p *probes, cancel func()) {
+				p.health = func(context.Context, string, apiserver.Options) (apiserver.Health, error) {
+					cancel()
+					return apiserver.Health{}, failed
+				}
+			},
+		},
+		{
+			name: "teleport: during the check of the tunnel's port", pathway: "remote",
+			setup: func(p *probes, cancel func()) {
+				p.checkTunnel = func(context.Context, string, string, string) error {
+					cancel()
+					return failed
+				}
+			},
+		},
+		{
+			name: "teleport: during the restart of the tunnel", pathway: "remote", starts: 1,
+			setup: func(p *probes, cancel func()) {
+				p.health = func(context.Context, string, apiserver.Options) (apiserver.Health, error) {
+					return apiserver.Health{}, failed
+				}
+				p.findTsh = func() (string, error) { return fakeTshPath, nil }
+				p.sessionValid = func(context.Context, string, string) (bool, error) { return true, nil }
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := login(t, tc.pathway, "ada@example.org")
+			calls := capture(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			p := connectedProbes()
+			starts := 0
+			p.startTunnel = func(context.Context, string, string, string, string) error {
+				starts++
+				cancel()
+				return errors.New("the tunnel did not start")
+			}
+			tc.setup(&p, cancel)
+			check = p
+			_, _, _, err := checkConnection(ctx, dir, io.Discard)
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("checkConnection returned %v, want the cancellation", err)
+			}
+			if starts != tc.starts {
+				t.Errorf("the tunnel was started %d times, want %d", starts, tc.starts)
+			}
+			if len(*calls) != 0 {
+				t.Error("sky ran")
+			}
+		})
 	}
 }

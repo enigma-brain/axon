@@ -191,7 +191,7 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	if len(files) == 0 {
 		return l.noConfig(opts)
 	}
-	p, err := l.determinePathway(files, added, opts)
+	p, err := l.determinePathway(ctx, files, added, opts)
 	if err != nil {
 		return fmt.Errorf("determine the pathway: %w", err)
 	}
@@ -222,6 +222,12 @@ func (l *login) run(ctx context.Context, opts Options) error {
 			return fmt.Errorf("establish the Teleport session: %w", err)
 		}
 		l.teleport.path = path
+	}
+
+	// A login cancelled while it chose or refreshed the pathway changes
+	// nothing from here on.
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	// Leaving the pathway that was connected, or its settings for
@@ -318,7 +324,7 @@ func (l *login) addConfig(ctx context.Context, opts Options) (f configfile.File,
 	if err != nil {
 		return fail(err)
 	}
-	outcome, err := resolveClashes(store, change, opts.Replace, in, opts.Out)
+	outcome, err := resolveClashes(ctx, store, change, opts.Replace, in, opts.Out)
 	var noTerminal *errClashNoTerminal
 	if errors.As(err, &noTerminal) {
 		c := noTerminal.clash
@@ -337,7 +343,7 @@ func (l *login) addConfig(ctx context.Context, opts Options) (f configfile.File,
 		yes := opts.Replace
 		if !yes {
 			fmt.Fprintf(opts.Out, msgLowerRevision, store.Path(prev.ID), prev.Revision, change.File.Revision)
-			yes, err = askYesNo(in, opts.Out, fmt.Sprintf(msgLowerPrompt, change.File.Revision))
+			yes, err = askYesNo(ctx, in, opts.Out, fmt.Sprintf(msgLowerPrompt, change.File.Revision))
 			if errors.Is(err, errNoAnswer) {
 				fmt.Fprintf(opts.Err, msgLowerRevisionWarning, src, change.File.Revision, prev.Revision)
 				return *prev, in, closeIn, nil
