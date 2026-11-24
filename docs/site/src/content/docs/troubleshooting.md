@@ -193,6 +193,26 @@ install line. The second means the release's binary is not the version it
 claims to be: report the release on the repository, and keep the `axon` you
 have.
 
+## Files in ~/.axon
+
+### axon moved its files to the names it uses
+
+```text
+Moved axon's files to their new names in <directory>: <old name> to <new name>, <old name> to <new name>
+Both <old path> and <new path> exist; axon uses <new path>, and <old path> can be deleted
+```
+
+`axon` found files in `~/.axon` under names it does not use, `orgs/`,
+`state/orgs/` or `config.toml`, and moved them to the names it uses,
+`configs/`, `state/configs/` and `settings.toml`. Your config files, your
+choice of pathway and your login are kept, and the first line needs nothing
+from you.
+
+The second line means a file is under both names. `axon` uses the new one,
+leaves the old one where it is, and prints the line on each command. Delete
+the old one once you have checked that nothing in it is missing from the new
+one.
+
 ## The config file
 
 ### No pathway is set up
@@ -283,7 +303,7 @@ axon: add the config file: the file is in an older format. Run `axon login --con
 axon: left out <path>: the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.
 ```
 
-The file is of format `1`, which an earlier `axon` used. `axon` does not convert it.
+The file is of format `1`, which `axon` does not read or convert.
 Run `axon login --config` with the address or file your organization gives you now; the
 second form is a stored file, which the new file replaces when its `id` is the same.
 
@@ -527,7 +547,7 @@ axon: port 46581 is held by process <pid> (<command>), which is not the Teleport
 
 Another program uses the tunnel's port. `axon login` and every `axon sky` command check
 the port first, and stop rather than send your requests to that program. Stop it, then
-run the command again. A tunnel started by an older `axon` is also such a process.
+run the command again.
 
 ### The Teleport tunnel could not be stopped
 

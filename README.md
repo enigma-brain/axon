@@ -106,8 +106,7 @@ says what failed and what to do. A build from source reports the version
 `dev` and is refused; install a release with the install line instead.
 
 `axon` contacts its releases only when you run `axon update`. Running the
-install line again also updates `axon`, and is the way to update a release
-older than the command.
+install line again also updates `axon`.
 
 ## Organizations
 
@@ -318,8 +317,7 @@ A Teleport pathway reaches the API server through Teleport, from anywhere.
   `~/.axon/state/tunnel.log`. `axon` records the tunnel's process ID and
   command line in `~/.axon/state/tunnel.json`, and takes a process for its
   tunnel only while that command line, proxy and application included,
-  still matches. A tunnel started by an older `axon`, without `--proxy`, is
-  another process to it: stop that process and run `axon login` again.
+  still matches.
   `ssh` to a cluster, VS Code Remote-SSH and the dashboard at
   `http://127.0.0.1:46581` all go through it.
 - **It points the SkyPilot client at `http://127.0.0.1:46581`** with `sky api
@@ -339,9 +337,7 @@ stops before any login step:
 When the `tsh` on your `PATH` is too old or too new for the Teleport proxy,
 `axon` names both versions and stops; install a `tsh` whose major version is
 the proxy's or one behind it, which for a `tsh` that is too new means an older
-one. A `tsh`
-that an earlier `axon` kept in `~/.axon/tools/tsh` is not used; delete that
-folder whenever you like.
+one.
 
 #### The tunnel
 
@@ -559,7 +555,7 @@ instead of the latest. CI runs it on Linux when `internal/update/` or
 | `internal/download` | Downloading a release archive: the one client, its redirect rule, the stall and size limits, the SHA-256 check, taking one program out of a `.tar.gz`, and printing an address without what can hold a token. `axon update` and the SkyPilot client install use it. |
 | `internal/fail` | Prints the error that ends a command to standard error, prefixed `axon:`, and exits non-zero. |
 | `internal/configfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/configs/`. |
-| `internal/axondir` | `~/.axon`: the names of its directories, the settings file, `tools/`, `state/`, the store's lock, renaming what `v0.3.0` and earlier kept under other names, and `ReplaceFile`, through which `axon` replaces every file it writes. |
+| `internal/axondir` | `~/.axon`: the names of its directories, the settings file, `tools/`, `state/`, the store's lock, moving the files kept under names `axon` does not use to the names it uses, and `ReplaceFile`, through which `axon` replaces every file it writes. |
 | `internal/connected` | The record of the connected pathway and its settings, in `~/.axon/state/pathway.toml`. |
 | `internal/login` | `axon login` and `axon logout` (`logout.go`): adding a file, making and choosing the pathway, the prompts, disconnecting the one left, the stages, the Teleport session and tunnel in `teleport.go`, and logout's order of steps. |
 | `internal/sky` | Everything specific to SkyPilot. The `axon sky` command group: its refusals, its connection check, and each pathway kind's endpoint. The steps login and logout run with SkyPilot, through `Connector`: installing and syncing the client, the browser login on a direct pathway in `direct.go`, pointing the client at the tunnel in `point.go`, and `sky api logout` in `logout.go`. SkyPilot's files and variables, and the one environment the client runs with. |

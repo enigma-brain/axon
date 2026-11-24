@@ -157,7 +157,7 @@ it holds, and replaces it without a question. When a member adds a copy whose
 the lines it prints when it stores or updates the file name the revisions. A
 file with a new `id` is a different file: when its pathways have the names or
 servers of the old file's, `axon` asks each member whether to replace the old
-one. An `axon` older than v0.3.0 refuses a file that has `revision`.
+one.
 
 Then one `[[pathway]]` entry for each pathway. Every pathway has these:
 
