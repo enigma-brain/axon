@@ -321,6 +321,9 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 		return File{}, false, err
 	}
 	defer unlock()
+	if _, err := s.recoverPrevious(); err != nil {
+		return File{}, false, err
+	}
 	change, err := s.inspect(f, opts.Origin.HandMade)
 	if err != nil {
 		return File{}, false, err
@@ -380,18 +383,29 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 	}
 	// A failure at any step puts everything back, so the stored files and
 	// records end either all as they were or all as they are meant to
-	// become. The stored file and record being replaced are kept in memory.
+	// become. The stored file being replaced is first kept beside itself,
+	// at path+previousExt, and stays in place until the new file replaces
+	// it in one rename, so it is never missing and its previous content is
+	// on disk throughout. The record being replaced is kept in memory.
 	// Each file to remove is first renamed aside, beside itself, and
 	// deleted only once everything else has succeeded, so its content stays
 	// on disk until then.
 	var saved []savedFile
-	for _, p := range []string{path, s.recordPath(f.ID)} {
-		sf, err := saveFile(p)
-		if err != nil {
+	if hadPrevious {
+		if err := keepPrevious(path); err != nil {
 			return File{}, false, err
 		}
-		saved = append(saved, sf)
+	} else {
+		saved = append(saved, savedFile{path: path})
 	}
+	sf, err := saveFile(s.recordPath(f.ID))
+	if err != nil {
+		if hadPrevious {
+			removeFile(path + previousExt)
+		}
+		return File{}, false, err
+	}
+	saved = append(saved, sf)
 	var aside []string // paths renamed aside, each now at path+removingExt
 	fail := func(err error) (File, bool, error) {
 		// Every step is undone, even after one fails, and each failure is
@@ -400,6 +414,16 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 		for i := len(aside) - 1; i >= 0; i-- {
 			if undo := renameFile(aside[i]+removingExt, aside[i]); undo != nil {
 				undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", aside[i], aside[i]+removingExt, unwrapPath(undo)))
+			}
+		}
+		if hadPrevious {
+			if undo := renameFile(path+previousExt, path); undo != nil {
+				undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", path, path+previousExt, unwrapPath(undo)))
+			} else {
+				// Before the new file is written, the copy is a hard
+				// link to the stored file itself, and renaming one link
+				// over the other leaves both.
+				removeFile(path + previousExt)
 			}
 		}
 		for i := len(saved) - 1; i >= 0; i-- {
@@ -435,9 +459,14 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 		return fail(err)
 	}
 	// The put has succeeded. A file left aside because its deletion
-	// fails is ignored by every reader, and is safe to delete.
+	// fails is ignored by every reader, and is safe to delete; a previous
+	// copy left behind is deleted by the next recovery, since the record
+	// matches the stored file.
 	for _, p := range aside {
 		removeFile(p + removingExt)
+	}
+	if hadPrevious {
+		removeFile(path + previousExt)
 	}
 	return f, true, nil
 }
@@ -445,6 +474,138 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 // removingExt is added to the name of a file a put is removing, until the
 // put has succeeded. No reader of the store reads such a file.
 const removingExt = ".removing"
+
+// previousExt is added to the name of a copy of a stored file that a put is
+// replacing, until the put has succeeded. No reader of the store reads such
+// a file; Recover decides what a leftover one means.
+const previousExt = ".previous"
+
+// keepPrevious keeps the stored file at path beside itself, at
+// path+previousExt: by a hard link, or, where linking fails, by a copy
+// synced to disk. The stored file stays in place.
+func keepPrevious(path string) error {
+	aside := path + previousExt
+	if err := removeFile(aside); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("keep %s: %w", path, unwrapPath(err))
+	}
+	if linkFile(path, aside) == nil {
+		return nil
+	}
+	if err := copyFile(path, aside); err != nil {
+		removeFile(aside)
+		return fmt.Errorf("keep %s: %w", path, unwrapPath(err))
+	}
+	return nil
+}
+
+// copyFile copies the regular file from to a new file to, with the same
+// permissions, and syncs the copy to disk.
+func copyFile(from, to string) error {
+	data, err := os.ReadFile(from)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(from)
+	if err != nil {
+		return err
+	}
+	out, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	if _, err := out.Write(data); err != nil {
+		out.Close()
+		return err
+	}
+	if err := out.Sync(); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
+}
+
+// Recover deals with the previous copies that a put stopped before it
+// ended left beside the stored files, and returns the paths of the stored
+// files it put a previous copy back in place of. The record says which copy
+// is the stored one: when its checksum is that of the stored file, the
+// copy is deleted; when it is that of the copy and not of the stored file,
+// the new file was written and its record was not, and the copy is put
+// back; when the stored file is missing, the copy is put back. Otherwise
+// the stored file is kept and the copy deleted.
+func (s Store) Recover() ([]string, error) {
+	if _, err := os.Stat(filepath.Join(s.dir.Root(), "orgs")); errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	unlock, err := s.lock()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	return s.recoverPrevious()
+}
+
+// recoverPrevious is Recover, with the store's lock held.
+func (s Store) recoverPrevious() ([]string, error) {
+	dir := filepath.Join(s.dir.Root(), "orgs")
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", dir, err)
+	}
+	var restored []string
+	for _, e := range entries {
+		id, ok := strings.CutSuffix(e.Name(), fileExt+previousExt)
+		if !ok || !fileIDPattern.MatchString(id) || !e.Type().IsRegular() {
+			continue
+		}
+		path := filepath.Join(dir, id+fileExt)
+		back, err := s.putBack(id, path)
+		if err != nil {
+			return restored, err
+		}
+		if back {
+			if err := renameFile(path+previousExt, path); err != nil {
+				return restored, fmt.Errorf("put back %s from %s: %w", path, path+previousExt, unwrapPath(err))
+			}
+			restored = append(restored, path)
+			continue
+		}
+		removeFile(path + previousExt)
+	}
+	return restored, nil
+}
+
+// putBack reports whether the previous copy of the stored file id, at
+// path+previousExt, is to be put back in place of the file at path.
+func (s Store) putBack(id, path string) (bool, error) {
+	stored, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("read %s: %w", path, unwrapPath(err))
+	}
+	rec, ok, err := s.Record(id)
+	if err != nil || !ok || rec.SHA256 == "" {
+		return false, nil
+	}
+	if fingerprint(stored) == rec.SHA256 {
+		return false, nil
+	}
+	previous, err := os.ReadFile(path + previousExt)
+	if err != nil {
+		return false, fmt.Errorf("read %s: %w", path+previousExt, unwrapPath(err))
+	}
+	return fingerprint(previous) == rec.SHA256, nil
+}
+
+// fingerprint is the hex SHA-256 of data, as a record holds it.
+func fingerprint(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
 
 // savedFile is a file's content before a put changed it.
 type savedFile struct {
@@ -476,11 +637,12 @@ func (f savedFile) restore() error {
 	return nil
 }
 
-// removeFile removes a file, renameFile renames one and replaceFile
-// replaces one. Tests replace them to make a step fail.
+// removeFile removes a file, renameFile renames one, linkFile links one
+// and replaceFile replaces one. Tests replace them to make a step fail.
 var (
 	removeFile  = os.Remove
 	renameFile  = os.Rename
+	linkFile    = os.Link
 	replaceFile = axondir.ReplaceFile
 )
 
@@ -499,11 +661,10 @@ func (s Store) writeRecord(id string, origin Origin, data []byte) error {
 	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
 		return fmt.Errorf("create %s: %w", dir, err)
 	}
-	sum := sha256.Sum256(data)
 	rec := record{
 		HandMade: origin.HandMade,
 		StoredAt: now().UTC().Format(time.RFC3339),
-		SHA256:   hex.EncodeToString(sum[:]),
+		SHA256:   fingerprint(data),
 	}
 	if !origin.HandMade {
 		rec.Source = origin.Source.String()
