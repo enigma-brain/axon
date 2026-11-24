@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/netreason"
 	"golang.org/x/mod/semver"
 )
@@ -431,11 +432,17 @@ func writeStaged(dir string, r io.Reader) (staged string, err error) {
 	return f.Name(), nil
 }
 
+// versionWaitDelay bounds how long update waits for the downloaded axon to
+// end after an interrupt, and for its output once it has.
+const versionWaitDelay = 2 * time.Second
+
 // runVersion runs bin --version and returns what it printed, trimmed.
 func runVersion(ctx context.Context, bin string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, runTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, bin, "--version").Output()
+	cmd := exec.CommandContext(ctx, bin, "--version")
+	interrupt.Stop(ctx, cmd, versionWaitDelay)
+	out, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}

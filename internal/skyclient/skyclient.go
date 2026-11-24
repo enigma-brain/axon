@@ -21,8 +21,10 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/interrupt"
 )
 
 // DefaultVersion is the client version installed when no other is given.
@@ -238,6 +240,7 @@ func skyPath(tools, version string) string {
 func runUV(ctx context.Context, uv string, env []string, args ...string) error {
 	var stderr tail
 	cmd := exec.CommandContext(ctx, uv, append(args, "--quiet")...)
+	interrupt.Stop(ctx, cmd, uvWaitDelay)
 	cmd.Env = env
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -252,6 +255,10 @@ func runUV(ctx context.Context, uv string, env []string, args ...string) error {
 	}
 	return nil
 }
+
+// uvWaitDelay bounds how long axon waits for uv to end after an interrupt,
+// and for its output once it has.
+const uvWaitDelay = 5 * time.Second
 
 // tail keeps the last few kilobytes written to it, and notes whether
 // uvNoSolution was ever written, since a long explanation from uv's resolver

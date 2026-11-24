@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/netreason"
 )
 
@@ -76,6 +77,7 @@ func (e *UnreachableError) Unwrap() error { return e.Err }
 func clientVersion(ctx context.Context, path string) (string, error) {
 	var stdout, stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, path, "version", "--client", "--format=json")
+	interrupt.Stop(ctx, cmd, waitDelay)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {

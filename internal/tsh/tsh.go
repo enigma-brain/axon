@@ -17,6 +17,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/enigma-brain/axon/internal/interrupt"
 )
 
 // InstallLink is Teleport's page on installing its client.
@@ -109,9 +111,19 @@ func AppLogin(ctx context.Context, tshPath, proxy, app string) error {
 	return nil
 }
 
+// terminalGrace bounds how long axon waits, after an interrupt, for a tsh
+// that runs on its terminal to end, so that tsh can put the terminal back
+// as it found it.
+const terminalGrace = 10 * time.Second
+
+// waitDelay bounds how long axon waits, after an interrupt, for a tsh that
+// runs without a terminal to end, and for its output once it has.
+const waitDelay = 2 * time.Second
+
 // runInTerminal runs tsh with args on axon's own terminal.
 func runInTerminal(ctx context.Context, tshPath string, args ...string) error {
 	cmd := exec.CommandContext(ctx, tshPath, args...)
+	interrupt.Stop(ctx, cmd, terminalGrace)
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
@@ -129,6 +141,7 @@ func SessionValid(ctx context.Context, tshPath, proxy string) (bool, error) {
 		return false, err
 	}
 	cmd := exec.CommandContext(ctx, tshPath, "status", "--format=json")
+	interrupt.Stop(ctx, cmd, waitDelay)
 	out, err := cmd.Output()
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
@@ -172,7 +185,9 @@ func Logout(ctx context.Context, tshPath, proxy string) error {
 	if err := CheckProxy(proxy); err != nil {
 		return err
 	}
-	out, err := exec.CommandContext(ctx, tshPath, "logout", "--proxy="+proxy).CombinedOutput()
+	cmd := exec.CommandContext(ctx, tshPath, "logout", "--proxy="+proxy)
+	interrupt.Stop(ctx, cmd, waitDelay)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if msg := strings.TrimSpace(string(out)); msg != "" {
 			return fmt.Errorf("tsh logout --proxy=%s: %w: %s", proxy, err, msg)

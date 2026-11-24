@@ -16,6 +16,7 @@ import (
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
+	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -235,7 +236,7 @@ func (lo *logout) skyLogout(ctx context.Context, opts LogoutOptions) error {
 	cmd := exec.CommandContext(ctx, skyPath, "api", "logout")
 	// sky api logout refuses to run while the endpoint variable is set.
 	cmd.Env = skyEnv(lo.environ())
-	cmd.WaitDelay = skyWaitDelay
+	interrupt.Stop(ctx, cmd, skyWaitDelay)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if msg := strings.TrimSpace(string(out)); msg != "" {

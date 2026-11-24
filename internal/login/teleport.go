@@ -14,6 +14,7 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/configfile"
+	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -219,7 +220,7 @@ func (l *login) skyLogin(ctx context.Context, opts Options, skyPath, endpoint st
 	defer cancel()
 	cmd := exec.CommandContext(ctx, skyPath, "api", "login", "-e", endpoint)
 	cmd.Env = skyEnv(l.environ())
-	cmd.WaitDelay = skyWaitDelay
+	interrupt.Stop(ctx, cmd, skyWaitDelay)
 	cmd.Stdout = opts.Out
 	cmd.Stderr = opts.Err
 
