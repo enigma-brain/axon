@@ -78,11 +78,10 @@ sky: restarting the Teleport tunnel
 Teleport keeps its profile and certificates in `~/.tsh`, which `tsh` writes.
 Removing `~/.axon` leaves `~/.tsh` in place.
 
-Removing `~/.axon` also leaves running a tunnel that the current `axon`
-started. The next login adopts that tunnel only when its
+Removing `~/.axon` also leaves running a tunnel that `axon` started. The
+next login adopts that tunnel only when its
 Teleport proxy and application match the pathway it uses. Otherwise it names
-the process that holds port 46581 and stops, as it does for a tunnel that an
-older `axon` started without `--proxy`. Stop that process, then run
+the process that holds port 46581 and stops. Stop that process, then run
 `axon login` again.
 
 ## When something fails
