@@ -65,10 +65,14 @@ func ensureUV(ctx context.Context, tools string, progress io.Writer) (string, er
 		return "", unavailableError{fmt.Errorf("the SkyPilot client cannot be installed on %s; axon supports macOS on Apple silicon and Intel, and Linux on x86-64", platform)}
 	}
 
+	// The version's directory is made only once the archive has arrived
+	// and is removed again, when still empty, if the install fails, so a
+	// failed or interrupted download leaves no empty directory behind.
 	fail := func(err error) (string, error) {
+		os.Remove(uvDir)
 		return "", fmt.Errorf("download uv %s: %w", uvVersion, err)
 	}
-	if err := os.MkdirAll(uvDir, dirMode); err != nil {
+	if err := os.MkdirAll(uvRoot, dirMode); err != nil {
 		return fail(err)
 	}
 
@@ -97,6 +101,9 @@ func ensureUV(ctx context.Context, tools string, progress io.Writer) (string, er
 			return err
 		}
 		if _, err := archive.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(uvDir, dirMode); err != nil {
 			return err
 		}
 		return extractUV(archive, uvPath)

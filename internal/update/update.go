@@ -29,6 +29,7 @@ import (
 	"github.com/enigma-brain/axon/internal/download"
 	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/netreason"
+	"github.com/enigma-brain/axon/internal/termtext"
 	"golang.org/x/mod/semver"
 )
 
@@ -256,7 +257,7 @@ func latestTag(ctx context.Context, client *http.Client, base *url.URL) (string,
 		loc := resp.Header.Get("Location")
 		if resp.StatusCode < 300 || resp.StatusCode > 399 || loc == "" {
 			if resp.StatusCode >= 500 {
-				return "", fmt.Errorf("could not look up the latest release at %s: %s. Run `axon update` again later.", download.Redact(latest), resp.Status)
+				return "", fmt.Errorf("could not look up the latest release at %s: %s. Run `axon update` again later.", download.Redact(latest), termtext.Clean(resp.Status))
 			}
 			return "", noRelease
 		}

@@ -677,3 +677,27 @@ func TestLatestTagStopsOffTheHostAndAfterTooManyRedirects(t *testing.T) {
 		t.Errorf("followed %d redirects in a loop, want %d", hops, maxRedirects)
 	}
 }
+
+// A server error in answer to the lookup of the latest release is reported
+// with the server's status, without the control characters it holds.
+func TestLatestTagServerErrorIsCleaned(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// net/http writes the status text it knows; hijack to send a raw one.
+		conn, buf, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer conn.Close()
+		buf.WriteString("HTTP/1.1 503 Service \x1b[31mUnavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+		buf.Flush()
+	}))
+	t.Cleanup(srv.Close)
+	base, _ := url.Parse(srv.URL + "/org/axon")
+
+	_, err := latestTag(context.Background(), download.Client(), base)
+	wantErr(t, err, "503 Service [31mUnavailable", "Run `axon update` again later.")
+	if strings.ContainsRune(err.Error(), '\x1b') {
+		t.Errorf("err = %q, want it without the escape", err)
+	}
+}

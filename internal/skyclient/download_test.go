@@ -53,6 +53,14 @@ func TestEnsureStalledDownloadSaysSo(t *testing.T) {
 	if errors.Is(err, ErrUnavailable) {
 		t.Errorf("a stalled download is ErrUnavailable: %v", err)
 	}
+	uvRoot := filepath.Join(f.tools, "uv")
+	entries, err := os.ReadDir(uvRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		t.Errorf("%s is left in %s after a failed download", e.Name(), uvRoot)
+	}
 }
 
 // An install interrupted part way through uv's download, once part of the
@@ -91,9 +99,7 @@ func TestEnsureCancelledMidDownloadLeavesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if e.Name() != uvVersion {
-			t.Errorf("%s is left in %s", e.Name(), uvRoot)
-		}
+		t.Errorf("%s is left in %s", e.Name(), uvRoot)
 	}
 }
 
