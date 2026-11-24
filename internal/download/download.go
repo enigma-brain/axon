@@ -88,13 +88,13 @@ func allowed(first, u *url.URL) bool {
 	case "https":
 		return true
 	case "http":
-		return first.Scheme == "http" && isLoopback(first) && isLoopback(u)
+		return first.Scheme == "http" && IsLoopback(first) && IsLoopback(u)
 	}
 	return false
 }
 
 // isLoopback reports whether u's host is a loopback IP address.
-func isLoopback(u *url.URL) bool {
+func IsLoopback(u *url.URL) bool {
 	ip := net.ParseIP(u.Hostname())
 	return ip != nil && ip.IsLoopback()
 }
