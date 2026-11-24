@@ -142,6 +142,10 @@ func TestReadAddressFailureHidesTheSecret(t *testing.T) {
 		{"http redirect", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "http://example.org/axon.toml?"+secret, http.StatusFound)
 		}},
+		{"invalid redirect", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Location", "/%zz?"+secret)
+			w.WriteHeader(http.StatusFound)
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

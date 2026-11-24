@@ -156,6 +156,11 @@ func fetch(ctx context.Context, address, shown string) ([]byte, error) {
 		if errors.As(err, &uerr) {
 			err = uerr.Err
 		}
+		// net/http quotes a Location header it cannot parse, query
+		// string included, so that reason is replaced.
+		if strings.HasPrefix(err.Error(), "failed to parse Location header") {
+			err = badRedirect{err}
+		}
 		return fmt.Errorf("fetch %s: %w", shown, err)
 	}
 	client := &http.Client{
@@ -192,6 +197,15 @@ func fetch(ctx context.Context, address, shown string) ([]byte, error) {
 	}
 	return data, nil
 }
+
+// badRedirect is a redirect to an address that does not parse. Its message
+// leaves the address out, since it can hold a token; the cause it wraps
+// names it.
+type badRedirect struct{ err error }
+
+func (e badRedirect) Error() string { return "redirected to an address that is not valid" }
+
+func (e badRedirect) Unwrap() error { return e.err }
 
 // readLimited reads r to its end, refusing more than MaxSize bytes.
 func readLimited(r io.Reader) ([]byte, error) {
