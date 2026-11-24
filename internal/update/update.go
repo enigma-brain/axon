@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/enigma-brain/axon/internal/netreason"
 	"golang.org/x/mod/semver"
 )
 
@@ -287,7 +288,7 @@ func latestTag(ctx context.Context, client *http.Client, base *url.URL) (string,
 	}
 	resp, err := c.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("could not look up the latest release at %s: %v. Check your network connection and run `axon update` again.", redact(latest), unwrapURLError(err))
+		return "", fmt.Errorf("could not look up the latest release at %s: %v. Check your network connection and run `axon update` again.", redact(latest), netError{err})
 	}
 	resp.Body.Close()
 	loc := resp.Header.Get("Location")
@@ -320,7 +321,7 @@ func get(ctx context.Context, client *http.Client, u *url.URL, limit int64) ([]b
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, 0, unwrapURLError(err)
+		return nil, 0, netError{err}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -328,7 +329,7 @@ func get(ctx context.Context, client *http.Client, u *url.URL, limit int64) ([]b
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
-		return nil, resp.StatusCode, err
+		return nil, resp.StatusCode, netError{err}
 	}
 	if int64(len(body)) > limit {
 		return nil, resp.StatusCode, fmt.Errorf("%s is larger than %d bytes", redact(u), limit)
@@ -336,15 +337,13 @@ func get(ctx context.Context, client *http.Client, u *url.URL, limit int64) ([]b
 	return body, resp.StatusCode, nil
 }
 
-// unwrapURLError drops the method and address that *url.Error adds, which
-// the messages already name.
-func unwrapURLError(err error) error {
-	var ue *url.Error
-	if errors.As(err, &ue) {
-		return ue.Err
-	}
-	return err
-}
+// netError is a failed request. Its message is the short reason, such as
+// "connection refused", since the messages already name what was requested.
+type netError struct{ err error }
+
+func (e netError) Error() string { return netreason.Short(e.err) }
+
+func (e netError) Unwrap() error { return e.err }
 
 // checksumFor returns the hex SHA-256 that checksums.txt lists for name. A
 // line is "<sum>  <name>", or "<sum> *<name>" for a binary-mode entry.

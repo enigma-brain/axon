@@ -377,7 +377,7 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 		return File{}, false, fmt.Errorf("replace %s: it is no longer stored", path)
 	}
 	if id != "" && bytes.Equal(previous, data) {
-		if cur, ok, err := s.Source(id); err == nil && ok && cur.String() == opts.Origin.Source.String() {
+		if cur, ok, err := s.Source(id); err == nil && ok && cur.raw() == opts.Origin.Source.raw() {
 			return f, false, nil
 		}
 	}
@@ -702,7 +702,7 @@ func (s Store) writeRecord(id string, origin Origin, data []byte) error {
 		SHA256:   fingerprint(data),
 	}
 	if !origin.HandMade {
-		rec.Source = origin.Source.String()
+		rec.Source = origin.Source.raw()
 	}
 	var buf bytes.Buffer
 	if err := toml.NewEncoder(&buf).Encode(rec); err != nil {

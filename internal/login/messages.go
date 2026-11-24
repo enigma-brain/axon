@@ -109,7 +109,13 @@ const (
 	// The source: the path, the address, or msgStdin.
 	msgConfigEmpty = "%s is empty."
 	msgStdin       = "standard input"
+	// The stored file's path and the address it was fetched from again.
+	msgRefreshEmpty = "axon: could not update %s: %s is empty. Using the stored file.\n"
 )
+
+// The next step after a stored pathway's Teleport proxy gives no answer,
+// when the pathway has no unreachable_hint.
+const msgProxyUnreachableNext = "Check your network connection and run `axon login` again."
 
 // Revisions.
 const (

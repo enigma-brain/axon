@@ -307,7 +307,8 @@ stops before any login step:
 
 When the `tsh` on your `PATH` is too old or too new for the Teleport proxy,
 `axon` names both versions and stops; install a `tsh` whose major version is
-the proxy's or one behind it. A `tsh`
+the proxy's or one behind it, which for a `tsh` that is too new means an older
+one. A `tsh`
 that an earlier `axon` kept in `~/.axon/tools/tsh` is not used; delete that
 folder whenever you like.
 

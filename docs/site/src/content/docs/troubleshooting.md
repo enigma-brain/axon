@@ -123,7 +123,9 @@ axon: could not look up the latest release at https://github.com/enigma-brain/ax
 axon: no release of axon was found at https://github.com/enigma-brain/axon/releases/latest. Name one with --version, such as `axon update --version 1.2.3`.
 ```
 
-The first means GitHub could not be reached: check your network, then run
+The reason is the short one the network gives, such as `no such host`,
+`connection refused` or `timed out`. The first means GitHub could not be
+reached: check your network, then run
 `axon update` again. The second means GitHub answered but named no latest
 release, which is the case while every release is a pre-release: name the
 version you want with `--version`.
@@ -143,7 +145,8 @@ Check the version against the list of releases, then run
 axon: could not download <file> of release v<version>: <reason>.
 ```
 
-The download stopped, usually because the network did. Check your network,
+The download stopped, usually because the network did; the reason is the short
+one the network gives, such as `connection refused` or `timed out`. Check your network,
 then run `axon update` again, with the same `--version` if you gave one.
 
 ### The release has no archive for your system
@@ -318,6 +321,10 @@ axon: add the config file: fetch <address>: the server answered <status>
 The address could not be fetched. Check your network and the address. A server that
 answers with an error is your organization's to fix.
 
+Every message that names a config file's address prints its scheme, host and path
+only, leaving out any query string, fragment or user name, which can hold a token.
+The full address is still the one `axon` fetches and records.
+
 ### A stored config file is left out
 
 ```text
@@ -332,12 +339,14 @@ it with `axon login --config <source>`, or delete the stored file from `~/.axon/
 
 ```text
 axon: could not update <path> from <address>: <reason>. Using the stored file.
+axon: could not update <path>: <address> is empty. Using the stored file.
 axon: could not update <path>: <reason>. Using the stored file.
 ```
 
 At login, `axon` fetches again the file that holds your pathway, when it came from an
 address. The first form means the fetch failed, the new file was refused, or it has a
-pathway named like one in another stored file; the second
+pathway named like one in another stored file; the second means the address answered
+with an empty file; the third
 means `axon` could not read what it recorded about the file's source. Either way `axon`
 carries on with the file it has. Nothing needs doing now; when the reason is a refusal,
 tell your organization.
@@ -444,11 +453,25 @@ SkyPilot's login stopped with an error. Read the reason, and run `axon login` ag
 
 ```text
 tsh <version> at <path> does not work with the Teleport proxy <proxy>, which runs <version> and supports tsh <n> and <n-1>. Update tsh: <link>
+tsh <version> at <path> is newer than the Teleport proxy <proxy> supports: it runs <version> and accepts tsh <n> or <n-1>. Install an older tsh: <link>
 ```
 
-The `tsh` on your `PATH` is too old or too new for your organization's Teleport. `axon`
-never replaces a `tsh` you installed. Install a `tsh` whose major version is the
-proxy's, `<n>`, or one behind it, `<n-1>`, from the link.
+The `tsh` on your `PATH` is too old, the first form, or too new, the second, for
+your organization's Teleport. `axon` never replaces a `tsh` you installed. Install
+a `tsh` whose major version is the proxy's, `<n>`, or one behind it, `<n-1>`, from
+the link; when yours is too new, that means an older one.
+
+### The Teleport proxy does not answer
+
+```text
+axon: establish the Teleport session: can't reach the Teleport proxy at <proxy>: <reason>. Check your network connection and run `axon login` again.
+```
+
+The pathway's Teleport proxy gave no answer. The reason is the short one the network
+gives, such as `no such host`, `connection refused` or `timed out`. When the pathway's
+config file has an `unreachable_hint`, that sentence takes the place of "Check your
+network connection and run `axon login` again." and says what to do, such as connecting
+to a VPN.
 
 ### tsh is not on PATH
 

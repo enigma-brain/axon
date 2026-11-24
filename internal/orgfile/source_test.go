@@ -3,6 +3,7 @@ package orgfile
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -57,8 +58,8 @@ func TestParseSource(t *testing.T) {
 				tt.in, src.String(), src.IsAddress(), tt.want, tt.address)
 		}
 		// The recorded form names the same source again.
-		if again := mustSource(t, src.String()); again != src {
-			t.Errorf("ParseSource(%q) = %+v, want %+v", src.String(), again, src)
+		if again := mustSource(t, src.raw()); again != src {
+			t.Errorf("ParseSource(%q) = %+v, want %+v", src.raw(), again, src)
 		}
 	}
 }
@@ -85,6 +86,85 @@ func TestParseSourceRefuses(t *testing.T) {
 		if strings.Contains(err.Error(), ":pw@") {
 			t.Errorf("ParseSource(%q) prints the password: %v", in, err)
 		}
+	}
+}
+
+// secret is the part of an address that can carry a token and that no
+// message prints.
+const secret = "token=s3cret"
+
+func TestSourceStringHidesTheSecret(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://example.org/axon.toml?" + secret:           "https://example.org/axon.toml",
+		"https://example.org/axon.toml?" + secret + "#frag": "https://example.org/axon.toml",
+		"https://example.org/axon.toml#" + secret:           "https://example.org/axon.toml",
+		"https://example.org:8443/a%20b.toml?" + secret:     "https://example.org:8443/a%20b.toml",
+	} {
+		src := mustSource(t, in)
+		if got := src.String(); got != want {
+			t.Errorf("String() of %q = %q, want %q", in, got, want)
+		}
+		if got := fmt.Sprintf("%s %v", src, src); strings.Contains(got, "s3cret") {
+			t.Errorf("formatting %q prints the secret: %s", in, got)
+		}
+		// What is recorded is the whole address.
+		if src.raw() != in {
+			t.Errorf("raw() of %q = %q", in, src.raw())
+		}
+	}
+}
+
+func TestParseSourceRefusalHidesTheSecret(t *testing.T) {
+	for _, in := range []string{
+		"http://example.org/axon.toml?" + secret,
+		"https://ada:pw@example.org/a.toml?" + secret,
+		"https:///axon.toml?" + secret,
+	} {
+		_, err := ParseSource(in)
+		if err == nil {
+			t.Errorf("ParseSource(%q) succeeded", in)
+			continue
+		}
+		if strings.Contains(err.Error(), "s3cret") || strings.Contains(err.Error(), "ada") {
+			t.Errorf("ParseSource(%q) = %v, which prints the secret", in, err)
+		}
+	}
+}
+
+func TestReadAddressFailureHidesTheSecret(t *testing.T) {
+	tests := []struct {
+		name    string
+		handler http.HandlerFunc
+	}{
+		{"status", func(w http.ResponseWriter, r *http.Request) {
+			http.NotFound(w, r)
+		}},
+		{"http redirect", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "http://example.org/axon.toml?"+secret, http.StatusFound)
+		}},
+		{"invalid redirect", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Location", "/%zz?"+secret)
+			w.WriteHeader(http.StatusFound)
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotQuery string
+			srv := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
+				gotQuery = r.URL.RawQuery
+				tt.handler(w, r)
+			})
+			_, err := Read(context.Background(), mustSource(t, srv.URL+"/axon.toml?"+secret), nil)
+			if err == nil {
+				t.Fatal("Read succeeded")
+			}
+			if gotQuery != secret {
+				t.Errorf("the fetch sent the query %q, want %q", gotQuery, secret)
+			}
+			if !strings.Contains(err.Error(), srv.URL+"/axon.toml") || strings.Contains(err.Error(), "s3cret") {
+				t.Errorf("Read = %v, want an error naming %s/axon.toml without the secret", err, srv.URL)
+			}
+		})
 	}
 }
 
