@@ -812,3 +812,80 @@ func TestVersionCreatesNothing(t *testing.T) {
 		t.Errorf("Version created ~/.axon: %v", err)
 	}
 }
+
+func TestDamagedVersionRecordIsNoClient(t *testing.T) {
+	for name, damage := range map[string]func(path string) error{
+		"empty":      func(path string) error { return os.WriteFile(path, nil, 0o600) },
+		"blank":      func(path string) error { return os.WriteFile(path, []byte(" \n"), 0o600) },
+		"garbled":    func(path string) error { return os.WriteFile(path, []byte("\x00\x01junk"), 0o600) },
+		"unreadable": func(path string) error { return os.Chmod(path, 0) },
+		"directory": func(path string) error {
+			if err := os.Remove(path); err != nil {
+				return err
+			}
+			return os.Mkdir(path, 0o700)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+				t.Fatal(err)
+			}
+			current := filepath.Join(f.tools, "skypilot", "current")
+			if err := damage(current); err != nil {
+				t.Fatal(err)
+			}
+			if name == "directory" {
+				// The directory is not replaced by a rename; the install
+				// below reports that rather than the damage.
+				t.Cleanup(func() { os.RemoveAll(current) })
+			}
+
+			if v, ok, err := Version(f.dir); err != nil || ok || v != "" {
+				t.Errorf("Version = %q, %v, %v; want \"\", false, nil", v, ok, err)
+			}
+			if _, err := Path(f.dir); !errors.Is(err, ErrNotInstalled) {
+				t.Errorf("Path error = %v, want ErrNotInstalled", err)
+			}
+			if name == "directory" {
+				return
+			}
+
+			// An install repairs it.
+			from, to, err := Ensure(context.Background(), f.dir, "0.13.0", nil)
+			if err != nil {
+				t.Fatalf("Ensure: %v", err)
+			}
+			if from != "" || to != "0.13.0" {
+				t.Errorf("Ensure moved %q -> %q, want \"\" -> 0.13.0", from, to)
+			}
+			if v, ok, err := Version(f.dir); err != nil || !ok || v != "0.13.0" {
+				t.Errorf("Version after the repair = %q, %v, %v; want 0.13.0", v, ok, err)
+			}
+			if out := runSky(t, f.dir, "--version"); out != "private sky 0.13.0 --version" {
+				t.Errorf("sky printed %q", out)
+			}
+		})
+	}
+}
+
+func TestReplaceFileLeavesNoTemporaryFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "current")
+	for _, content := range []string{"0.13.0\n", "0.14.0\n"} {
+		if err := writeFile(path, content); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil || string(data) != content {
+			t.Errorf("file = %q, %v; want %q", data, err, content)
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("directory holds %d entries, want only the file", len(entries))
+	}
+}

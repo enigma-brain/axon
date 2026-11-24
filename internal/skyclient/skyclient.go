@@ -170,20 +170,19 @@ func installClient(ctx context.Context, uv string, env []string, tools, version 
 }
 
 // Version returns the version of the installed client without installing
-// anything. The boolean is false when no client is installed.
+// anything. The boolean is false when no client is installed. A record that
+// is missing, cannot be read, or names no release version is no client, so
+// that an install replaces it.
 func Version(dir axondir.Dir) (version string, installed bool, err error) {
 	// A read creates no directory.
 	path := filepath.Join(dir.ToolsPath(), skypilotDir, currentFile)
 	data, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", false, nil
-	}
 	if err != nil {
-		return "", false, fmt.Errorf("read %s: %w", path, err)
+		return "", false, nil
 	}
 	version = strings.TrimSpace(string(data))
 	if !versionPattern.MatchString(version) {
-		return "", false, fmt.Errorf("read %s: %q is not a release version", path, version)
+		return "", false, nil
 	}
 	if !isExecutable(skyPath(dir.ToolsPath(), version)) {
 		return "", false, nil
