@@ -52,7 +52,44 @@ platform the install script stops and says so.
 
 ## Update
 
-Run the install line again. It replaces `axon` with the latest release.
+Run:
+
+```sh
+axon update
+```
+
+It downloads the latest release for your platform, checks it against the
+release's checksums, and replaces the `axon` you ran with it in one step. It
+says which version you had and which it installed:
+
+```text
+Downloading axon 1.3.0 for darwin_arm64 from https://github.com/enigma-brain/axon
+Updated axon from 1.2.3 to 1.3.0 in /Users/you/.local/bin/axon
+```
+
+When you already have the latest release, it says so and changes nothing.
+Only the `axon` program changes: your pathways, your login and the clients
+`axon` installed stay as they are. `axon` looks for a new release only when
+you run `axon update`.
+
+To install a named release, such as a pre-release, give its version, with or
+without the leading `v`. In this example, `1.2.3-rc.1` stands for the version
+you want:
+
+```sh
+axon update --version 1.2.3-rc.1
+```
+
+Without `--version`, an `axon` newer than the latest release, such as a
+pre-release of the next version, is left as it is. A pre-release updates to
+its final release once that is out.
+
+Running the install line again also updates `axon` to the latest release. Use
+it for an `axon` that has no `axon update`, which is a release before the
+command was added, or one built from source.
+
+When the update fails, see [Troubleshooting](/axon/troubleshooting/#updating-axon).
+Every failure leaves the `axon` you had in place.
 
 ## Install a named version
 

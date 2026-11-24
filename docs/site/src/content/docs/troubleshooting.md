@@ -90,6 +90,106 @@ terminal:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+## Updating axon
+
+Every failure of `axon update` ends with `axon <version> is unchanged.`: the
+`axon` you ran is still in place and still works. `<version>` stands for the
+release in these messages.
+
+### axon is a development build
+
+```text
+axon: this axon is a development build (dev), and `axon update` updates only a released axon. Install a release with the install line:
+```
+
+The `axon` you ran was built from source, not installed from a release, so it
+has no version to compare. Install a release with the install line that
+follows the message, as [Installing](/axon/installing/) shows.
+
+### The version is not a release version
+
+```text
+axon: "<text>" is not a release version. Name one such as 1.2.3 or 1.2.3-rc.1.
+```
+
+`--version` takes a release's version, with or without its leading `v`, such
+as `1.2.3`, `v1.2.3` or `1.2.3-rc.1`. Run `axon update --version` again with
+one.
+
+### The latest release could not be found
+
+```text
+axon: could not look up the latest release at https://github.com/enigma-brain/axon/releases/latest: <reason>. Check your network connection and run `axon update` again.
+axon: no release of axon was found at https://github.com/enigma-brain/axon/releases/latest. Name one with --version, such as `axon update --version 1.2.3`.
+```
+
+The first means GitHub could not be reached: check your network, then run
+`axon update` again. The second means GitHub answered but named no latest
+release, which is the case while every release is a pre-release: name the
+version you want with `--version`.
+
+### The named release does not exist
+
+```text
+axon: there is no release v<version> of axon. Check the version, and find the releases at https://github.com/enigma-brain/axon/releases.
+```
+
+Check the version against the list of releases, then run
+`axon update --version` again with one that is listed.
+
+### A download failed
+
+```text
+axon: could not download <file> of release v<version>: <reason>.
+```
+
+The download stopped, usually because the network did. Check your network,
+then run `axon update` again, with the same `--version` if you gave one.
+
+### The release has no archive for your system
+
+```text
+axon: release v<version> has no archive for <os>_<arch>, so it cannot be installed on this machine.
+```
+
+That release was not built for your system. Name a release that was, with
+`--version`, or keep the `axon` you have.
+
+### The checksum does not match
+
+```text
+axon: the checksum of <archive> does not match checksums.txt of release v<version> (expected <checksum>, got <checksum>).
+```
+
+The archive is not the one the release published, so it was not installed.
+Run `axon update` again. If it fails the same way, do not install that
+release, and report it on the repository.
+
+### axon's directory cannot be written
+
+```text
+axon: cannot write to <directory>, where axon is installed: <reason>.
+axon: cannot replace <path>: <reason>.
+```
+
+`axon update` replaces the file you ran, so it needs to write to that file's
+directory. Run it as the user who installed `axon` there, or install with
+the install line, which puts `axon` in `~/.local/bin`.
+
+### The new axon does not run
+
+```text
+axon: the downloaded axon <version> does not run in <directory>: <reason>.
+axon: the downloaded axon <version> reports "<text>", not "axon <version>", so it was not installed.
+```
+
+The first means the new binary could not be started in the directory where
+`axon` is installed. That happens when the directory is on a filesystem that
+does not allow running programs; install `axon` in another directory with the
+install line. The second means the release's binary is not the version it
+claims to be: report the release on the repository, and keep the `axon` you
+have.
+
 ## The config file
 
 ### No pathway is set up
