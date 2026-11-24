@@ -112,6 +112,14 @@ Can't reach the SkyPilot API server at <address>: <reason>. Check the address an
 Can't reach the Teleport proxy at <proxy>: <reason>. Check the address and try again.
 ```
 
+The reason is the short one the network gives, such as `no such host`, which
+means the name does not exist, `connection refused`, which means nothing
+answers on that port, or `timed out`. For example:
+
+```text
+Can't reach the SkyPilot API server at https://sky.wrong.example: no such host. Check the address and try again.
+```
+
 `axon` checks the address before it stores the pathway, and asks for it again.
 Check it for typos, and that you are on a network the server answers on. The
 second form means something else answers at that address: ask your organization
@@ -151,6 +159,7 @@ your organization which field it names. Messages seen most:
 
 | Message | What it means |
 |---|---|
+| `<source> is empty.` | The file, standard input or the address gave nothing, or only blank lines and comments. With `--config -`, check that the file reached standard input. |
 | `format: must be 2` | The file's `format` is missing or is a number `axon` does not know. |
 | `id: must be lowercase letters, digits and hyphens, start with a letter, and be at most 32 characters` | The file's `id` is not of the allowed form. |
 | `pathway: the file must have at least one [[pathway]]` | The file holds no pathway. |
