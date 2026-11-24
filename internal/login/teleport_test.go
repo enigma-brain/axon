@@ -123,9 +123,9 @@ func newTeleportHarness(t *testing.T) *teleportHarness {
 	h.l.teleport.ensure = func(context.Context, string) (string, error) {
 		return fakeTsh, nil
 	}
-	environ := h.l.environ
-	h.l.environ = func() []string {
-		return append(environ(), "FAKESKY_CONFIG="+h.l.teleport.skyConfig)
+	environ := h.l.sky.Environ
+	h.l.sky.Environ = func() []string {
+		return append(environ(), "FAKESKY_CONFIG="+h.l.sky.SettingsFile)
 	}
 	t.Cleanup(func() {
 		if err := h.tunnel().Stop(); err != nil {
@@ -214,8 +214,8 @@ func TestTeleportFirstLogin(t *testing.T) {
 	if want := "api login -e " + h.endpoint() + "\n"; string(args) != want {
 		t.Errorf("sky args = %q, want %q", args, want)
 	}
-	if _, ok := h.skyEnv(1)[endpointVar]; ok {
-		t.Errorf("sky ran with %s set", endpointVar)
+	if _, ok := h.skyEnv(1)["SKYPILOT_API_SERVER_ENDPOINT"]; ok {
+		t.Error("sky ran with SKYPILOT_API_SERVER_ENDPOINT set")
 	}
 	assertNoPythonVars(t, h.skyEnv(1))
 	if got := h.email(); got != h.user {
@@ -388,7 +388,7 @@ func TestTeleportMovesTheOldEndpoint(t *testing.T) {
 		t.Fatalf("first login: %v", err)
 	}
 	old := "http://localhost:" + strconv.Itoa(testPort)
-	if err := os.WriteFile(h.l.teleport.skyConfig, []byte("api_server:\n  endpoint: "+old+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(h.l.sky.SettingsFile, []byte("api_server:\n  endpoint: "+old+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	runs := h.skyRuns()
@@ -405,8 +405,9 @@ func TestTeleportMovesTheOldEndpoint(t *testing.T) {
 	if got, want := lines[len(lines)-1], "api login -e "+h.endpoint(); got != want {
 		t.Errorf("sky args = %q, want %q", got, want)
 	}
-	if stored, err := storedEndpoint(h.l.teleport.skyConfig); err != nil || stored != h.endpoint() {
-		t.Errorf("stored endpoint = %q, %v, want %q", stored, err, h.endpoint())
+	// The fake sky stores the endpoint as sky api login does.
+	if stored, err := os.ReadFile(h.l.sky.SettingsFile); err != nil || string(stored) != "api_server:\n  endpoint: "+h.endpoint()+"\n" {
+		t.Errorf("SkyPilot's settings = %q, %v, want the endpoint %q", stored, err, h.endpoint())
 	}
 	if calls := h.tshCalls(); contains(calls, "login --proxy=teleport.example.org") {
 		t.Errorf("tsh calls %q include a Teleport login", calls)
@@ -431,10 +432,10 @@ func TestTeleportStoredEndpoint(t *testing.T) {
 				if strings.Contains(config, "%s") {
 					config = fmt.Sprintf(config, h.endpoint())
 				}
-				if err := os.MkdirAll(filepath.Dir(h.l.teleport.skyConfig), 0o755); err != nil {
+				if err := os.MkdirAll(filepath.Dir(h.l.sky.SettingsFile), 0o755); err != nil {
 					t.Fatal(err)
 				}
-				if err := os.WriteFile(h.l.teleport.skyConfig, []byte(config), 0o644); err != nil {
+				if err := os.WriteFile(h.l.sky.SettingsFile, []byte(config), 0o644); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -649,17 +650,6 @@ func TestSwitchToDirectKeepsTeleportWhenStopFails(t *testing.T) {
 	}
 }
 
-func TestSkyLoginKeepsCallerDeadline(t *testing.T) {
-	h := newTeleportHarness(t)
-	h.script("hang")
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
-	defer cancel()
-	err := h.l.skyLogin(ctx, Options{Out: io.Discard, Err: io.Discard}, h.client.sky, h.endpoint())
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("err = %v, want the caller's deadline", err)
-	}
-}
-
 func TestTeleportSyncsClientBeforeSkyLogin(t *testing.T) {
 	h := newTeleportHarness(t)
 	h.serverVersion = "0.14.0"
@@ -785,8 +775,8 @@ func TestTeleportStoredEndpointFollowsSkyPilotGlobalConfig(t *testing.T) {
 				}
 				return ""
 			}
-			inHome := h.l.teleport.skyConfig
-			h.l.teleport.skyConfig = newLogin(h.home, getenv).teleport.skyConfig
+			inHome := h.l.sky.SettingsFile
+			h.l.sky.SettingsFile = newLogin(h.home, getenv).sky.SettingsFile
 			for path, endpoint := range map[string]string{named: tc.named, inHome: tc.inHome} {
 				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 					t.Fatal(err)

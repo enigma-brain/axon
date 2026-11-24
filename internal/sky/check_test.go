@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -486,8 +487,14 @@ func TestDirectUnreachableMessage(t *testing.T) {
 	}
 }
 
-// TestCheckNeverInstallsOrOpensABrowser checks the source of the package:
-// it calls none of the functions that install something or open a browser.
+// loginStepFiles are the files of the steps axon login and axon logout run
+// with SkyPilot. They install the client and open a browser; the command
+// group's own files never reach them.
+var loginStepFiles = []string{"connect.go", "direct.go", "point.go", "logout.go"}
+
+// TestCheckNeverInstallsOrOpensABrowser checks the source of the command
+// group: it calls none of the functions that install something or open a
+// browser, and none of the login steps kept in the same package.
 func TestCheckNeverInstallsOrOpensABrowser(t *testing.T) {
 	forbidden := map[string][]string{
 		"skyclient": {"Ensure"},
@@ -498,6 +505,7 @@ func TestCheckNeverInstallsOrOpensABrowser(t *testing.T) {
 		t.Fatal(err)
 	}
 	fset := token.NewFileSet()
+	parsed := map[string]*ast.File{}
 	for _, name := range files {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
@@ -506,16 +514,54 @@ func TestCheckNeverInstallsOrOpensABrowser(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ast.Inspect(f, func(n ast.Node) bool {
-			sel, ok := n.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			if pkg, ok := sel.X.(*ast.Ident); ok {
-				for _, fn := range forbidden[pkg.Name] {
-					if sel.Sel.Name == fn {
-						t.Errorf("%s calls %s.%s", fset.Position(sel.Pos()), pkg.Name, fn)
+		parsed[name] = f
+	}
+	// The names the login steps declare.
+	steps := map[string]bool{}
+	for _, name := range loginStepFiles {
+		f, ok := parsed[name]
+		if !ok {
+			t.Fatalf("%s is not in the package", name)
+		}
+		for _, d := range f.Decls {
+			switch d := d.(type) {
+			case *ast.FuncDecl:
+				steps[d.Name.Name] = true
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					switch spec := spec.(type) {
+					case *ast.TypeSpec:
+						steps[spec.Name.Name] = true
+					case *ast.ValueSpec:
+						for _, n := range spec.Names {
+							steps[n.Name] = true
+						}
 					}
+				}
+			}
+		}
+		delete(parsed, name)
+	}
+	for name, f := range parsed {
+		imported := map[string]bool{}
+		for _, imp := range f.Imports {
+			imported[path.Base(strings.Trim(imp.Path.Value, `"`))] = true
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			switch n := n.(type) {
+			case *ast.SelectorExpr:
+				if pkg, ok := n.X.(*ast.Ident); ok && imported[pkg.Name] {
+					for _, fn := range forbidden[pkg.Name] {
+						if n.Sel.Name == fn {
+							t.Errorf("%s calls %s.%s", fset.Position(n.Pos()), pkg.Name, fn)
+						}
+					}
+					// Another package's name is not a login step's.
+					return false
+				}
+			case *ast.Ident:
+				if steps[n.Name] {
+					t.Errorf("%s uses %s, a login step", fset.Position(n.Pos()), n.Name)
 				}
 			}
 			return true

@@ -18,6 +18,7 @@ import (
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/interrupt"
+	"github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
@@ -237,8 +238,8 @@ func TestInterruptDuringTheBrowserLoginWaitsForSky(t *testing.T) {
 	h.script("hang")
 	start := time.Now()
 	h.interrupted(Options{Pathway: "campus"}, "in your browser", syscall.SIGINT)
-	if took := time.Since(start); took < skyWaitDelay {
-		t.Errorf("the login stopped after %s, before sky's grace period of %s", took, skyWaitDelay)
+	if took := time.Since(start); took < sky.WaitDelay {
+		t.Errorf("the login stopped after %s, before sky's grace period of %s", took, sky.WaitDelay)
 	}
 }
 
@@ -260,8 +261,8 @@ func (h *teleportHarness) cancelAtTunnel(cancel func()) {
 // cancelAtTunnelHealth makes the health request through the tunnel cancel
 // ctx and fail.
 func (h *teleportHarness) cancelAtTunnelHealth(cancel func()) {
-	health := h.l.health
-	h.l.health = func(ctx context.Context, endpoint string, opts apiserver.Options) (apiserver.Health, error) {
+	health := h.l.sky.Health
+	h.l.sky.Health = func(ctx context.Context, endpoint string, opts apiserver.Options) (apiserver.Health, error) {
 		if endpoint == h.endpoint() {
 			cancel()
 			return apiserver.Health{}, errors.New("the request was cancelled")

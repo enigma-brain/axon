@@ -19,6 +19,7 @@ import (
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
+	"github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/skyclient"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -138,11 +139,11 @@ func newHarness(t *testing.T) *harness {
 	t.Helper()
 	h := &harness{t: t, home: t.TempDir(), skyDir: t.TempDir(), serverVersion: "0.13.0", user: "ada@example.org"}
 	h.cookieFile = filepath.Join(h.home, ".sky", "cookies.txt")
-	sky := filepath.Join(h.skyDir, "sky")
-	if err := os.WriteFile(sky, []byte(fakeSky), 0o755); err != nil {
+	skyBin := filepath.Join(h.skyDir, "sky")
+	if err := os.WriteFile(skyBin, []byte(fakeSky), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	h.client = &fakeClient{version: "0.13.0", installed: true, sky: sky}
+	h.client = &fakeClient{version: "0.13.0", installed: true, sky: skyBin}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -158,28 +159,36 @@ func newHarness(t *testing.T) *harness {
 
 	dir := axondir.New(h.home)
 	h.l = &login{
-		dir:        dir,
-		client:     h.client,
-		health:     apiserver.Fetch,
-		cookieFile: h.cookieFile,
-		endpoint: func(p configfile.Pathway) string {
-			if p.Kind == configfile.KindTeleport {
-				return "http://127.0.0.1:" + strconv.Itoa(testPort)
-			}
-			return h.directURL
-		},
-		loginWait: 10 * time.Second,
-		environ: func() []string {
-			return []string{
-				"PATH=" + os.Getenv("PATH"),
-				"SKYPILOT_API_SERVER_ENDPOINT=http://elsewhere.example",
-				"BROWSER=chromium",
-				"PYTHONPATH=/elsewhere/lib",
-				"PYTHONHOME=/elsewhere",
-				"VIRTUAL_ENV=/elsewhere/venv",
-				"CONDA_PREFIX=/elsewhere/conda",
-				"UV_INDEX_URL=https://index.example.org",
-			}
+		dir: dir,
+		sky: sky.Connector{
+			Dir:           dir,
+			ClientVersion: func(axondir.Dir) (string, bool, error) { return h.client.Version() },
+			EnsureClient: func(ctx context.Context, _ axondir.Dir, v string, progress io.Writer) (string, string, error) {
+				return h.client.Ensure(ctx, v, progress)
+			},
+			ClientPath: func(axondir.Dir) (string, error) { return h.client.Path() },
+			Health:     apiserver.Fetch,
+			CookieFile: h.cookieFile,
+			Endpoint: func(p configfile.Pathway) string {
+				if p.Kind == configfile.KindTeleport {
+					return "http://127.0.0.1:" + strconv.Itoa(testPort)
+				}
+				return h.directURL
+			},
+			SettingsFile: filepath.Join(h.home, ".sky", "config.yaml"),
+			LoginWait:    10 * time.Second,
+			Environ: func() []string {
+				return []string{
+					"PATH=" + os.Getenv("PATH"),
+					"SKYPILOT_API_SERVER_ENDPOINT=http://elsewhere.example",
+					"BROWSER=chromium",
+					"PYTHONPATH=/elsewhere/lib",
+					"PYTHONHOME=/elsewhere",
+					"VIRTUAL_ENV=/elsewhere/venv",
+					"CONDA_PREFIX=/elsewhere/conda",
+					"UV_INDEX_URL=https://index.example.org",
+				}
+			},
 		},
 		readConfig: configfile.Read,
 		// The tests never reach the real terminal.
@@ -188,7 +197,6 @@ func newHarness(t *testing.T) *harness {
 			newTunnel: func(stateDir, tshPath, proxy, app string) *tunnel.Tunnel {
 				return tunnel.NewOnPort(stateDir, tshPath, proxy, app, testPort)
 			},
-			skyConfig: filepath.Join(h.home, ".sky", "config.yaml"),
 		},
 	}
 	h.store(exampleConfig)
@@ -475,40 +483,6 @@ func TestDirectNeedsAuthInAnAddressIsNotTheStatus(t *testing.T) {
 	}
 }
 
-func TestHasWord(t *testing.T) {
-	for text, want := range map[string]bool{
-		"needs_auth": true,
-		// What sky api login prints when a login ends with needs_auth: the
-		// ValueError raised in _show_logged_in_message, in
-		// sky/client/sdk.py of skypilot 0.13.0, printed without a traceback.
-		"ValueError: Cannot log in API server at https://sky.example.org (status: needs_auth)\n": true,
-		"Failed to log in (status: needs_auth)":                                                  true,
-		"status: \x1b[31mneeds_auth\x1b[0m":                                                      true,
-		"\x1b[1;31mneeds_auth\x1b[0m)":                                                           true,
-		"(status:\x1b[0mneeds_auth\x1b[39m)":                                                     true,
-		"https://sky.example.org/\x1b[0mx/needs_auth":                                            false,
-		"https://sky.example.org/\x1b[0mneeds_auth":                                              false,
-		"?status=\x1b[1mneeds_auth\x1b[0m":                                                       false,
-		"Open https://sky.example.org/auth:needs_auth":                                           false,
-		"(status:needs_auth)":                                                                    true,
-		"see https://sky.example.org (status: needs_auth)":                                       true,
-		"status needs_auth.":                                                                     true,
-		`{"status": "needs_auth"}`:                                                               true,
-		"status:needs_auth\n":                                                                    true,
-		"https://sky.example.org/needs_auth":                                                     false,
-		"https://sky.example.org/?s=needs_auth":                                                  false,
-		"x_needs_auth":                                                                           false,
-		"needs_auth_soon":                                                                        false,
-		"needs_authorization":                                                                    false,
-		"/needs_auth then (needs_auth)":                                                          true,
-		"":                                                                                       false,
-	} {
-		if got := hasWord(text, needsAuth); got != want {
-			t.Errorf("hasWord(%q) = %v, want %v", text, got, want)
-		}
-	}
-}
-
 func TestDirectNeedsAuthTwice(t *testing.T) {
 	h := newHarness(t)
 	h.script("needs", "needs")
@@ -548,7 +522,7 @@ func TestDirectSilentFailureCaughtByIdentityCheck(t *testing.T) {
 
 func TestDirectLeavesBrowserUnset(t *testing.T) {
 	h := newHarness(t)
-	h.l.environ = func() []string { return []string{"PATH=" + os.Getenv("PATH")} }
+	h.l.sky.Environ = func() []string { return []string{"PATH=" + os.Getenv("PATH")} }
 	h.script("ok")
 	if err := h.run("campus"); err != nil {
 		t.Fatal(err)
@@ -560,7 +534,7 @@ func TestDirectLeavesBrowserUnset(t *testing.T) {
 
 func TestDirectBrowserWaitEnds(t *testing.T) {
 	h := newHarness(t)
-	h.l.loginWait = 300 * time.Millisecond
+	h.l.sky.LoginWait = 300 * time.Millisecond
 	h.script("hang")
 	start := time.Now()
 	err := h.run("campus")
@@ -665,21 +639,6 @@ func TestClientUpdateFailureMessages(t *testing.T) {
 	}
 }
 
-func TestFormatWait(t *testing.T) {
-	for d, want := range map[time.Duration]string{
-		5 * time.Minute:        "5 minutes",
-		time.Minute:            "1 minute",
-		300 * time.Millisecond: "300ms",
-	} {
-		if got := formatWait(d); got != want {
-			t.Errorf("formatWait(%s) = %q, want %q", d, got, want)
-		}
-	}
-	if loginWait != 5*time.Minute {
-		t.Errorf("loginWait = %s, want 5 minutes", loginWait)
-	}
-}
-
 // A config file update that stopped with the stored file missing leaves
 // the previous copy beside it, which the next login puts back and reports.
 func TestLoginPutsBackAnInterruptedUpdate(t *testing.T) {
@@ -714,7 +673,7 @@ func TestLoginReadsSkyPilotsSettingsFile(t *testing.T) {
 			}
 			return ""
 		}
-		if got := newLogin("/home/ada", getenv).teleport.skyConfig; got != want {
+		if got := newLogin("/home/ada", getenv).sky.SettingsFile; got != want {
 			t.Errorf("SKYPILOT_GLOBAL_CONFIG=%q: login reads %q, want %q", v, got, want)
 		}
 	}
