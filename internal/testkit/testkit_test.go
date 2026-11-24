@@ -9,6 +9,7 @@ import (
 // TestNotInTheBinary checks that no package the axon binary is built from
 // imports testkit, so that test scaffolding never ships.
 func TestNotInTheBinary(t *testing.T) {
+	t.Parallel()
 	out, err := exec.Command("go", "list", "-deps", "github.com/enigma-brain/axon").Output()
 	if err != nil {
 		t.Fatalf("go list: %v", err)
