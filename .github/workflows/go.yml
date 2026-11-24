@@ -1,0 +1,71 @@
+name: Go
+
+# The build-and-test job and the real job, defined once and called by the CI
+# workflow on Linux and by the Mac workflow on macOS. The caller names the
+# runner and which jobs run.
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: The runner the jobs run on.
+        required: true
+        type: string
+      test:
+        description: Run gofmt, the build, vet and go test -race.
+        type: boolean
+        default: false
+      real:
+        description: Run the smoke test, which installs the SkyPilot client for real.
+        type: boolean
+        default: false
+      update:
+        description: With real, also update an old axon to the latest release with axon update.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test (${{ inputs.runner }})
+    if: inputs.test
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race ./...
+
+  real:
+    name: Smoke test and real update (${{ inputs.runner }})
+    if: inputs.real
+    runs-on: ${{ inputs.runner }}
+    env:
+      AXON_REAL_INSTALL: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - name: Run axon login with an example config file in an empty home, and the installed sky --version
+        run: go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
+      - name: Update an old axon to the latest release with axon update
+        if: inputs.update
+        env:
+          AXON_REAL_UPDATE: "1"
+        run: go test -count=1 -timeout 10m -run '^TestRealUpdate$' -v .

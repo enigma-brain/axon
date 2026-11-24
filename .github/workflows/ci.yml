@@ -4,8 +4,9 @@ name: CI
 # integration". Every job here runs on Linux. Build and test runs for every
 # change; every job that downloads real software or builds the release runs
 # only when the paths it tests have changed, and the changes job decides.
-# The Mac jobs run in the release workflow, before a release is published,
-# and in the Mac workflow, which is started by hand.
+# Build and test and the real job are defined in go.yml, which the Mac
+# workflow, started by hand, calls as well. The Mac jobs also run in the
+# release workflow, before a release is published.
 on:
   pull_request:
   push:
@@ -20,7 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
-      skyclient: ${{ steps.filter.outputs.skyclient }}
       update: ${{ steps.filter.outputs.update }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,41 +55,23 @@ jobs:
           echo "$changed"
 
           matches() { echo "$changed" | grep -qE "$1"; }
-          workflow='^\.github/workflows/ci\.yml$'
-          code=false skyclient=false update=false
+          workflow='^\.github/workflows/(ci|go)\.yml$'
+          code=false update=false
           if matches "\.go\$|^go\.(mod|sum)\$|^internal/|^install\.sh\$|^\.goreleaser\.yaml\$|^\.github/release-gate/|^\.github/workflows/release\.yml\$|$workflow"; then
             code=true
           fi
-          if matches "^internal/skyclient/|$workflow"; then skyclient=true; fi
           if matches "^internal/update/|^update_test\.go\$|$workflow"; then update=true; fi
           {
             echo "code=$code"
-            echo "skyclient=$skyclient"
             echo "update=$update"
           } >> "$GITHUB_OUTPUT"
 
   test:
     name: Build and test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
-        with:
-          go-version-file: go.mod
-      - name: Check formatting
-        run: |
-          unformatted=$(gofmt -l .)
-          if [ -n "$unformatted" ]; then
-            echo "These files need gofmt:"
-            echo "$unformatted"
-            exit 1
-          fi
-      - name: Build
-        run: go build ./...
-      - name: Vet
-        run: go vet ./...
-      - name: Test
-        run: go test -race ./...
+    uses: ./.github/workflows/go.yml
+    with:
+      runner: ubuntu-latest
+      test: true
 
   shellcheck:
     name: Check install.sh and the release gate's curl with shellcheck
@@ -151,24 +133,11 @@ jobs:
           exit "$missing"
 
   real:
-    name: Real installs and smoke test
+    name: Smoke test and real update
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    env:
-      AXON_REAL_INSTALL: "1"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
-        with:
-          go-version-file: go.mod
-      - name: Install the SkyPilot client into an empty home and run sky --version
-        if: needs.changes.outputs.skyclient == 'true'
-        run: go test -count=1 -timeout 20m -run '^TestRealInstall$' -v ./internal/skyclient
-      - name: Run axon login with an example config file in an empty home
-        run: go test -count=1 -timeout 20m -run '^TestSmokeLogin$' -v .
-      - name: Update an old axon to the latest release with axon update
-        if: needs.changes.outputs.update == 'true'
-        env:
-          AXON_REAL_UPDATE: "1"
-        run: go test -count=1 -timeout 10m -run '^TestRealUpdate$' -v .
+    uses: ./.github/workflows/go.yml
+    with:
+      runner: ubuntu-latest
+      real: true
+      update: ${{ needs.changes.outputs.update == 'true' }}
