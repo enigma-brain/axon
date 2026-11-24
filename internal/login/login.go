@@ -4,6 +4,7 @@
 package login
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -341,6 +342,13 @@ func (l *login) addConfig(ctx context.Context, opts Options) (f configfile.File,
 	if err := l.leaveRemoved(put.Remove, opts); err != nil {
 		return fail(err)
 	}
+	// The stored copy's bytes, read before Put replaces them, tell an
+	// update from the same file added again.
+	var same bool
+	if prev := change.Previous; prev != nil {
+		stored, err := os.ReadFile(store.Path(prev.ID))
+		same = err == nil && bytes.Equal(stored, data)
+	}
 	f, err = store.Put(data, put)
 	if err != nil {
 		return fail(err)
@@ -350,6 +358,10 @@ func (l *login) addConfig(ctx context.Context, opts Options) (f configfile.File,
 		if active, ok, err := l.dir.Pathway(); err == nil && ok {
 			reportDestination(opts.Out, *change.Previous, f, active)
 		}
+	}
+	if same {
+		reportAlreadyStored(opts.Out, store.Path(f.ID), f)
+		return f, in, closeIn, nil
 	}
 	previous := change.Previous
 	if previous != nil && !previous.HasRevision && !f.HasRevision {

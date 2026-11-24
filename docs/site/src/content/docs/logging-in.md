@@ -195,7 +195,9 @@ How a change reaches your laptop depends on where the file came from:
   pathway named like one in another stored file, `axon` says so in one line and
   logs in with the file it has.
 - **A file path or standard input:** the file is read once. Run `axon login --config`
-  again with the new file.
+  again with the new file. When it is the same as the stored copy, `axon`
+  prints `The config file <path> is already stored`, with its revision when it
+  has one, and logs in.
 
 `axon sky` never fetches a file. It uses the stored ones.
 

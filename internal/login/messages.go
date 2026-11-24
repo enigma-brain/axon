@@ -140,6 +140,10 @@ const (
 	// The stored file's path, the old revision and the new one, each
 	// "revision N" or "no revision".
 	msgUpdatedFileRevision = "Updated the config file %s from %s to %s\n"
+	// The stored file's path, for a file added again unchanged.
+	msgAlreadyStored = "The config file %s is already stored\n"
+	// The stored file's path and the revision.
+	msgAlreadyStoredRevision = "The config file %s is already stored (revision %d)\n"
 	// A revision number.
 	msgRevisionN  = "revision %d"
 	msgNoRevision = "no revision"
