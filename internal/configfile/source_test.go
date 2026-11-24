@@ -45,7 +45,7 @@ func TestParseSource(t *testing.T) {
 		in, want string
 		address  bool
 	}{
-		{"-", "-", false},
+		{"-", "standard input", false},
 		{"https://example.org/axon.toml", "https://example.org/axon.toml", true},
 		{"~/Downloads/axon.toml", filepath.Join(home, "Downloads", "axon.toml"), false},
 		{"/tmp/axon.toml", "/tmp/axon.toml", false},

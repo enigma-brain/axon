@@ -18,8 +18,6 @@ import (
 // Options are the inputs and outputs of the steps axon login and axon
 // logout run with SkyPilot.
 type Options struct {
-	// In is where the commands the steps run read from.
-	In io.Reader
 	// Out is where progress is written.
 	Out io.Writer
 	// Err is where the error output of the commands the steps run is

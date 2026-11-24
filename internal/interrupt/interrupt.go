@@ -134,6 +134,52 @@ func Stop(ctx context.Context, cmd *exec.Cmd, grace time.Duration) {
 	}
 }
 
+// StopGroup starts cmd, made with exec.CommandContext(ctx, ...), in a
+// process group of its own, and sets how the group is stopped when ctx
+// ends and how long axon waits for cmd then.
+//
+// In a group of its own the program does not receive the terminal's SIGINT,
+// which reaches axon alone. It is for a program that reads an interrupt as
+// a request to carry on another way rather than to stop, and that neither
+// reads from the terminal nor changes its settings: from a group that is
+// not the terminal's, either would stop the program.
+//
+//   - Interrupted by SIGINT or SIGTERM, axon sends the group SIGTERM.
+//   - Otherwise, as when a deadline axon set has passed, the group is
+//     killed.
+//
+// When the program has not exited grace after ctx ended, it is killed, and
+// its output is no longer waited for.
+//
+// StopGroup returns end, which the caller calls once cmd's Wait or Run has
+// returned. When ctx ended, end kills whatever is left of the group, such as
+// a child that ignored SIGTERM, so that nothing the program started outlives
+// it.
+func StopGroup(ctx context.Context, cmd *exec.Cmd, grace time.Duration) (end func()) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Setpgid = true
+	cmd.WaitDelay = grace
+	cmd.Cancel = func() error {
+		sig := syscall.SIGKILL
+		if _, ok := Signal(ctx); ok {
+			sig = syscall.SIGTERM
+		}
+		// The group's ID is the program's own process ID.
+		err := syscall.Kill(-cmd.Process.Pid, sig)
+		if errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		}
+		return err
+	}
+	return func() {
+		if ctx.Err() != nil && cmd.Process != nil {
+			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+	}
+}
+
 // isTerminal reports whether w is a terminal.
 func isTerminal(w io.Writer) bool {
 	f, ok := w.(*os.File)

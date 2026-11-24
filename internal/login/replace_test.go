@@ -293,7 +293,7 @@ func TestLowerRevisionWithoutATerminalKeepsTheStoredCopy(t *testing.T) {
 	if err := h.login(Options{Config: path, Pathway: "campus"}); err != nil {
 		t.Fatal(err)
 	}
-	want := "axon: the config file at " + path + " is revision 5, older than the stored revision 7. Using the stored file.\n"
+	want := "axon: the config file from " + path + " is revision 5, older than the stored revision 7. Using the stored file.\n"
 	if h.errOut.String() != want {
 		t.Errorf("stderr = %q, want %q", h.errOut.String(), want)
 	}
@@ -330,7 +330,7 @@ func TestRefreshOfALowerRevision(t *testing.T) {
 		wantStored   string
 		wantErr      string
 	}{
-		{"no terminal", "", "7", "axon: the config file at https://example.org/config.toml is revision 5, older than the stored revision 7. Using the stored file.\n"},
+		{"no terminal", "", "7", "axon: the config file from https://example.org/config.toml is revision 5, older than the stored revision 7. Using the stored file.\n"},
 		{"no", "n\n", "7", ""},
 		{"yes", "y\n", "5", ""},
 	} {
@@ -456,5 +456,69 @@ func TestLoginWithALeftoverRemovingFile(t *testing.T) {
 	}
 	if h.errOut.Len() != 0 {
 		t.Errorf("stderr = %q", h.errOut.String())
+	}
+}
+
+func TestUpdatedFromNoRevision(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.noFiles()
+	h.logIn()
+	path := filepath.Join(h.home, ".axon", "configs", "example.toml")
+	if err := h.login(Options{Config: writeConfig(t, testkit.ExampleConfig), Pathway: "campus"}); err != nil {
+		t.Fatal(err)
+	}
+	h.out.Reset()
+	if err := h.login(Options{Config: writeConfig(t, revised("1")), Pathway: "campus"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(h.out.String(), "Updated the config file "+path+" from no revision to revision 1\n") {
+		t.Errorf("output:\n%s", h.out.String())
+	}
+}
+
+// TestAddingTheStoredFileAgain says the file is already stored, from any
+// source, with and without a revision, and the login carries on.
+func TestAddingTheStoredFileAgain(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, data, want string
+	}{
+		{"revision", revised("1"), "The config file %PATH% is already stored (revision 1)\n"},
+		{"no revision", testkit.ExampleConfig, "The config file %PATH% is already stored\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := newHarness(t)
+			h.noFiles()
+			h.logIn()
+			path := filepath.Join(h.home, ".axon", "configs", "example.toml")
+			if err := h.login(Options{Config: "-", Pathway: "campus", In: strings.NewReader(tc.data)}); err != nil {
+				t.Fatal(err)
+			}
+			for _, config := range []string{"-", writeConfig(t, tc.data)} {
+				h.out.Reset()
+				opts := Options{Config: config, Pathway: "campus"}
+				if config == "-" {
+					opts.In = strings.NewReader(tc.data)
+				}
+				if err := h.login(opts); err != nil {
+					t.Fatalf("login with --config %s: %v\n%s", config, err, h.out.String())
+				}
+				out := h.out.String()
+				if want := strings.ReplaceAll(tc.want, "%PATH%", path); !strings.Contains(out, want) {
+					t.Errorf("with --config %s, output lacks %q:\n%s", config, want, out)
+				}
+				if strings.Contains(out, "Updated the config file") {
+					t.Errorf("with --config %s, output says the file was updated:\n%s", config, out)
+				}
+				if !strings.Contains(out, "sky: connected as") {
+					t.Errorf("with --config %s, the login did not carry on:\n%s", config, out)
+				}
+			}
+			if h.stored("example") != tc.data {
+				t.Errorf("stored:\n%s", h.stored("example"))
+			}
+		})
 	}
 }

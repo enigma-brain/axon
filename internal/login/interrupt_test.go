@@ -239,17 +239,20 @@ func TestInterruptDuringTheBrowserLogin(t *testing.T) {
 	}
 }
 
-// TestInterruptDuringTheBrowserLoginWaitsForSky interrupts by SIGINT, which
-// the terminal delivers to sky itself: axon sends sky nothing, and kills it
-// only once skyWaitDelay has passed.
-func TestInterruptDuringTheBrowserLoginWaitsForSky(t *testing.T) {
+// TestInterruptDuringTheBrowserLoginStopsSky interrupts by SIGINT, which
+// the terminal does not deliver to sky: axon stops sky itself, without
+// waiting out sky's grace period.
+func TestInterruptDuringTheBrowserLoginStopsSky(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	h.script("hang")
 	start := time.Now()
 	h.interrupted(Options{Pathway: "campus"}, "in your browser", syscall.SIGINT)
-	if took := time.Since(start); took < sky.WaitDelay {
-		t.Errorf("the login stopped after %s, before sky's grace period of %s", took, sky.WaitDelay)
+	if took := time.Since(start); took >= sky.WaitDelay {
+		t.Errorf("the login stopped after %s, want before sky's grace period of %s", took, sky.WaitDelay)
+	}
+	if h.email() != "" {
+		t.Errorf("stored the login of %q", h.email())
 	}
 }
 

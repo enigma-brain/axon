@@ -31,6 +31,12 @@ func TestMain(m *testing.M) {
 		Exit(syscall.SIGTERM)
 	case "trap":
 		childTrap()
+	case "group":
+		childGroup()
+	case "group-child":
+		signal.Ignore(syscall.SIGTERM)
+		fmt.Println("ready")
+		time.Sleep(time.Minute)
 	}
 	os.Exit(3)
 }
@@ -54,6 +60,35 @@ func childTrap() {
 	fmt.Println("ready")
 	fmt.Println("got", <-ch)
 	os.Exit(0)
+}
+
+// leaderIgnoresEnv makes the "group" part ignore SIGTERM itself when it is
+// "1".
+const leaderIgnoresEnv = "AXON_INTERRUPT_LEADER_IGNORES"
+
+// childGroup starts a child that ignores SIGTERM, handing it the probe pipe
+// at file descriptor 3, waits for it to be ready, prints ready, and waits. It ignores SIGTERM too when
+// leaderIgnoresEnv says so.
+func childGroup() {
+	if os.Getenv(leaderIgnoresEnv) == "1" {
+		signal.Ignore(syscall.SIGTERM)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^$")
+	cmd.Env = append(os.Environ(), childEnv+"=group-child")
+	cmd.ExtraFiles = []*os.File{os.NewFile(3, "probe")}
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		os.Exit(5)
+	}
+	if err := cmd.Start(); err != nil {
+		os.Exit(5)
+	}
+	// The child ignores SIGTERM once it is ready.
+	if line, _ := bufio.NewReader(out).ReadString('\n'); line != "ready\n" {
+		os.Exit(6)
+	}
+	fmt.Println("ready")
+	time.Sleep(time.Minute)
 }
 
 // child starts the test binary as part, with its standard output on a pipe,
@@ -168,15 +203,15 @@ func TestReport(t *testing.T) {
 	}
 }
 
-// stopped runs the trapping child under Stop with grace, cancels its
+// stopped runs the trapping child under stop with grace, cancels its
 // context with cause once it is ready, and returns what Wait returned, what
 // the child printed after it was ready, and how long Wait took after the
 // cancellation.
-func stopped(t *testing.T, cause error, grace time.Duration, deliver func(*exec.Cmd)) (error, string, time.Duration) {
+func stopped(t *testing.T, stop func(context.Context, *exec.Cmd, time.Duration), cause error, grace time.Duration, deliver func(*exec.Cmd)) (error, string, time.Duration) {
 	t.Helper()
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
-	cmd, out := child(t, ctx, "trap", func(cmd *exec.Cmd) { Stop(ctx, cmd, grace) })
+	cmd, out := child(t, ctx, "trap", func(cmd *exec.Cmd) { stop(ctx, cmd, grace) })
 	rest := make(chan string, 1)
 	go func() {
 		b, _ := io.ReadAll(out)
@@ -195,7 +230,7 @@ func stopped(t *testing.T, cause error, grace time.Duration, deliver func(*exec.
 
 func TestStopForwardsSIGTERM(t *testing.T) {
 	t.Parallel()
-	_, out, _ := stopped(t, &Error{Signal: syscall.SIGTERM}, 5*time.Second, nil)
+	_, out, _ := stopped(t, Stop, &Error{Signal: syscall.SIGTERM}, 5*time.Second, nil)
 	if !strings.Contains(out, "got terminated") {
 		t.Fatalf("the program printed %q, want it to have received SIGTERM", out)
 	}
@@ -205,7 +240,7 @@ func TestStopSendsNothingOnSIGINT(t *testing.T) {
 	t.Parallel()
 	// The terminal delivers SIGINT to the program; here the test does.
 	deliver := func(cmd *exec.Cmd) { cmd.Process.Signal(syscall.SIGINT) }
-	err, out, _ := stopped(t, &Error{Signal: syscall.SIGINT}, 5*time.Second, deliver)
+	err, out, _ := stopped(t, Stop, &Error{Signal: syscall.SIGINT}, 5*time.Second, deliver)
 	if !strings.Contains(out, "got interrupt") {
 		t.Fatalf("the program printed %q, want it to have received the one SIGINT", out)
 	}
@@ -217,7 +252,7 @@ func TestStopSendsNothingOnSIGINT(t *testing.T) {
 func TestStopKillsAfterGrace(t *testing.T) {
 	t.Parallel()
 	grace := 300 * time.Millisecond
-	err, out, took := stopped(t, &Error{Signal: syscall.SIGINT}, grace, nil)
+	err, out, took := stopped(t, Stop, &Error{Signal: syscall.SIGINT}, grace, nil)
 	if strings.Contains(out, "got") {
 		t.Fatalf("the program printed %q, want no signal sent to it on SIGINT", out)
 	}
@@ -231,11 +266,102 @@ func TestStopKillsAfterGrace(t *testing.T) {
 
 func TestStopKillsOnOtherCancellations(t *testing.T) {
 	t.Parallel()
-	err, out, took := stopped(t, context.DeadlineExceeded, time.Minute, nil)
+	err, out, took := stopped(t, Stop, context.DeadlineExceeded, time.Minute, nil)
 	if strings.Contains(out, "got") || !signaledBy(err, syscall.SIGKILL) {
 		t.Fatalf("Wait returned %v and the program printed %q, want it killed", err, out)
 	}
 	if took > 10*time.Second {
 		t.Fatalf("the program was killed after %s, want at once", took)
+	}
+}
+
+// stopGroup is StopGroup for stopped, which leaves nothing for end to do.
+func stopGroup(ctx context.Context, cmd *exec.Cmd, grace time.Duration) { StopGroup(ctx, cmd, grace) }
+
+func TestStopGroupStartsAGroupOfItsOwn(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cmd, _ := child(t, ctx, "trap", func(cmd *exec.Cmd) { StopGroup(ctx, cmd, time.Second) })
+	pgid, err := syscall.Getpgid(cmd.Process.Pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pgid != cmd.Process.Pid {
+		t.Fatalf("the program is in the process group %d, want its own, %d", pgid, cmd.Process.Pid)
+	}
+}
+
+func TestStopGroupSendsSIGTERMOnEitherSignal(t *testing.T) {
+	t.Parallel()
+	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
+		_, out, took := stopped(t, stopGroup, &Error{Signal: sig}, time.Minute, nil)
+		if !strings.Contains(out, "got terminated") {
+			t.Errorf("interrupted by %v, the program printed %q, want it to have received SIGTERM", sig, out)
+		}
+		if took > 10*time.Second {
+			t.Errorf("interrupted by %v, the program ended after %s, want at once", sig, took)
+		}
+	}
+}
+
+func TestStopGroupKillsOnOtherCancellations(t *testing.T) {
+	t.Parallel()
+	err, out, took := stopped(t, stopGroup, context.DeadlineExceeded, time.Minute, nil)
+	if strings.Contains(out, "got") || !signaledBy(err, syscall.SIGKILL) {
+		t.Fatalf("Wait returned %v and the program printed %q, want it killed", err, out)
+	}
+	if took > 10*time.Second {
+		t.Fatalf("the program was killed after %s, want at once", took)
+	}
+}
+
+// TestStopGroupLeavesNothingRunning interrupts a program whose child
+// ignores SIGTERM, with the program itself ending on SIGTERM or ignoring it,
+// and checks that once end is called the whole group has ended. Both hold
+// the write end of a pipe, whose read end sees EOF only when both have
+// exited.
+func TestStopGroupLeavesNothingRunning(t *testing.T) {
+	t.Parallel()
+	for _, ignores := range []string{"0", "1"} {
+		t.Run("leader ignores "+ignores, func(t *testing.T) {
+			t.Parallel()
+			ctx, cancel := context.WithCancelCause(context.Background())
+			defer cancel(nil)
+			probe, probeW, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer probe.Close()
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
+			cmd.Env = append(os.Environ(), childEnv+"=group", leaderIgnoresEnv+"="+ignores)
+			cmd.ExtraFiles = []*os.File{probeW}
+			end := StopGroup(ctx, cmd, 300*time.Millisecond)
+			out, err := cmd.StdoutPipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			probeW.Close()
+			t.Cleanup(func() { syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) })
+			if line, err := bufio.NewReader(out).ReadString('\n'); line != "ready\n" {
+				t.Fatalf("the program printed %q (%v), want ready", line, err)
+			}
+			cancel(&Error{Signal: syscall.SIGINT})
+			cmd.Wait()
+			end()
+			gone := make(chan struct{})
+			go func() {
+				io.Copy(io.Discard, probe)
+				close(gone)
+			}()
+			select {
+			case <-gone:
+			case <-time.After(5 * time.Second):
+				t.Fatal("a process of the group still runs after end")
+			}
+		})
 	}
 }

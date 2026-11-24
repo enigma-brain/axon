@@ -222,3 +222,13 @@ func reportStored(out io.Writer, path string, f configfile.File, previous *confi
 		fmt.Fprintf(out, msgUpdatedFile, path)
 	}
 }
+
+// reportAlreadyStored writes the line for a config file added again with
+// the same content as the stored copy.
+func reportAlreadyStored(out io.Writer, path string, f configfile.File) {
+	if f.HasRevision {
+		fmt.Fprintf(out, msgAlreadyStoredRevision, path, f.Revision)
+		return
+	}
+	fmt.Fprintf(out, msgAlreadyStored, path)
+}

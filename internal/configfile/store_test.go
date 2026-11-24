@@ -127,8 +127,8 @@ func TestAddKeepsOtherFiles(t *testing.T) {
 	}
 	for id, want := range map[string]string{"example-campus": "-", "example-remote": filepath.Join(home, "remote.toml")} {
 		src, _, err := s.Source(id)
-		if err != nil || src.String() != want {
-			t.Errorf("Source(%s) = %q, %v, want %q", id, src, err, want)
+		if err != nil || src.raw() != want {
+			t.Errorf("Source(%s) = %q, %v, want %q", id, src.raw(), err, want)
 		}
 	}
 }
@@ -149,8 +149,8 @@ func TestAddReplacesTheSameID(t *testing.T) {
 		t.Errorf("stored file = %q, want the newer copy", got)
 	}
 	src, _, _ := s.Source("example")
-	if src.String() != "-" {
-		t.Errorf("source = %q, want -", src)
+	if src.raw() != "-" {
+		t.Errorf("source = %q, want -", src.raw())
 	}
 	files, _, _ := s.List()
 	if got, want := pathwayIDs(files), []string{"example/lab", "example/annex"}; !reflect.DeepEqual(got, want) {
