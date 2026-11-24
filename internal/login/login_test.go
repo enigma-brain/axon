@@ -68,9 +68,12 @@ type fakeClient struct {
 	fail map[string]error
 }
 
-func (c *fakeClient) Version() (string, bool, error) { return c.version, c.installed, nil }
+// The fake's methods have the signatures of sky.Connector's client
+// fields, so that a Connector takes them as they are.
 
-func (c *fakeClient) Ensure(_ context.Context, v string, _ io.Writer) (string, string, error) {
+func (c *fakeClient) Version(axondir.Dir) (string, bool, error) { return c.version, c.installed, nil }
+
+func (c *fakeClient) Ensure(_ context.Context, _ axondir.Dir, v string, _ io.Writer) (string, string, error) {
 	if err := c.fail[v]; err != nil {
 		return "", "", err
 	}
@@ -85,7 +88,7 @@ func (c *fakeClient) Ensure(_ context.Context, v string, _ io.Writer) (string, s
 	return from, v, nil
 }
 
-func (c *fakeClient) Path() (string, error) {
+func (c *fakeClient) Path(axondir.Dir) (string, error) {
 	if p, ok := c.paths[c.version]; ok {
 		return p, nil
 	}
@@ -135,13 +138,11 @@ func newHarness(t *testing.T) *harness {
 		dir: dir,
 		sky: sky.Connector{
 			Dir:           dir,
-			ClientVersion: func(axondir.Dir) (string, bool, error) { return h.client.Version() },
-			EnsureClient: func(ctx context.Context, _ axondir.Dir, v string, progress io.Writer) (string, string, error) {
-				return h.client.Ensure(ctx, v, progress)
-			},
-			ClientPath: func(axondir.Dir) (string, error) { return h.client.Path() },
-			Health:     apiserver.Fetch,
-			CookieFile: h.cookieFile,
+			ClientVersion: h.client.Version,
+			EnsureClient:  h.client.Ensure,
+			ClientPath:    h.client.Path,
+			Health:        apiserver.Fetch,
+			CookieFile:    h.cookieFile,
 			Endpoint: func(p configfile.Pathway) string {
 				if p.Kind == configfile.KindTeleport {
 					return "http://127.0.0.1:" + strconv.Itoa(testPort)

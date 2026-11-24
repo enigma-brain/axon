@@ -487,14 +487,13 @@ func TestDirectUnreachableMessage(t *testing.T) {
 	}
 }
 
-// loginStepFiles are the files of the steps axon login and axon logout run
-// with SkyPilot. They install the client and open a browser; the command
-// group's own files never reach them.
-var loginStepFiles = []string{"connect.go", "direct.go", "point.go", "logout.go"}
-
 // TestCheckNeverInstallsOrOpensABrowser checks the source of the command
-// group: it calls none of the functions that install something or open a
-// browser, and none of the login steps kept in the same package.
+// group: nothing that Run reaches in this package installs something or
+// opens a browser, and Run reaches none of the steps axon login and axon
+// logout run with SkyPilot, which are Connector and its methods. It follows
+// every name Run's code uses, through every file of the package, so a file
+// added later is checked as well; a method is followed by its name,
+// whatever its receiver.
 func TestCheckNeverInstallsOrOpensABrowser(t *testing.T) {
 	forbidden := map[string][]string{
 		"skyclient": {"Ensure"},
@@ -505,7 +504,10 @@ func TestCheckNeverInstallsOrOpensABrowser(t *testing.T) {
 		t.Fatal(err)
 	}
 	fset := token.NewFileSet()
-	parsed := map[string]*ast.File{}
+	// decls holds every top-level declaration by the name it declares,
+	// and imports the names each file imports.
+	decls := map[string][]ast.Node{}
+	imports := map[ast.Node]map[string]bool{}
 	for _, name := range files {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
@@ -514,71 +516,120 @@ func TestCheckNeverInstallsOrOpensABrowser(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		parsed[name] = f
-	}
-	// The names the login steps declare.
-	steps := map[string]bool{}
-	for _, name := range loginStepFiles {
-		f, ok := parsed[name]
-		if !ok {
-			t.Fatalf("%s is not in the package", name)
-		}
-		for _, d := range f.Decls {
-			switch d := d.(type) {
-			case *ast.FuncDecl:
-				steps[d.Name.Name] = true
-			case *ast.GenDecl:
-				for _, spec := range d.Specs {
-					switch spec := spec.(type) {
-					case *ast.TypeSpec:
-						steps[spec.Name.Name] = true
-					case *ast.ValueSpec:
-						for _, n := range spec.Names {
-							steps[n.Name] = true
-						}
-					}
-				}
-			}
-		}
-		delete(parsed, name)
-	}
-	for name, f := range parsed {
 		imported := map[string]bool{}
 		for _, imp := range f.Imports {
 			imported[path.Base(strings.Trim(imp.Path.Value, `"`))] = true
 		}
-		ast.Inspect(f, func(n ast.Node) bool {
-			switch n := n.(type) {
-			case *ast.SelectorExpr:
-				if pkg, ok := n.X.(*ast.Ident); ok && imported[pkg.Name] {
-					for _, fn := range forbidden[pkg.Name] {
-						if n.Sel.Name == fn {
-							t.Errorf("%s calls %s.%s", fset.Position(n.Pos()), pkg.Name, fn)
+		add := func(n string, d ast.Node) {
+			decls[n] = append(decls[n], d)
+			imports[d] = imported
+		}
+		for _, d := range f.Decls {
+			switch d := d.(type) {
+			case *ast.FuncDecl:
+				add(d.Name.Name, d)
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					switch spec := spec.(type) {
+					case *ast.TypeSpec:
+						add(spec.Name.Name, spec)
+					case *ast.ValueSpec:
+						for _, n := range spec.Names {
+							add(n.Name, spec)
 						}
 					}
-					// Another package's name is not a login step's.
-					return false
-				}
-			case *ast.Ident:
-				if steps[n.Name] {
-					t.Errorf("%s uses %s, a login step", fset.Position(n.Pos()), n.Name)
 				}
 			}
-			return true
-		})
-		if strings.Contains(mustRead(t, name), `"api", "login"`) {
-			t.Errorf("%s runs sky api login", name)
+		}
+	}
+	if len(decls["Run"]) == 0 {
+		t.Fatal("the package declares no Run")
+	}
+
+	queue := []string{"Run"}
+	seen := map[string]bool{"Run": true}
+	follow := func(name string) {
+		if !seen[name] && len(decls[name]) > 0 {
+			seen[name] = true
+			queue = append(queue, name)
+		}
+	}
+	for len(queue) > 0 {
+		name := queue[0]
+		queue = queue[1:]
+		for _, d := range decls[name] {
+			if isLoginStep(d) {
+				t.Errorf("%s: Run reaches %s, a login step", fset.Position(d.Pos()), name)
+				continue
+			}
+			imported := imports[d]
+			ast.Inspect(d, func(n ast.Node) bool {
+				switch n := n.(type) {
+				case *ast.SelectorExpr:
+					if pkg, ok := n.X.(*ast.Ident); ok && imported[pkg.Name] {
+						for _, fn := range forbidden[pkg.Name] {
+							if n.Sel.Name == fn {
+								t.Errorf("%s: Run reaches %s, which uses %s.%s", fset.Position(n.Pos()), name, pkg.Name, fn)
+							}
+						}
+						// Another package's name is not this package's.
+						return false
+					}
+					follow(n.Sel.Name)
+				case *ast.Ident:
+					follow(n.Name)
+				case *ast.CallExpr:
+					if runsAPILogin(n.Args) {
+						t.Errorf("%s: Run reaches %s, which runs sky api login", fset.Position(n.Pos()), name)
+					}
+				case *ast.CompositeLit:
+					if runsAPILogin(n.Elts) {
+						t.Errorf("%s: Run reaches %s, which runs sky api login", fset.Position(n.Pos()), name)
+					}
+				}
+				return true
+			})
+		}
+	}
+	// The check reaches the code it is meant to: the probes it runs.
+	for _, name := range []string{"checkConnection", "realProbes"} {
+		if !seen[name] {
+			t.Errorf("Run does not reach %s; the walk is broken", name)
 		}
 	}
 }
 
-func mustRead(t *testing.T, name string) string {
-	t.Helper()
-	data, err := os.ReadFile(name)
-	if err != nil {
-		t.Fatal(err)
+// isLoginStep reports whether d is one of the login steps: Connector, its
+// constructor, or a method of Connector.
+func isLoginStep(d ast.Node) bool {
+	switch d := d.(type) {
+	case *ast.TypeSpec:
+		return d.Name.Name == "Connector"
+	case *ast.FuncDecl:
+		if d.Recv == nil {
+			return d.Name.Name == "NewConnector"
+		}
+		recv := d.Recv.List[0].Type
+		if star, ok := recv.(*ast.StarExpr); ok {
+			recv = star.X
+		}
+		id, ok := recv.(*ast.Ident)
+		return ok && id.Name == "Connector"
 	}
-	return string(data)
+	return false
+}
+
+// runsAPILogin reports whether exprs hold the words "api" and "login" one
+// after the other, as the arguments of sky api login.
+func runsAPILogin(exprs []ast.Expr) bool {
+	for i := 0; i+1 < len(exprs); i++ {
+		a, ok1 := exprs[i].(*ast.BasicLit)
+		b, ok2 := exprs[i+1].(*ast.BasicLit)
+		if ok1 && ok2 && a.Value == `"api"` && b.Value == `"login"` {
+			return true
+		}
+	}
+	return false
 }
 
 func TestStopExitsNonZeroWithTheMessage(t *testing.T) {
