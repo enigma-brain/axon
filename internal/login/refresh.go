@@ -54,7 +54,7 @@ func (l *login) refresh(ctx context.Context, p configfile.Pathway, added *config
 		changed bool
 	)
 	if err == nil {
-		switch keep, askErr := l.confirmDestination(p, data, src, path, opts); {
+		switch keep, askErr := l.confirmDestination(ctx, p, data, src, path, opts); {
 		case askErr != nil:
 			return configfile.Pathway{}, askErr
 		case keep:
@@ -65,7 +65,7 @@ func (l *login) refresh(ctx context.Context, p configfile.Pathway, added *config
 	var lower *configfile.LowerRevisionError
 	if errors.As(err, &lower) {
 		fmt.Fprintf(opts.Out, msgLowerRevision, path, lower.Stored, lower.New)
-		yes, askErr := askYesNo(opts.In, opts.Out, fmt.Sprintf(msgLowerPrompt, lower.New))
+		yes, askErr := askYesNo(ctx, opts.In, opts.Out, fmt.Sprintf(msgLowerPrompt, lower.New))
 		switch {
 		case errors.Is(askErr, errNoAnswer):
 			fmt.Fprintf(opts.Err, msgLowerRevisionWarning, src, lower.New, lower.Stored)
@@ -123,7 +123,7 @@ func (l *login) refresh(ctx context.Context, p configfile.Pathway, added *config
 		return all[0], nil
 	}
 	fmt.Fprintln(opts.Out, gone)
-	return askPathway(all, opts.In, opts.Out)
+	return askPathway(ctx, all, opts.In, opts.Out)
 }
 
 // confirmDestination asks whether to take the fetched file data when it
@@ -137,7 +137,7 @@ func (l *login) refresh(ctx context.Context, p configfile.Pathway, added *config
 // so a script that pipes answers in cannot move the pathway without
 // --replace. A file that fails the checks, or whose id is not p's file's,
 // is not asked about: storing it refuses it.
-func (l *login) confirmDestination(p configfile.Pathway, data []byte, src configfile.Source, path string, opts Options) (keep bool, err error) {
+func (l *login) confirmDestination(ctx context.Context, p configfile.Pathway, data []byte, src configfile.Source, path string, opts Options) (keep bool, err error) {
 	fetched, err := configfile.Parse(data)
 	if err != nil || fetched.ID != p.File {
 		return false, nil
@@ -160,7 +160,7 @@ func (l *login) confirmDestination(p configfile.Pathway, data []byte, src config
 		fmt.Fprintf(opts.Err, msgDestinationWarning, src, p.ID)
 		return true, nil
 	}
-	yes, err := askYesNo(opts.In, opts.Out, msgDestinationPrompt)
+	yes, err := askYesNo(ctx, opts.In, opts.Out, msgDestinationPrompt)
 	switch {
 	case errors.Is(err, errNoAnswer):
 		fmt.Fprintf(opts.Err, msgDestinationWarning, src, p.ID)

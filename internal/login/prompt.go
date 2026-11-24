@@ -1,6 +1,7 @@
 package login
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -21,7 +22,7 @@ import (
 //     picks.
 //   - Otherwise the active pathway, when a stored file has it.
 //   - Otherwise the only stored pathway, or one the user picks.
-func (l *login) determinePathway(files []configfile.File, added *configfile.File, opts Options) (configfile.Pathway, error) {
+func (l *login) determinePathway(ctx context.Context, files []configfile.File, added *configfile.File, opts Options) (configfile.Pathway, error) {
 	var all []configfile.Pathway
 	for _, f := range files {
 		all = append(all, f.Pathways...)
@@ -54,7 +55,7 @@ func (l *login) determinePathway(files []configfile.File, added *configfile.File
 	if len(candidates) == 1 {
 		return candidates[0], nil
 	}
-	return askPathway(candidates, opts.In, opts.Out)
+	return askPathway(ctx, candidates, opts.In, opts.Out)
 }
 
 // find returns the pathway in ps whose identifier is id.
@@ -83,7 +84,7 @@ func idList(ps []configfile.Pathway) string {
 // with its description, until it gets an answer it accepts: a number from
 // the list or a pathway's identifier. At the end of input it stops and
 // names --pathway.
-func askPathway(ps []configfile.Pathway, in io.Reader, out io.Writer) (configfile.Pathway, error) {
+func askPathway(ctx context.Context, ps []configfile.Pathway, in io.Reader, out io.Writer) (configfile.Pathway, error) {
 	fmt.Fprintln(out, "Which pathway are you on?")
 	width := 0
 	for _, p := range ps {
@@ -95,7 +96,10 @@ func askPathway(ps []configfile.Pathway, in io.Reader, out io.Writer) (configfil
 
 	for {
 		fmt.Fprintf(out, "Pathway [1-%d]: ", len(ps))
-		line, err := readLine(in)
+		line, err := readLine(ctx, in)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return configfile.Pathway{}, ctxErr
+		}
 		answer := strings.TrimSpace(line)
 		if answer != "" {
 			if p, ok := parseAnswer(ps, answer); ok {
@@ -125,10 +129,35 @@ func parseAnswer(ps []configfile.Pathway, answer string) (configfile.Pathway, bo
 	return find(ps, strings.ToLower(answer))
 }
 
-// readLine reads one line from r, up to and including the newline. It reads a
-// byte at a time, so that nothing after the line is consumed: the commands
-// login runs next read the same input.
-func readLine(r io.Reader) (string, error) {
+// readLine reads one line from r, up to and including the newline, and
+// returns ctx's error as soon as ctx ends, without waiting for the line. It
+// reads a byte at a time, so that nothing after the line is consumed: the
+// commands login runs next read the same input. A read that ctx cut short
+// is left running; it ends when input arrives or axon exits.
+func readLine(ctx context.Context, r io.Reader) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	type result struct {
+		line string
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		line, err := readLineFrom(r)
+		done <- result{line, err}
+	}()
+	select {
+	case res := <-done:
+		return res.line, res.err
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+// readLineFrom reads one line from r, as readLine does, however long it
+// takes.
+func readLineFrom(r io.Reader) (string, error) {
 	var line []byte
 	b := make([]byte, 1)
 	for {

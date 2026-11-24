@@ -487,13 +487,13 @@ func TestAskPathway(t *testing.T) {
 		"2":              "remote",
 	}
 	for in, want := range cases {
-		got, err := askPathway(ps, strings.NewReader(in), io.Discard)
+		got, err := askPathway(context.Background(), ps, strings.NewReader(in), io.Discard)
 		if err != nil || got.ID != want {
 			t.Errorf("answers %q: got %q, %v, want %q", in, got.ID, err, want)
 		}
 	}
 	var out bytes.Buffer
-	_, err := askPathway(ps, strings.NewReader("3\nnope\n"), &out)
+	_, err := askPathway(context.Background(), ps, strings.NewReader("3\nnope\n"), &out)
 	if err == nil || !strings.Contains(err.Error(), "--pathway") {
 		t.Errorf("no valid answer: err = %v", err)
 	}
@@ -505,7 +505,7 @@ func TestAskPathway(t *testing.T) {
 func TestAskPathwayLeavesLaterInput(t *testing.T) {
 	ps := []configfile.Pathway{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}}
 	in := strings.NewReader("1\nTOKEN\n")
-	if _, err := askPathway(ps, in, io.Discard); err != nil {
+	if _, err := askPathway(context.Background(), ps, in, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	rest, _ := io.ReadAll(in)

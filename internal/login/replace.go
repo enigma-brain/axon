@@ -1,6 +1,7 @@
 package login
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -16,10 +17,13 @@ var errNoAnswer = errors.New("no answer")
 
 // askYesNo asks question and reads answers from in until one is yes or
 // no. Enter alone is no. At the end of input it returns errNoAnswer.
-func askYesNo(in io.Reader, out io.Writer, question string) (bool, error) {
+func askYesNo(ctx context.Context, in io.Reader, out io.Writer, question string) (bool, error) {
 	for {
 		fmt.Fprint(out, question)
-		line, err := readLine(in)
+		line, err := readLine(ctx, in)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return false, ctxErr
+		}
 		switch strings.ToLower(strings.TrimSpace(line)) {
 		case "y", "yes":
 			return true, nil
@@ -59,7 +63,7 @@ type errClashNoTerminal struct{ clash configfile.Clash }
 // file a pathway of change clashes with. With replace, every answer is yes
 // and nothing is asked. Removal is not done here: the caller passes the
 // outcome's remove to configfile.Store.Put.
-func resolveClashes(store configfile.Store, change configfile.Change, replace bool, in io.Reader, out io.Writer) (clashOutcome, error) {
+func resolveClashes(ctx context.Context, store configfile.Store, change configfile.Change, replace bool, in io.Reader, out io.Writer) (clashOutcome, error) {
 	var outcome clashOutcome
 	several := len(change.File.Pathways) > 1
 	for _, group := range groupClashes(change.Clashes) {
@@ -74,7 +78,7 @@ func resolveClashes(store configfile.Store, change configfile.Change, replace bo
 		if !replace {
 			fmt.Fprint(out, clashQuestion(store, c, several))
 			var err error
-			yes, err = askYesNo(in, out, msgReplacePrompt)
+			yes, err = askYesNo(ctx, in, out, msgReplacePrompt)
 			if errors.Is(err, errNoAnswer) {
 				return clashOutcome{}, &errClashNoTerminal{clash: c}
 			}

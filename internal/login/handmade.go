@@ -271,7 +271,7 @@ func (l *login) makeFromFlags(ctx context.Context, opts Options) (configfile.Fil
 	if err := l.probe(ctx, h, true, opts.Out); err != nil {
 		return configfile.File{}, err
 	}
-	return l.storeHandMade(h, opts)
+	return l.storeHandMade(ctx, h, opts)
 }
 
 // makeAtPrompt asks for a pathway and makes it, asking for an address
@@ -282,7 +282,7 @@ func (l *login) makeAtPrompt(ctx context.Context, opts Options) (configfile.File
 	var h handMade
 	for h.kind == "" {
 		fmt.Fprint(out, msgKindQuestion)
-		answer, err := askLine(in, out, msgKindPrompt)
+		answer, err := askLine(ctx, in, out, msgKindPrompt)
 		if err != nil {
 			return configfile.File{}, err
 		}
@@ -299,9 +299,9 @@ func (l *login) makeAtPrompt(ctx context.Context, opts Options) (configfile.File
 	for {
 		var err error
 		if h.kind == configfile.KindDirect {
-			h.endpoint, err = askValid(in, out, msgEndpointPrompt, "", cleanEndpoint)
+			h.endpoint, err = askValid(ctx, in, out, msgEndpointPrompt, "", cleanEndpoint)
 		} else {
-			h.proxy, err = askValid(in, out, msgProxyPrompt, "", cleanProxy)
+			h.proxy, err = askValid(ctx, in, out, msgProxyPrompt, "", cleanProxy)
 		}
 		if err != nil {
 			return configfile.File{}, err
@@ -317,22 +317,25 @@ func (l *login) makeAtPrompt(ctx context.Context, opts Options) (configfile.File
 	}
 	if h.kind == configfile.KindTeleport {
 		var err error
-		if h.app, err = askValid(in, out, fmt.Sprintf(msgAppPrompt, defaultApp), defaultApp, cleanApp); err != nil {
+		if h.app, err = askValid(ctx, in, out, fmt.Sprintf(msgAppPrompt, defaultApp), defaultApp, cleanApp); err != nil {
 			return configfile.File{}, err
 		}
 	}
 	var err error
-	if h.name, err = askValid(in, out, fmt.Sprintf(msgNamePrompt, h.address()), h.address(), cleanName); err != nil {
+	if h.name, err = askValid(ctx, in, out, fmt.Sprintf(msgNamePrompt, h.address()), h.address(), cleanName); err != nil {
 		return configfile.File{}, err
 	}
-	return l.storeHandMade(h, opts)
+	return l.storeHandMade(ctx, h, opts)
 }
 
 // askLine asks with prompt and returns the trimmed answer. At the end of
 // input with no answer, it stops and says how to make a pathway.
-func askLine(in io.Reader, out io.Writer, prompt string) (string, error) {
+func askLine(ctx context.Context, in io.Reader, out io.Writer, prompt string) (string, error) {
 	fmt.Fprint(out, prompt)
-	line, err := readLine(in)
+	line, err := readLine(ctx, in)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return "", ctxErr
+	}
 	answer := strings.TrimSpace(line)
 	if err != nil && (answer == "" || !errors.Is(err, io.EOF)) {
 		fmt.Fprintln(out)
@@ -346,9 +349,9 @@ func askLine(in io.Reader, out io.Writer, prompt string) (string, error) {
 
 // askValid asks with prompt until clean accepts the answer, and returns
 // what clean makes of it. An empty answer is def, when def is not empty.
-func askValid(in io.Reader, out io.Writer, prompt, def string, clean func(string) (string, error)) (string, error) {
+func askValid(ctx context.Context, in io.Reader, out io.Writer, prompt, def string, clean func(string) (string, error)) (string, error) {
 	for {
-		answer, err := askLine(in, out, prompt)
+		answer, err := askLine(ctx, in, out, prompt)
 		if err != nil {
 			return "", err
 		}
@@ -369,7 +372,7 @@ func askValid(in io.Reader, out io.Writer, prompt, def string, clean func(string
 // storeHandMade writes h as a config file and stores it as hand-made,
 // asking first about each stored pathway it clashes with. When the user
 // keeps a stored pathway of the same name, it asks for another name.
-func (l *login) storeHandMade(h handMade, opts Options) (configfile.File, error) {
+func (l *login) storeHandMade(ctx context.Context, h handMade, opts Options) (configfile.File, error) {
 	store := configfile.NewStore(l.dir)
 	for {
 		id := identifier(h.name)
@@ -385,7 +388,7 @@ func (l *login) storeHandMade(h handMade, opts Options) (configfile.File, error)
 		if err != nil {
 			return configfile.File{}, err
 		}
-		outcome, err := resolveClashes(store, change, opts.Replace, opts.In, opts.Out)
+		outcome, err := resolveClashes(ctx, store, change, opts.Replace, opts.In, opts.Out)
 		var noTerminal *errClashNoTerminal
 		if errors.As(err, &noTerminal) {
 			c := noTerminal.clash
@@ -396,7 +399,7 @@ func (l *login) storeHandMade(h handMade, opts Options) (configfile.File, error)
 		}
 		if outcome.declined != nil {
 			fmt.Fprint(opts.Out, msgChooseName)
-			if h.name, err = askValid(opts.In, opts.Out, fmt.Sprintf(msgNamePrompt, h.address()), h.address(), cleanName); err != nil {
+			if h.name, err = askValid(ctx, opts.In, opts.Out, fmt.Sprintf(msgNamePrompt, h.address()), h.address(), cleanName); err != nil {
 				return configfile.File{}, err
 			}
 			continue
