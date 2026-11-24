@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -47,9 +45,9 @@ func (l *login) connectDirect(ctx context.Context, p configfile.Pathway, opts Op
 
 	sawNeedsAuth, err := l.browserLogin(ctx, opts, skyPath, endpoint)
 	if err == nil && sawNeedsAuth {
-		fmt.Fprintf(opts.Out, "sky: the login ended with %s; removing %s and logging in once more\n", needsAuth, l.cookieFile)
-		if err := os.Remove(l.cookieFile); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return apiserver.Health{}, fmt.Errorf("remove %s: %w. Remove it by hand and run `axon login` again.", l.cookieFile, err)
+		fmt.Fprintf(opts.Out, "sky: the login ended with %s; removing the cookies of %s from %s and logging in once more\n", needsAuth, endpoint, l.cookieFile)
+		if _, err := apiserver.RemoveCookies(l.cookieFile, endpoint); err != nil {
+			return apiserver.Health{}, fmt.Errorf("remove the cookies of %s from %s: %w. Remove that file by hand and run `axon login` again.", endpoint, l.cookieFile, err)
 		}
 		sawNeedsAuth, err = l.browserLogin(ctx, opts, skyPath, endpoint)
 		if err == nil && sawNeedsAuth {
@@ -86,7 +84,7 @@ func (l *login) browserLogin(ctx context.Context, opts Options, skyPath, endpoin
 	if ctx.Err() != nil {
 		return false, ctx.Err()
 	}
-	if seen.contains(needsAuth) {
+	if seen.containsWord(needsAuth) {
 		return true, nil
 	}
 	if runErr != nil {
@@ -108,10 +106,38 @@ func (w *scanWriter) Write(p []byte) (int, error) {
 	return w.buf.Write(p)
 }
 
-func (w *scanWriter) contains(s string) bool {
+// containsWord reports whether what was written holds word as a word of its
+// own: not inside a longer word, and not inside an address such as a URL.
+func (w *scanWriter) containsWord(word string) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return bytes.Contains(w.buf.Bytes(), []byte(s))
+	return hasWord(w.buf.String(), word)
+}
+
+// hasWord reports whether text holds word with a word's edges on both sides.
+// Before the word comes the start of text, white space, or one of ( [ " ' ` :
+// and after it the end of text, white space, or one of ) ] " ' ` . , ; : so that
+// "(status: needs_auth)" holds it, and "https://host/needs_auth",
+// "?status=needs_auth" and "x_needs_auth" do not.
+func hasWord(text, word string) bool {
+	for i := 0; ; {
+		j := strings.Index(text[i:], word)
+		if j < 0 {
+			return false
+		}
+		start := i + j
+		end := start + len(word)
+		if (start == 0 || isWordEdge(text[start-1], "([\"'`:")) &&
+			(end == len(text) || isWordEdge(text[end], ")]\"'`.,;:")) {
+			return true
+		}
+		i = start + 1
+	}
+}
+
+// isWordEdge reports whether c is white space or one of punct.
+func isWordEdge(c byte, punct string) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || strings.IndexByte(punct, c) >= 0
 }
 
 // withoutVars returns env without the variables named.

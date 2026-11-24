@@ -361,7 +361,13 @@ func TestDirectNeedsAuthRetriesOnce(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(h.cookieFile), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(h.cookieFile, []byte("# Netscape HTTP Cookie File\n"), 0o600); err != nil {
+	// The fake server's address is on 127.0.0.1; the other server's
+	// cookie is not for it.
+	const otherCookie = "other.example.org\tFALSE\t/\tTRUE\t0\t_oauth2_proxy\tkeep\n"
+	cookies := "# Netscape HTTP Cookie File\n" +
+		"127.0.0.1\tFALSE\t/\tFALSE\t0\t_oauth2_proxy\tstale\n" +
+		otherCookie
+	if err := os.WriteFile(h.cookieFile, []byte(cookies), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h.script("needs", "ok")
@@ -371,11 +377,95 @@ func TestDirectNeedsAuthRetriesOnce(t *testing.T) {
 	if n := h.skyRuns(); n != 2 {
 		t.Errorf("sky ran %d times, want 2", n)
 	}
-	if _, err := os.Stat(h.cookieFile); !os.IsNotExist(err) {
-		t.Errorf("the cookie file is still there: %v", err)
+	data, err := os.ReadFile(h.cookieFile)
+	if err != nil {
+		t.Fatalf("the cookie file is gone: %v", err)
+	}
+	if want := "# Netscape HTTP Cookie File\n" + otherCookie; string(data) != want {
+		t.Errorf("cookie file =\n%s\nwant only the other server's cookie:\n%s", data, want)
+	}
+	if want := "removing the cookies of " + h.directURL + " from " + h.cookieFile; !strings.Contains(h.out.String(), want) {
+		t.Errorf("output lacks %q:\n%s", want, h.out.String())
 	}
 	if !strings.Contains(h.errOut.String(), "needs_auth") {
 		t.Errorf("sky's error output was not forwarded: %q", h.errOut.String())
+	}
+}
+
+func TestDirectNeedsAuthRetriesWithNoCookieFile(t *testing.T) {
+	h := newHarness(t)
+	h.script("needs", "ok")
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if n := h.skyRuns(); n != 2 {
+		t.Errorf("sky ran %d times, want 2", n)
+	}
+}
+
+func TestDirectCookieRemovalFailureSaysWhatToDo(t *testing.T) {
+	h := newHarness(t)
+	// The server's cookie is in a directory that cannot be written, so
+	// the file can be read but not rewritten without it.
+	skyDir := filepath.Dir(h.cookieFile)
+	if err := os.MkdirAll(skyDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(h.cookieFile, []byte("127.0.0.1\tFALSE\t/\tFALSE\t0\t_oauth2_proxy\tstale\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(skyDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(skyDir, 0o700) })
+	h.script("needs", "ok")
+	err := h.run("campus")
+	want := "remove the cookies of " + h.directURL + " from " + h.cookieFile + ": "
+	if err == nil || !strings.Contains(err.Error(), want) ||
+		!strings.HasSuffix(err.Error(), ". Remove that file by hand and run `axon login` again.") {
+		t.Fatalf("err = %v, want one starting %q that says to remove the file", err, want)
+	}
+	if n := h.skyRuns(); n != 1 {
+		t.Errorf("sky ran %d times, want 1", n)
+	}
+}
+
+// An address that holds needs_auth, such as the login page's, is not the
+// status, so no retry follows.
+func TestDirectNeedsAuthInAnAddressIsNotTheStatus(t *testing.T) {
+	h := newHarness(t)
+	h.script("address")
+	if err := os.WriteFile(filepath.Join(h.skyDir, "sky"), []byte(strings.Replace(fakeSky,
+		"silent) echo",
+		"address) echo \"Open https://sky.example.org/auth/needs_auth?state=needs_auth\"; touch \"$dir/loggedin\" ;;\nsilent) echo", 1)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if n := h.skyRuns(); n != 1 {
+		t.Errorf("sky ran %d times, want 1", n)
+	}
+}
+
+func TestHasWord(t *testing.T) {
+	for text, want := range map[string]bool{
+		"needs_auth":                            true,
+		"Failed to log in (status: needs_auth)": true,
+		"status needs_auth.":                    true,
+		`{"status": "needs_auth"}`:              true,
+		"status:needs_auth\n":                   true,
+		"https://sky.example.org/needs_auth":    false,
+		"https://sky.example.org/?s=needs_auth": false,
+		"x_needs_auth":                          false,
+		"needs_auth_soon":                       false,
+		"needs_authorization":                   false,
+		"/needs_auth then (needs_auth)":         true,
+		"":                                      false,
+	} {
+		if got := hasWord(text, needsAuth); got != want {
+			t.Errorf("hasWord(%q) = %v, want %v", text, got, want)
+		}
 	}
 }
 
