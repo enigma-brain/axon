@@ -131,12 +131,6 @@ func handArgs(proxy string) []string {
 	return []string{"--proxy=" + proxy, "proxy", "app", testApp, "--port", strconv.Itoa(testPort)}
 }
 
-// oldArgs returns the arguments of the tunnel's command in the form an older
-// axon ran it, without --proxy.
-func oldArgs() []string {
-	return []string{"proxy", "app", testApp, "--port", strconv.Itoa(testPort)}
-}
-
 // startByHand starts the fake tsh the way a user would at a prompt, with a
 // bare "tsh" as the first argument, in mode, and with no record. It returns
 // once the fake listens.
