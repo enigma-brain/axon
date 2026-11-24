@@ -210,8 +210,8 @@ func TestStalledProxyStops(t *testing.T) {
 	pingURL = fixedURL(stall.URL + "/webapi/ping")
 
 	_, err := Ensure(context.Background(), testProxy)
-	if err == nil || !strings.Contains(err.Error(), "read the Teleport proxy's version") || !strings.Contains(err.Error(), "no data for 200ms") {
-		t.Errorf("Ensure returned %v, want the stalled step named", err)
+	if want := "can't reach the Teleport proxy at " + testProxy + ": timed out"; err == nil || err.Error() != want {
+		t.Errorf("Ensure returned %v, want %q", err, want)
 	}
 }
 
@@ -220,8 +220,35 @@ func TestProxyUnreachable(t *testing.T) {
 	f.putOnPath("18.11.7")
 	pingURL = fixedURL("http://127.0.0.1:1/webapi/ping")
 	_, err := Ensure(context.Background(), testProxy)
-	if err == nil || !strings.Contains(err.Error(), "read the Teleport proxy's version at http://127.0.0.1:1/webapi/ping") {
-		t.Fatalf("Ensure returned %v, want the step named", err)
+	var unreachable *UnreachableError
+	if want := "can't reach the Teleport proxy at " + testProxy + ": connection refused"; err == nil || err.Error() != want || !errors.As(err, &unreachable) {
+		t.Fatalf("Ensure returned %v, want %q", err, want)
+	}
+}
+
+// A proxy that answers, but not with its version, is not one that can't be
+// reached.
+func TestProxyAnswersWithAnError(t *testing.T) {
+	f := newFixture(t)
+	f.putOnPath("18.11.7")
+	srv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(srv.Close)
+	pingURL = fixedURL(srv.URL + "/webapi/ping")
+	_, err := Ensure(context.Background(), testProxy)
+	var unreachable *UnreachableError
+	if err == nil || errors.As(err, &unreachable) || !strings.Contains(err.Error(), "read the Teleport proxy's version at "+srv.URL+"/webapi/ping: GET "+srv.URL+"/webapi/ping: 404 Not Found") {
+		t.Fatalf("Ensure returned %v, want the step and the status named", err)
+	}
+}
+
+func TestCancelledPingIsNotUnreachable(t *testing.T) {
+	newFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := Ping(ctx, testProxy)
+	var unreachable *UnreachableError
+	if !errors.Is(err, context.Canceled) || errors.As(err, &unreachable) {
+		t.Fatalf("Ping returned %v, want context.Canceled", err)
 	}
 }
 
