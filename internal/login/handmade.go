@@ -14,6 +14,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/enigma-brain/axon/internal/apiserver"
+	"github.com/enigma-brain/axon/internal/netreason"
 	"github.com/enigma-brain/axon/internal/orgfile"
 	"github.com/enigma-brain/axon/internal/tsh"
 )
@@ -180,7 +181,7 @@ func probeSky(ctx context.Context, endpoint string) error {
 	case ctx.Err() != nil:
 		return ctx.Err()
 	case errors.Is(err, apiserver.ErrUnreachable):
-		return &probeError{reason: strings.TrimPrefix(err.Error(), apiserver.ErrUnreachable.Error()+": ")}
+		return &probeError{reason: netreason.Short(err)}
 	default:
 		return &probeError{notSkyPilot: true, reason: err.Error()}
 	}
@@ -203,7 +204,10 @@ func (l *login) probe(ctx context.Context, h handMade, fromFlags bool, out io.Wr
 	}
 	var pe *probeError
 	notSkyPilot := errors.As(err, &pe) && pe.notSkyPilot
-	reason := err.Error()
+	reason := netreason.Short(err)
+	if pe != nil {
+		reason = pe.reason
+	}
 	switch {
 	case h.kind == orgfile.KindTeleport && fromFlags:
 		return fmt.Errorf(msgFlagProxyUnreachable, h.proxy, reason)
