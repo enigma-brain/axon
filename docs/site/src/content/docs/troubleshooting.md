@@ -791,8 +791,8 @@ file behind, `axon update` leaves the `axon` you ran in place, the SkyPilot
 client stays at the version it was, a stored config file is as it was or as
 the command was making it, and a Teleport tunnel that the login started
 either runs or does not. A program that `axon` was running, such as the
-browser login or Teleport's login, received your Ctrl-C too, and `axon`
-waited for it to end. Run the command again when you want it.
+browser login or Teleport's login, received your Ctrl-C from the terminal
+too, or SIGTERM from `axon`, and `axon` waited for it to end. Run the command again when you want it.
 
 Pressing Ctrl-C a second time while `axon` stops ends it at once, and can
 leave a temporary file whose name begins with a dot beside the file `axon`
