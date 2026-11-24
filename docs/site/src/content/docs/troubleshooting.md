@@ -266,7 +266,7 @@ describes, or leave things as they are.
 ### An older revision of a config file
 
 ```text
-axon: the config file at <source> is revision <n>, older than the stored revision <m>. Using the stored file.
+axon: the config file from <source> is revision <n>, older than the stored revision <m>. Using the stored file.
 ```
 
 The file you added, or the one fetched at login, is older than the copy on your

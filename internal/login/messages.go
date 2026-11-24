@@ -107,9 +107,8 @@ const (
 
 // A config file that holds nothing.
 const (
-	// The source: the path, the address, or msgStdin.
+	// The source: the path, the address, or standard input.
 	msgConfigEmpty = "%s is empty."
-	msgStdin       = "standard input"
 	// The stored file's path and the address it was fetched from again.
 	msgRefreshEmpty = "axon: could not update %s: %s is empty. Using the stored file.\n"
 )
@@ -130,7 +129,7 @@ const (
 	// The stored revision.
 	msgKeptRevision = "Kept revision %d.\n"
 	// The address, the new revision and the stored one.
-	msgLowerRevisionWarning = "axon: the config file at %s is revision %d, older than the stored revision %d. Using the stored file.\n"
+	msgLowerRevisionWarning = "axon: the config file from %s is revision %d, older than the stored revision %d. Using the stored file.\n"
 
 	// The stored file's path.
 	msgStoredFile = "Stored the config file %s\n"

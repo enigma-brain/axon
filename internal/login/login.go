@@ -284,7 +284,7 @@ func (l *login) addConfig(ctx context.Context, opts Options) (f configfile.File,
 		return configfile.File{}, nil, nil, err
 	}
 	in, closeIn = opts.In, func() {}
-	if src.String() == "-" {
+	if src.IsStdin() {
 		in = strings.NewReader("")
 		if tty, err := l.openTerminal(); err == nil {
 			in, closeIn = tty, func() { tty.Close() }
@@ -298,11 +298,7 @@ func (l *login) addConfig(ctx context.Context, opts Options) (f configfile.File,
 	store := configfile.NewStore(l.dir)
 	change, err := store.Inspect(data, false)
 	if errors.Is(err, configfile.ErrEmpty) {
-		name := src.String()
-		if name == "-" {
-			name = msgStdin
-		}
-		return fail(fmt.Errorf(msgConfigEmpty, name))
+		return fail(fmt.Errorf(msgConfigEmpty, src))
 	}
 	if err != nil {
 		return fail(err)

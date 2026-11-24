@@ -159,6 +159,28 @@ func TestOneFileOnePathway(t *testing.T) {
 	)
 }
 
+// TestFileFromStandardInput names standard input in words, not as the "-"
+// the record holds.
+func TestFileFromStandardInput(t *testing.T) {
+	t.Parallel()
+	dir, s := newDir(t)
+	add(t, s, campus, "-")
+	text, err := list(t, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertLines(t, text,
+		"No pathway is in use. `axon login` chooses one.",
+		"",
+		"example-campus",
+		"  from standard input",
+		"  revision 3, stored <time>",
+		"",
+		"    Campus  --pathway campus",
+		"      direct, https://sky.example.org",
+	)
+}
+
 func TestSeveralFilesOneInUse(t *testing.T) {
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")

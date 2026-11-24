@@ -81,11 +81,17 @@ func ParseSource(s, home string) (Source, error) {
 	return Source{kind: sourcePath, value: abs}, nil
 }
 
+// stdinName is how messages name the standard-input source.
+const stdinName = "standard input"
+
 // String returns the source as messages print it: the address without its
 // user information, query string or fragment, which can hold a token; the
-// absolute path; or "-".
+// absolute path; or "standard input".
 func (s Source) String() string {
-	if s.kind != sourceAddress {
+	switch s.kind {
+	case sourceStdin:
+		return stdinName
+	case sourcePath:
 		return s.value
 	}
 	u, err := url.Parse(s.value)
@@ -98,6 +104,9 @@ func (s Source) String() string {
 // raw returns the source as it is recorded and read: the whole address, the
 // absolute path, or "-". It is never printed.
 func (s Source) raw() string { return s.value }
+
+// IsStdin reports whether the source is standard input.
+func (s Source) IsStdin() bool { return s.kind == sourceStdin }
 
 // IsAddress reports whether the source is an address, the one kind of
 // source that can be read again without the user.

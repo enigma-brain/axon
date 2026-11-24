@@ -293,7 +293,7 @@ func TestLowerRevisionWithoutATerminalKeepsTheStoredCopy(t *testing.T) {
 	if err := h.login(Options{Config: path, Pathway: "campus"}); err != nil {
 		t.Fatal(err)
 	}
-	want := "axon: the config file at " + path + " is revision 5, older than the stored revision 7. Using the stored file.\n"
+	want := "axon: the config file from " + path + " is revision 5, older than the stored revision 7. Using the stored file.\n"
 	if h.errOut.String() != want {
 		t.Errorf("stderr = %q, want %q", h.errOut.String(), want)
 	}
@@ -330,7 +330,7 @@ func TestRefreshOfALowerRevision(t *testing.T) {
 		wantStored   string
 		wantErr      string
 	}{
-		{"no terminal", "", "7", "axon: the config file at https://example.org/config.toml is revision 5, older than the stored revision 7. Using the stored file.\n"},
+		{"no terminal", "", "7", "axon: the config file from https://example.org/config.toml is revision 5, older than the stored revision 7. Using the stored file.\n"},
 		{"no", "n\n", "7", ""},
 		{"yes", "y\n", "5", ""},
 	} {
