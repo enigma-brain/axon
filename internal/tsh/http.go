@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/enigma-brain/axon/internal/termtext"
 )
 
 // stallTimeout bounds how long a request waits for its response, and then
@@ -40,7 +42,7 @@ func get(ctx context.Context, url string) (*http.Response, error) {
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
 		stop()
-		return nil, &statusError{url: url, status: resp.Status}
+		return nil, &statusError{url: url, status: termtext.Clean(resp.Status)}
 	}
 	timer.Reset(stallTimeout)
 	resp.Body = &stallBody{ReadCloser: resp.Body, ctx: ctx, stalled: stalled, timer: timer, stop: stop}

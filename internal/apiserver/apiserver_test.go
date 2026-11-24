@@ -113,6 +113,17 @@ func TestOtherAnswersAreErrors(t *testing.T) {
 	}
 }
 
+// A snippet of an unexpected answer is printed without control or format
+// characters.
+func TestSnippetIsCleaned(t *testing.T) {
+	_, err := Fetch(context.Background(), serve(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "not\x1b[2J json\u202e")
+	}), Options{})
+	if err == nil || strings.ContainsAny(err.Error(), "\x1b\u202e") || !strings.Contains(err.Error(), "not[2J json") {
+		t.Errorf("err = %q", err)
+	}
+}
+
 func TestClosedPortIsUnreachable(t *testing.T) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

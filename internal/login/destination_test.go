@@ -293,3 +293,17 @@ func TestLoginDeletesARecordWithoutItsFile(t *testing.T) {
 		t.Errorf("the record of a stored file is gone: %v", err)
 	}
 }
+
+// The user name the server reports is printed without control or format
+// characters.
+func TestConnectedLineIsCleaned(t *testing.T) {
+	h := newHarness(t)
+	h.user = "ada\u200b[2J@example.org\u202e"
+	h.logIn()
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	if out := h.out.String(); strings.ContainsAny(out, "\u200b\u202e") || !strings.Contains(out, "sky: connected as ada[2J@example.org (SkyPilot") {
+		t.Errorf("output = %q", out)
+	}
+}

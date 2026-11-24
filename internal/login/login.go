@@ -18,6 +18,7 @@ import (
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/sky"
+	"github.com/enigma-brain/axon/internal/termtext"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -213,7 +214,7 @@ func (l *login) run(ctx context.Context, opts Options) error {
 		if errors.As(err, &unreachable) {
 			next := msgProxyUnreachableNext
 			if p.UnreachableHint != "" {
-				next = p.UnreachableHint
+				next = termtext.Clean(p.UnreachableHint)
 			}
 			return fmt.Errorf("establish the Teleport session: %w. %s", err, next)
 		}
