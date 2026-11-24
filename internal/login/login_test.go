@@ -41,7 +41,7 @@ env > "$dir/env.$n"
 behavior=$(sed -n "${n}p" "$dir/script" 2>/dev/null)
 case "$behavior" in
 silent) echo "Logged in" ;;
-needs) echo "Failed to log in (status: needs_auth)" >&2; exit 1 ;;
+needs) echo "ValueError: Cannot log in API server at $4 (status: needs_auth)" >&2; exit 1 ;;
 fail) echo "boom" >&2; exit 2 ;;
 hang) exec sleep 30 ;;
 *) touch "$dir/loggedin"; echo "Logged in" ;;
@@ -470,18 +470,26 @@ func TestDirectNeedsAuthInAnAddressIsNotTheStatus(t *testing.T) {
 
 func TestHasWord(t *testing.T) {
 	for text, want := range map[string]bool{
-		"needs_auth":                            true,
-		"Failed to log in (status: needs_auth)": true,
-		"status needs_auth.":                    true,
-		`{"status": "needs_auth"}`:              true,
-		"status:needs_auth\n":                   true,
-		"https://sky.example.org/needs_auth":    false,
-		"https://sky.example.org/?s=needs_auth": false,
-		"x_needs_auth":                          false,
-		"needs_auth_soon":                       false,
-		"needs_authorization":                   false,
-		"/needs_auth then (needs_auth)":         true,
-		"":                                      false,
+		"needs_auth": true,
+		// What sky api login prints when a login ends with needs_auth: the
+		// ValueError raised in _show_logged_in_message, in
+		// sky/client/sdk.py of skypilot 0.13.0, printed without a traceback.
+		"ValueError: Cannot log in API server at https://sky.example.org (status: needs_auth)\n": true,
+		"Failed to log in (status: needs_auth)":                                                  true,
+		"status: \x1b[31mneeds_auth\x1b[0m":                                                      true,
+		"\x1b[1;31mneeds_auth\x1b[0m)":                                                           true,
+		"(status:\x1b[0mneeds_auth\x1b[39m)":                                                     true,
+		"https://sky.example.org/\x1b[0mx/needs_auth":                                            false,
+		"status needs_auth.":                                                                     true,
+		`{"status": "needs_auth"}`:                                                               true,
+		"status:needs_auth\n":                                                                    true,
+		"https://sky.example.org/needs_auth":                                                     false,
+		"https://sky.example.org/?s=needs_auth":                                                  false,
+		"x_needs_auth":                                                                           false,
+		"needs_auth_soon":                                                                        false,
+		"needs_authorization":                                                                    false,
+		"/needs_auth then (needs_auth)":                                                          true,
+		"":                                                                                       false,
 	} {
 		if got := hasWord(text, needsAuth); got != want {
 			t.Errorf("hasWord(%q) = %v, want %v", text, got, want)

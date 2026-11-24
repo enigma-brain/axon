@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -119,8 +120,10 @@ func (w *scanWriter) containsWord(word string) bool {
 // Before the word comes the start of text, white space, or one of ( [ " ' ` :
 // and after it the end of text, white space, or one of ) ] " ' ` . , ; : so that
 // "(status: needs_auth)" holds it, and "https://host/needs_auth",
-// "?status=needs_auth" and "x_needs_auth" do not.
+// "?status=needs_auth" and "x_needs_auth" do not. A terminal color or style
+// sequence counts as white space, so colored output is read as plain text.
 func hasWord(text, word string) bool {
+	text = ansiEscape.ReplaceAllString(text, " ")
 	for i := 0; ; {
 		j := strings.Index(text[i:], word)
 		if j < 0 {
@@ -135,6 +138,10 @@ func hasWord(text, word string) bool {
 		i = start + 1
 	}
 }
+
+// ansiEscape matches a terminal control sequence, such as one that sets a
+// color: ESC [, parameters, and a final letter.
+var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;?]*[A-Za-z]")
 
 // isWordEdge reports whether c is white space or one of punct.
 func isWordEdge(c byte, punct string) bool {
