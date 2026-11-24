@@ -14,6 +14,7 @@ import (
 // whose push started the run. Without it GoReleaser finds the tag in git, and
 // picks any of the tags on the commit.
 func TestReleaseWorkflowBuildsPushedTag(t *testing.T) {
+	t.Parallel()
 	data, err := os.ReadFile(filepath.Join(".github", "workflows", "release.yml"))
 	if err != nil {
 		t.Fatal(err)

@@ -147,6 +147,7 @@ func wantFailure(t *testing.T, name string, err error) {
 }
 
 func TestBinary(t *testing.T) {
+	t.Parallel()
 	bin := build(t, "1.2.3")
 
 	t.Run("version and help with no file", func(t *testing.T) {
