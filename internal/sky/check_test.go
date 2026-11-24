@@ -648,9 +648,9 @@ func TestCheckStopsWhenCancelled(t *testing.T) {
 			}
 			tc.setup(&p, cancel)
 			check = p
-			_, _, err := Check(ctx, dir, io.Discard)
+			_, _, _, err := checkConnection(ctx, dir, io.Discard)
 			if !errors.Is(err, context.Canceled) {
-				t.Errorf("Check returned %v, want the cancellation", err)
+				t.Errorf("checkConnection returned %v, want the cancellation", err)
 			}
 			if starts != tc.starts {
 				t.Errorf("the tunnel was started %d times, want %d", starts, tc.starts)

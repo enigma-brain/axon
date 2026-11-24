@@ -244,12 +244,12 @@ func TestInterruptDuringTheBrowserLoginWaitsForSky(t *testing.T) {
 
 // teleportInterrupted runs a teleport login, cancelled by cancelAt, and
 // returns its error.
-func (h *metaHarness) runCancellable(ctx context.Context) error {
+func (h *teleportHarness) runCancellable(ctx context.Context) error {
 	return h.l.run(ctx, Options{Pathway: "remote", In: strings.NewReader(""), Out: &h.out, Err: &h.errOut})
 }
 
 // cancelAtTunnel makes the login cancel ctx when it reaches the tunnel.
-func (h *metaHarness) cancelAtTunnel(cancel func()) {
+func (h *teleportHarness) cancelAtTunnel(cancel func()) {
 	newTunnel := h.l.teleport.newTunnel
 	h.l.teleport.newTunnel = func(stateDir, tshPath, proxy, app string) *tunnel.Tunnel {
 		cancel()
@@ -259,7 +259,7 @@ func (h *metaHarness) cancelAtTunnel(cancel func()) {
 
 // cancelAtTunnelHealth makes the health request through the tunnel cancel
 // ctx and fail.
-func (h *metaHarness) cancelAtTunnelHealth(cancel func()) {
+func (h *teleportHarness) cancelAtTunnelHealth(cancel func()) {
 	health := h.l.health
 	h.l.health = func(ctx context.Context, endpoint string, opts apiserver.Options) (apiserver.Health, error) {
 		if endpoint == h.endpoint() {
@@ -270,7 +270,7 @@ func (h *metaHarness) cancelAtTunnelHealth(cancel func()) {
 	}
 }
 
-func (h *metaHarness) assertRunningAndRecorded(want bool) {
+func (h *teleportHarness) assertRunningAndRecorded(want bool) {
 	h.t.Helper()
 	st := h.tunnelStatus()
 	if st.Running != want {
@@ -291,17 +291,17 @@ func TestInterruptTeleportLogin(t *testing.T) {
 		name string
 		// first is whether a login runs first, so that the tunnel is up.
 		first bool
-		setup func(h *metaHarness, cancel func())
+		setup func(h *teleportHarness, cancel func())
 		// running is whether the tunnel is running and recorded after.
 		running bool
 	}{
-		{"checking a tunnel that is down", false, (*metaHarness).cancelAtTunnel, false},
-		{"checking a tunnel that is up", true, (*metaHarness).cancelAtTunnel, true},
-		{"asking the server through a tunnel that is up", true, (*metaHarness).cancelAtTunnelHealth, true},
-		{"asking the server through a tunnel just started", false, (*metaHarness).cancelAtTunnelHealth, true},
+		{"checking a tunnel that is down", false, (*teleportHarness).cancelAtTunnel, false},
+		{"checking a tunnel that is up", true, (*teleportHarness).cancelAtTunnel, true},
+		{"asking the server through a tunnel that is up", true, (*teleportHarness).cancelAtTunnelHealth, true},
+		{"asking the server through a tunnel just started", false, (*teleportHarness).cancelAtTunnelHealth, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			h := newMetaHarness(t)
+			h := newTeleportHarness(t)
 			if tc.first {
 				if err := h.run("remote"); err != nil {
 					t.Fatalf("first login: %v\n%s", err, h.out.String())
@@ -321,7 +321,7 @@ func TestInterruptTeleportLogin(t *testing.T) {
 // TestInterruptWhileTheTunnelStarts cancels the login while it waits for a
 // new tunnel to serve: the tunnel is stopped and not recorded.
 func TestInterruptWhileTheTunnelStarts(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	h.writeTsh("proxy-mode", "refuse")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -365,7 +365,7 @@ func TestInterruptWhileTheConfigFileIsFetched(t *testing.T) {
 // logout reports no failed step of its own and keeps the records, so that
 // logging out again retries.
 func TestInterruptLogout(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	if err := h.run("remote"); err != nil {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
