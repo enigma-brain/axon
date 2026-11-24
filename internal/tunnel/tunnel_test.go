@@ -826,7 +826,7 @@ func TestConcurrentStarts(t *testing.T) {
 	if pid, ok := recorded(t, tn); !ok || pid != st.PID {
 		t.Errorf("record = %d, %v, want the running tunnel %d", pid, ok, st.PID)
 	}
-	procs, err := tn.find()
+	procs, err := tn.find(false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -877,5 +877,57 @@ func TestPortBusyErrorCleansCommand(t *testing.T) {
 	err := &PortBusyError{PID: 7, Command: "evil \x1b[2J‮cmd\n"}
 	if got, want := err.Error(), "port 46581 is held by process 7 (evil [2Jcmd), which is not the Teleport tunnel"; got != want {
 		t.Errorf("Error = %q, want %q", got, want)
+	}
+}
+
+func TestAdoptSkipsProcessThatIsGone(t *testing.T) {
+	tn := newTestTunnel(t)
+	gone := exec.Command("sleep", "0")
+	if err := gone.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := tn.adopt(context.Background(), gone.Process.Pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := recorded(t, tn); ok {
+		t.Error("adopt recorded a process that has exited")
+	}
+}
+
+func TestAdoptKeepsRecordOfTunnelStartedInItsPlace(t *testing.T) {
+	tn := newTestTunnel(t)
+	seen := startByHandNoWait(t, "idle")
+	// Another axon recorded a tunnel after seen was observed.
+	other := startByHandNoWait(t, "idle")
+	if err := tn.record(other); err != nil {
+		t.Fatal(err)
+	}
+	if err := tn.adopt(context.Background(), seen); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := recorded(t, tn); !ok || got != other {
+		t.Errorf("record = %d, %v, want %d kept", got, ok, other)
+	}
+}
+
+func TestDiscardRecordKeepsReplacement(t *testing.T) {
+	dir := t.TempDir()
+	stale := record{PID: 12345, Args: handArgs(testProxy)}
+	fresh := record{PID: 54321, Args: handArgs(testProxy)}
+	if err := writeRecord(dir, fresh); err != nil {
+		t.Fatal(err)
+	}
+	// A reader without the lock read stale before fresh replaced it.
+	if err := discardRecord(dir, stale, false); err != nil {
+		t.Fatal(err)
+	}
+	if rec, ok, err := readRecord(dir); err != nil || !ok || rec.PID != fresh.PID {
+		t.Errorf("record = %+v, %v, %v, want the replacement kept", rec, ok, err)
+	}
+	if err := discardRecord(dir, fresh, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := readRecord(dir); err != nil || ok {
+		t.Errorf("record after discarding it = %v, %v, want none", ok, err)
 	}
 }

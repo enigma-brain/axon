@@ -38,9 +38,12 @@ of them through for the owner.
   user logs in to, and the design says why. Nothing is built and nothing is
   enforced; a user on a shared machine carries the exposure.
 - **Refuse requests from web pages.** A listener in front of the tunnel
-  drops requests that carry a browser's `Origin` header, or a `Host` other
-  than the tunnel's address. It closes the browser case, not the case of
-  another account, and the dashboard in the browser has to be let through.
+  drops requests that carry another site's `Origin` header, or a `Host`
+  other than the tunnel's address. That stops a rebinding page and a page's
+  requests that change something, but not all of the browser case: a page's
+  cross-origin `GET` carries no `Origin` header and names the tunnel's
+  address as its `Host`, so it passes. It does nothing for another account,
+  and the dashboard in the browser has to be let through.
 - **State the limit and warn at login.** `axon login` prints a warning when
   it sees other users logged in. The detection is a guess that is wrong in
   both directions, and a warning does not close the port.
@@ -66,7 +69,8 @@ reaches.
   log in to, or the browser case is judged too wide to leave open.
 - Test with a real `tsh proxy app` whether a request whose `Host` header
   names another site reaches the API server, and whether the API server
-  acts on a request a web page can send without reading the answer.
+  acts on a request a web page can send without reading the answer,
+  including a cross-origin `GET` with no `Origin` header.
 - Then: confirm whether the tunnel's listener is reachable by other local
   accounts on macOS, Linux and WSL as described, and test whether the
   SkyPilot client, the dashboard and `ssh` to a cluster each work through a
