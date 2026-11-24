@@ -120,7 +120,9 @@ func (w *scanWriter) containsWord(word string) bool {
 // Before the word comes the start of text, white space, or one of ( [ " ' ` :
 // and after it the end of text, white space, or one of ) ] " ' ` . , ; : so that
 // "(status: needs_auth)" holds it, and "https://host/needs_auth",
-// "?status=needs_auth" and "x_needs_auth" do not. Terminal color and style
+// "?status=needs_auth" and "x_needs_auth" do not. A match inside an address,
+// a run of text without white space that holds "://", never counts, so
+// "https://host/auth:needs_auth" does not hold it. Terminal color and style
 // sequences are removed first, so colored output is read as plain text and a
 // sequence never makes an edge of its own.
 func hasWord(text, word string) bool {
@@ -133,11 +135,23 @@ func hasWord(text, word string) bool {
 		start := i + j
 		end := start + len(word)
 		if (start == 0 || isWordEdge(text[start-1], "([\"'`:")) &&
-			(end == len(text) || isWordEdge(text[end], ")]\"'`.,;:")) {
+			(end == len(text) || isWordEdge(text[end], ")]\"'`.,;:")) &&
+			!strings.Contains(tokenAround(text, start, end), "://") {
 			return true
 		}
 		i = start + 1
 	}
+}
+
+// tokenAround returns the run of text without white space that holds
+// text[start:end].
+func tokenAround(text string, start, end int) string {
+	from := strings.LastIndexAny(text[:start], " \t\n\r") + 1
+	to := len(text)
+	if k := strings.IndexAny(text[end:], " \t\n\r"); k >= 0 {
+		to = end + k
+	}
+	return text[from:to]
 }
 
 // ansiEscape matches a terminal control sequence, such as one that sets a
