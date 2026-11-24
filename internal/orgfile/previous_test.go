@@ -263,3 +263,24 @@ func TestAnUpdateStopsWhenTheCopyCannotBeSynced(t *testing.T) {
 		t.Errorf("a stopped update left changes:\nbefore %v\nafter  %v", before, after)
 	}
 }
+
+// A copy that cannot be deleted stops recovery, and a put with it, so a
+// later removal of the stored file cannot be undone by the copy.
+func TestRecoverStopsWhenTheCopyCannotBeDeleted(t *testing.T) {
+	s, home, newer := updated(t)
+	old, _ := os.ReadFile(s.Path("a"))
+	leftover(t, s, home, newer, old, newer)
+	removeFile = func(p string) error {
+		if p == s.Path("a")+previousExt {
+			return errors.New("injected failure")
+		}
+		return os.Remove(p)
+	}
+	t.Cleanup(func() { removeFile = os.Remove })
+	if _, err := s.Recover(); err == nil || !strings.Contains(err.Error(), "injected failure") {
+		t.Fatalf("Recover = %v, want the injected failure", err)
+	}
+	if _, err := s.Add([]byte(directOrg("b", "two", "B", "https://b.example.org")), mustSource(t, "-")); err == nil {
+		t.Fatal("Add succeeded with a copy that cannot be deleted")
+	}
+}

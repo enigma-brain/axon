@@ -593,7 +593,11 @@ func (s Store) recoverPrevious() ([]string, error) {
 			restored = append(restored, path)
 			continue
 		}
-		removeFile(path + previousExt)
+		// A copy that stays would later bring back a stored file that a
+		// put removed, so a failure to delete it stops recovery.
+		if err := removeFile(path + previousExt); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return restored, fmt.Errorf("remove %s: %w", path+previousExt, unwrapPath(err))
+		}
 	}
 	return restored, nil
 }
