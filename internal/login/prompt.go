@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/enigma-brain/axon/internal/configfile"
+	"github.com/enigma-brain/axon/internal/termtext"
 )
 
 // determinePathway returns the pathway this login uses, chosen from the
@@ -86,10 +87,10 @@ func askPathway(ps []configfile.Pathway, in io.Reader, out io.Writer) (configfil
 	fmt.Fprintln(out, "Which pathway are you on?")
 	width := 0
 	for _, p := range ps {
-		width = max(width, len(p.Name))
+		width = max(width, len(termtext.Clean(p.Name)))
 	}
 	for i, p := range ps {
-		fmt.Fprintf(out, "  %d) %-*s  %s\n", i+1, width, p.Name, p.Description)
+		fmt.Fprintf(out, "  %d) %-*s  %s\n", i+1, width, termtext.Clean(p.Name), termtext.Clean(p.Description))
 	}
 
 	for {

@@ -10,10 +10,10 @@ import (
 	"io"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
+	"github.com/enigma-brain/axon/internal/termtext"
 )
 
 // timeLayout is how a stored file's time is printed, in local time.
@@ -71,7 +71,7 @@ func Run(opts Options) error {
 		w.line("No config file or pathway is stored. Run `axon login` to add a pathway.")
 		if activeErr != nil {
 			w.line("")
-			w.line(clean(activeErr.Error()))
+			w.line(termtext.Clean(activeErr.Error()))
 		}
 		return w.result(unreadable)
 	}
@@ -88,11 +88,11 @@ func Run(opts Options) error {
 	}
 	switch {
 	case activeErr != nil:
-		w.line("The pathway in use is not known: " + clean(activeErr.Error()))
+		w.line("The pathway in use is not known: " + termtext.Clean(activeErr.Error()))
 	case inUse != nil:
-		w.line(fmt.Sprintf("The pathway in use is %s (%s), from %s.", clean(inUse.Name), inUse.ID, inUse.File))
+		w.line(fmt.Sprintf("The pathway in use is %s (%s), from %s.", termtext.Clean(inUse.Name), inUse.ID, inUse.File))
 	case hasActive:
-		w.line(fmt.Sprintf("No pathway is in use: the chosen pathway %q is in no stored config file. `axon login` chooses one.", clean(active)))
+		w.line(fmt.Sprintf("No pathway is in use: the chosen pathway %q is in no stored config file. `axon login` chooses one.", termtext.Clean(active)))
 	default:
 		w.line("No pathway is in use. `axon login` chooses one.")
 	}
@@ -104,13 +104,13 @@ func Run(opts Options) error {
 		switch {
 		case err != nil:
 			unreadable++
-			w.wrapped("  the record cannot be read: "+clean(err.Error()), "  ")
+			w.wrapped("  the record cannot be read: "+termtext.Clean(err.Error()), "  ")
 		case !ok:
 			w.line("  source not recorded")
 		case rec.HandMade:
 			w.line("  made by hand at `axon login`")
 		default:
-			w.line("  from " + clean(rec.Source.String()))
+			w.line("  from " + termtext.Clean(rec.Source.String()))
 		}
 		facts := "no revision"
 		if f.HasRevision {
@@ -126,45 +126,18 @@ func Run(opts Options) error {
 			if inUse != nil && p.File == inUse.File && p.ID == inUse.ID {
 				mark = "* "
 			}
-			w.wrapped("  "+mark+clean(p.Name)+"  --pathway "+p.ID, "  ")
-			w.wrapped("      "+server(p), "  ")
+			w.wrapped("  "+mark+termtext.Clean(p.Name)+"  --pathway "+p.ID, "  ")
+			w.wrapped("      "+termtext.Clean(p.Destination()), "  ")
 		}
 	}
 
 	for _, p := range problems {
 		w.line("")
-		w.line(clean(p.Path))
-		w.wrapped("  cannot be read: "+clean(p.Err.Error()), "  ")
+		w.line(termtext.Clean(p.Path))
+		w.wrapped("  cannot be read: "+termtext.Clean(p.Err.Error()), "  ")
 	}
 
 	return w.result(unreadable)
-}
-
-// server describes where a pathway reaches its server, after its kind.
-func server(p configfile.Pathway) string {
-	switch p.Kind {
-	case configfile.KindTeleport:
-		proxy := ""
-		if p.Teleport != nil {
-			proxy = p.Teleport.Proxy
-		}
-		return fmt.Sprintf("teleport, proxy %s, application %s", clean(proxy), clean(p.Sky.App))
-	default:
-		return fmt.Sprintf("%s, %s", p.Kind, clean(p.Sky.Endpoint))
-	}
-}
-
-// clean returns s without control characters and Unicode format
-// characters, such as the bidirectional overrides, so that text from a
-// config file cannot move the cursor, change colors or reorder what the
-// terminal shows.
-func clean(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
-			return -1
-		}
-		return r
-	}, s)
 }
 
 // writer writes lines and keeps the first error.

@@ -428,6 +428,34 @@ func TestCleanProxy(t *testing.T) {
 	}
 }
 
+// A hand-made pathway's answers are refused when they hold a control or
+// format character, which a config file may not hold.
+func TestCleanRefusesUnsafeCharacters(t *testing.T) {
+	if _, err := cleanName("Lab\u202e"); err == nil || err.Error() != msgNameUnsafe {
+		t.Errorf("cleanName with a format character: %v", err)
+	}
+	if _, err := cleanName("La\x1b[2Jb"); err == nil || err.Error() != msgNameUnsafe {
+		t.Errorf("cleanName with an escape: %v", err)
+	}
+	if _, err := cleanEndpoint("https://sky.example.org/\u202e"); err == nil {
+		t.Error("cleanEndpoint accepted a format character")
+	}
+	for _, bad := range []string{"https://sky.example.org/?", "https://sky.example.org/#", "https://sky%E2%80%8B.example.org", "sky.example.org/%E2%80%AE", "sky.example.org/#x", "https://sky.example.org/?a=b"} {
+		if _, err := cleanEndpoint(bad); err == nil {
+			t.Errorf("cleanEndpoint(%q) accepted it", bad)
+		}
+	}
+	if got, err := cleanEndpoint("sky.example.org/api/"); err != nil || got != "https://sky.example.org/api" {
+		t.Errorf("cleanEndpoint of a plain address = %q, %v", got, err)
+	}
+	if _, err := cleanApp("sky\u200b"); err == nil {
+		t.Error("cleanApp accepted a format character")
+	}
+	if got, err := cleanName("Lab"); err != nil || got != "Lab" {
+		t.Errorf("cleanName(%q) = %q, %v", "Lab", got, err)
+	}
+}
+
 // netFailure is the error a request to address fails with when its dial
 // fails with cause, wrapped as Go wraps it. Nothing is contacted.
 func netFailure(address string, cause error) error {

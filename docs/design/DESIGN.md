@@ -164,9 +164,14 @@ parts, whatever its kind [{D!}](decisions/pathway-contract.md):
 - every pathway has an `id` of the allowed characters, a `kind` of `direct`
   or `teleport`, a `name` and a `description`;
 - every `direct` pathway has `sky.endpoint`, and it is an `https`
-  address;
+  address with no user name, password, query string or fragment;
 - every `teleport` pathway has `teleport.proxy`, a hostname, optionally
-  with a port, and `sky.app`;
+  with a port, and `sky.app`, a name that does not start with `-` and holds
+  no white space;
+- no `name`, `description`, `unreachable_hint`, `sky.app` or
+  `sky.endpoint` holds a control character or a Unicode format character,
+  in `sky.endpoint` whether written out or percent-encoded in its host or
+  path;
 - `revision`, when present, is a whole number, 0 or more;
 - it has no field or table that this section does not list for the file or
   for the pathway's kind;
@@ -178,8 +183,9 @@ format. Run `axon login --config <source>` again with your organization's
 current config file." `axon` does not convert it.
 
 A file that fails a check is refused whole, with a message that names the
-field and the check. A refused file changes nothing: every stored file
-stays as it was.
+field and the check. A field the format does not have is named quoted, so
+that its characters cannot act on the terminal. A refused file changes
+nothing: every stored file stays as it was.
 
 The config files are trusted input: they decide which servers the
 user's logins and requests go to. Apart from the hosts the active pathway
@@ -200,7 +206,10 @@ source is one of three:
 | `-`, standard input | `<command that prints the file> \| axon login --config -` |
 
 An address is fetched without credentials, so it suits an organization that
-publishes its file. A file path or standard input suits one that hands the
+publishes its file. A redirect is followed only to another `https` address,
+and the request that follows it carries no `Referer`, so the address
+redirected from, query string included, does not reach the redirect's
+target. A file path or standard input suits one that hands the
 file out by other means; with standard input, an organization's setup is
 one line that fetches the file with a tool its members are already signed
 in to. An address with a scheme other than `https` is refused.
@@ -268,7 +277,10 @@ with the same `id` are a clash.
 A file being removed is renamed with the suffix `.removing` and deleted once
 the addition is stored. When `axon` stops in between, such a file is left in
 `~/.axon/configs/` or `~/.axon/state/configs/`; `axon` never reads it, and it is
-safe to delete.
+safe to delete. At `axon login`, under the lock that serializes changes to
+the stored files, `axon` deletes every such file, and every record in
+`~/.axon/state/configs/` whose stored file is gone, so that a record never
+outlives its file.
 
 A stored config file that an update replaces is first kept beside itself
 with the suffix `.previous`, as a hard link or as a copy written to disk,
@@ -337,8 +349,20 @@ file's [{D!}](decisions/config-updates.md). When the fetch
 fails or the file is refused, `axon` says so in one line and continues with
 the stored file. No other stored file is fetched.
 
-When the fetched file no longer has the pathway, the pathway is left. If
-`--pathway` named it, `axon login` stops, says that the pathway is no
+A fetched file that changes where the pathway goes is asked about before it
+is stored [{D!}](decisions/config-update-destination.md). It changes where
+the pathway goes when it changes the pathway's kind, its API server's
+address, its Teleport proxy or its application, compared as a clash
+compares servers, or no longer has the pathway. `axon` prints the old and
+the new values and asks whether to switch, and the default answer is no.
+No keeps the stored copy whole, and the login goes on with it. With no
+terminal, the stored copy is kept, with one line that says so and names
+`--replace`; `--replace` answers yes. This question comes before the one
+about a lower revision, and no to it asks nothing more. A fetched file that
+changes none of these is stored without a question.
+
+When the fetched file no longer has the pathway and is stored, the pathway
+is left. If `--pathway` named it, `axon login` stops, says that the pathway is no
 longer in its config file, and lists the identifiers the stored files
 have. Otherwise `axon login` determines a pathway again from the stored
 files, with no further fetch in that login, and uses the stored copy of the
@@ -353,6 +377,9 @@ is left out with one line, and the login uses the stored copy.
 
 A file from a file path or standard input is read once, when `--config` is
 given. Updating it is running `axon login --config` again with the new file.
+A file that `--config` adds asks nothing about where the pathway in use
+goes: when it changes that, as a fetched file can, `axon` prints the old
+and the new values.
 
 `axon sky` never fetches a file. It uses the stored ones.
 
@@ -807,6 +834,11 @@ Every failure names the step that failed and the next action for the user.
 
 A message names an organization detail only by printing a host or a
 text field from a config file as it is written.
+
+Text that a server sends and `axon` prints, such as the user name and the
+version the API server reports, a snippet of an answer `axon` did not
+expect, or an HTTP status line, is printed with its control characters and
+Unicode format characters removed.
 
 A message names a product only when it comes from the part of `axon` that
 uses that product [{D!}](decisions/product-names-in-messages.md).
