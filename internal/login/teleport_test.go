@@ -217,6 +217,7 @@ func TestTeleportFirstLogin(t *testing.T) {
 	if _, ok := h.skyEnv(1)[endpointVar]; ok {
 		t.Errorf("sky ran with %s set", endpointVar)
 	}
+	assertNoPythonVars(t, h.skyEnv(1))
 	if got := h.email(); got != h.user {
 		t.Errorf("recorded email = %q, want %q", got, h.user)
 	}

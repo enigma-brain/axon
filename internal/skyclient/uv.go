@@ -4,12 +4,9 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -102,50 +99,6 @@ func ensureUV(ctx context.Context, tools string, progress io.Writer) (string, er
 	return uvPath, nil
 }
 
-// download writes the body at url to w, reporting progress by quarters when
-// the size is known, and returns the body's SHA-256 in hex.
-func download(ctx context.Context, url string, w io.Writer, progress io.Writer) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GET %s: %s", url, resp.Status)
-	}
-
-	h := sha256.New()
-	dst := io.MultiWriter(w, h)
-	if resp.ContentLength > 0 {
-		dst = io.MultiWriter(dst, &quarterReporter{total: resp.ContentLength, out: progress})
-	}
-	if _, err := io.Copy(dst, resp.Body); err != nil {
-		return "", fmt.Errorf("GET %s: %w", url, err)
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// quarterReporter writes the percentage done, on the current line, each time
-// the bytes written to it pass a further quarter of total.
-type quarterReporter struct {
-	total, done int64
-	reported    int
-	out         io.Writer
-}
-
-func (q *quarterReporter) Write(p []byte) (int, error) {
-	q.done += int64(len(p))
-	for q.reported < 4 && q.done*4 >= q.total*int64(q.reported+1) {
-		q.reported++
-		fmt.Fprintf(q.out, " %d%%", q.reported*25)
-	}
-	return len(p), nil
-}
-
 // extractUV writes the uv executable from the release archive r to path.
 func extractUV(r io.Reader, path string) error {
 	gz, err := gzip.NewReader(r)
@@ -169,9 +122,11 @@ func extractUV(r io.Reader, path string) error {
 }
 
 // replaceFile replaces path with the content of r, with mode perm. It writes
-// a temporary file and renames it, so a reader never sees a partial file.
+// a temporary file, flushes it to disk and renames it, so a reader never sees
+// a partial file and a crash leaves either the old file or the new one.
 func replaceFile(path string, r io.Reader, perm os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*")
 	if err != nil {
 		return err
 	}
@@ -184,29 +139,37 @@ func replaceFile(path string, r io.Reader, perm os.FileMode) error {
 		tmp.Close()
 		return err
 	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+	syncDir(dir)
+	return nil
+}
+
+// syncDir flushes dir's entries to disk, so a rename into it survives a
+// crash. Not every file system supports it, so a failure is ignored: the
+// rename itself has succeeded.
+func syncDir(dir string) {
+	d, err := os.Open(dir)
+	if err != nil {
+		return
+	}
+	d.Sync()
+	d.Close()
 }
 
 // uvEnv returns the environment uv runs with: the caller's, without anything
 // that points uv or Python elsewhere, and with every directory uv writes to
 // placed under tools.
 func uvEnv(tools string) []string {
-	var env []string
-	for _, kv := range os.Environ() {
-		key, _, _ := strings.Cut(kv, "=")
-		switch {
-		case strings.HasPrefix(key, "UV_"),
-			key == "VIRTUAL_ENV",
-			key == "CONDA_PREFIX",
-			key == "PYTHONHOME",
-			key == "PYTHONPATH":
-			continue
-		}
-		env = append(env, kv)
-	}
+	env := without(os.Environ(), func(key string) bool { return strings.HasPrefix(key, "UV_") })
 	return append(env,
 		"UV_NO_CONFIG=1",
 		"UV_MANAGED_PYTHON=1",

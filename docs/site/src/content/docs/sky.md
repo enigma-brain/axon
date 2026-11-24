@@ -123,8 +123,8 @@ browser opens. Otherwise the login is the server's own, in a browser, as the
 [direct pathway's page](/axon/pathways/direct/) describes.
 
 A stale session is cleared for you. When the login ends with `needs_auth`,
-`axon` removes `~/.sky/cookies.txt`, which holds only the API server's
-cookies, and logs in once more. When `SKYPILOT_API_COOKIE_FILE` names another
+`axon` removes the API server's cookies from `~/.sky/cookies.txt`, keeping
+every other line, and logs in once more. When `SKYPILOT_API_COOKIE_FILE` names another
 file, `axon` uses that file, as SkyPilot does.
 
 ### On a Teleport pathway
