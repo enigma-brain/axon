@@ -88,6 +88,10 @@ const Format = 2
 // used.
 var ErrOlderFormat = errors.New("the file is in an older format. Run `axon login --config <source>` again with your organization's current config file.")
 
+// ErrEmpty is the refusal of a file that holds nothing: no bytes, or only
+// white space and comments.
+var ErrEmpty = errors.New("the file is empty")
+
 var (
 	fileIDPattern    = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 	pathwayIDPattern = regexp.MustCompile(`^[a-z0-9-]+$`)
@@ -156,6 +160,9 @@ func Parse(data []byte) (File, error) {
 			return File{}, refuse(perr.LastKey, "not valid TOML: %s (line %d)", perr.Message, perr.Position.Line)
 		}
 		return File{}, refuse("", "not valid TOML: %v", err)
+	}
+	if len(generic) == 0 {
+		return File{}, ErrEmpty
 	}
 	if n, ok := generic["format"].(int64); ok && n >= 1 && n < Format {
 		return File{}, ErrOlderFormat

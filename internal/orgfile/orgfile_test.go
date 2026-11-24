@@ -264,3 +264,20 @@ endpoint = "https://sky.example.org"
 		t.Errorf("Parse of a format 1 file: err = %v, want %v", err, ErrOlderFormat)
 	}
 }
+
+func TestParseEmpty(t *testing.T) {
+	for name, data := range map[string]string{
+		"no bytes":        "",
+		"white space":     " \n\t\r\n",
+		"comments":        "# a config file\n\n  # nothing else\n",
+		"comment, no eol": "# only",
+	} {
+		if _, err := Parse([]byte(data)); !errors.Is(err, ErrEmpty) {
+			t.Errorf("%s: Parse = %v, want ErrEmpty", name, err)
+		}
+	}
+	// A file with something in it is checked as before.
+	if _, err := Parse([]byte("id = \"x\"\n")); err == nil || errors.Is(err, ErrEmpty) || err.Error() != "format: must be 2" {
+		t.Errorf("Parse of a file without format = %v, want the format refused", err)
+	}
+}
