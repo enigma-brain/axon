@@ -13,10 +13,11 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
-// fakeTsh is the path of the fake tsh, built by TestMain into a file named
-// tsh so that its command line matches the tunnel's.
+// fakeTsh is the path of the fake tsh, built by TestMain.
 var fakeTsh string
 
 // The made-up Teleport proxy and application the tests' tunnels reach.
@@ -51,65 +52,25 @@ func TestMain(m *testing.M) {
 }
 
 func run(m *testing.M) int {
-	bin, err := os.MkdirTemp("", "faketsh")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	defer os.RemoveAll(bin)
-	fakeTsh = filepath.Join(bin, "tsh")
-	build := exec.Command("go", "build", "-o", fakeTsh, "./testdata/faketsh")
-	build.Stdout, build.Stderr = os.Stderr, os.Stderr
-	if err := build.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "build the fake tsh:", err)
-		return 1
-	}
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	testPort = ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
-
 	// The tests run only the fake tsh, by its path, and a few shell tools.
-	// HOME and PATH hold nothing else, so no real login tool, client or
-	// browser can be found.
-	if err := fence(bin); err != nil {
+	// lsof, which the package runs on macOS, is not on PATH: the package
+	// runs lsof by its fixed path.
+	f, err := testkit.Fence(testkit.FenceOptions{Tools: []string{"sh", "sleep"}, FakeTsh: true})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer f.Close()
+	fakeTsh = f.Tsh
+	if testPort, err = testkit.FreePort(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
 	code := m.Run()
 	// Stop any fake tunnel a failed test left behind.
-	NewOnPort(bin, fakeTsh, testProxy, testApp, testPort).Stop()
+	NewOnPort(f.Dir, fakeTsh, testProxy, testApp, testPort).Stop()
 	return code
-}
-
-// fence sets HOME to an empty directory and PATH to a directory under bin
-// that holds only the shell tools the tests run. lsof, which the package
-// runs on macOS, is not on it: the package runs lsof by its fixed path.
-func fence(bin string) error {
-	home := filepath.Join(bin, "home")
-	path := filepath.Join(bin, "path")
-	for _, dir := range []string{home, path} {
-		if err := os.Mkdir(dir, 0o700); err != nil {
-			return err
-		}
-	}
-	for _, tool := range []string{"sh", "sleep"} {
-		real, err := exec.LookPath(tool)
-		if err != nil {
-			return err
-		}
-		if err := os.Symlink(real, filepath.Join(path, tool)); err != nil {
-			return err
-		}
-	}
-	os.Setenv("HOME", home)
-	os.Setenv("PATH", path)
-	return nil
 }
 
 // newTestTunnel returns a tunnel on testPort with its own state directory,

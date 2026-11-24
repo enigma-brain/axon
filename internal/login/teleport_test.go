@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -18,12 +17,12 @@ import (
 
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/connected"
+	"github.com/enigma-brain/axon/internal/testkit"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
-// fakeTsh is the path of the fake tsh, built by TestMain into a file named
-// tsh so that the tunnel package recognizes its command line.
+// fakeTsh is the path of the fake tsh, built by TestMain.
 var fakeTsh string
 
 // The made-up Teleport proxy and application the tests log in to.
@@ -39,68 +38,29 @@ var testPort int
 func TestMain(m *testing.M) { os.Exit(runTests(m)) }
 
 func runTests(m *testing.M) int {
-	bin, err := os.MkdirTemp("", "login-faketsh")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	defer os.RemoveAll(bin)
-	fakeTsh = filepath.Join(bin, "tsh")
-	build := exec.Command("go", "build", "-o", fakeTsh, "./testdata/faketsh")
-	build.Stdout, build.Stderr = os.Stderr, os.Stderr
-	if err := build.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "build the fake tsh:", err)
-		return 1
-	}
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	testPort = ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
-
 	// The tests run only the fakes, by their paths, and the shell tools the
-	// fake sky uses. HOME and PATH hold nothing else, so no real login tool,
-	// client or browser can be found.
-	if err := fence(bin); err != nil {
+	// fake sky uses, and lsof, which the tunnel package runs on macOS to
+	// find a port's listeners.
+	tools := []string{"sh", "cat", "dirname", "env", "mkdir", "sed", "sleep", "touch"}
+	if runtime.GOOS == "darwin" {
+		tools = append(tools, "lsof")
+	}
+	f, err := testkit.Fence(testkit.FenceOptions{Tools: tools, FakeTsh: true})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer f.Close()
+	fakeTsh = f.Tsh
+	if testPort, err = testkit.FreePort(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
 	code := m.Run()
 	// Stop any fake tunnel a failed test left behind.
-	tunnel.NewOnPort(bin, fakeTsh, testProxy, testApp, testPort).Stop()
+	tunnel.NewOnPort(f.Dir, fakeTsh, testProxy, testApp, testPort).Stop()
 	return code
-}
-
-// fence sets HOME to an empty directory and PATH to a directory under bin
-// that holds only the shell tools the fakes run, and lsof, which the tunnel
-// package runs on macOS to find a port's listeners.
-func fence(bin string) error {
-	home := filepath.Join(bin, "home")
-	path := filepath.Join(bin, "path")
-	for _, dir := range []string{home, path} {
-		if err := os.Mkdir(dir, 0o700); err != nil {
-			return err
-		}
-	}
-	for _, tool := range []string{"sh", "cat", "dirname", "env", "mkdir", "sed", "sleep", "touch", "lsof"} {
-		real, err := exec.LookPath(tool)
-		if err != nil {
-			if tool == "lsof" && runtime.GOOS != "darwin" {
-				continue
-			}
-			return err
-		}
-		if err := os.Symlink(real, filepath.Join(path, tool)); err != nil {
-			return err
-		}
-	}
-	os.Setenv("HOME", home)
-	os.Setenv("PATH", path)
-	return nil
 }
 
 // teleportHarness is one login on a teleport pathway against the fake tsh,
