@@ -44,7 +44,12 @@ func (d deps) forward(ctx context.Context, w io.Writer, dir axondir.Dir, args []
 	if err != nil {
 		return err
 	}
-	return d.exec(d.skyPathFor(dir, version), args, environ(os.Environ(), Endpoint(p), email))
+	project, err := writeMark(dir)
+	if err != nil {
+		return err
+	}
+	warnProject(w)
+	return d.exec(d.skyPathFor(dir, version), args, environ(os.Environ(), Endpoint(p), email, project))
 }
 
 // exec replaces the axon process with the sky at path, given args and env.

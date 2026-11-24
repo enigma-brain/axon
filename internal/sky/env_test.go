@@ -41,13 +41,14 @@ func TestClientEnvOfEachCaller(t *testing.T) {
 			"BROWSER=chromium",
 			"SKYPILOT_API_SERVER_ENDPOINT_EXTRA=kept",
 		}},
-		{"a forwarded command", environ(base, "http://127.0.0.1:46581", "ada@example.org"), []string{
+		{"a forwarded command", environ(base, "http://127.0.0.1:46581", "ada@example.org", "/p.yaml"), []string{
 			"PATH=/bin",
 			"PYTHONUNBUFFERED=0",
 			"BROWSER=chromium",
 			"SKYPILOT_API_SERVER_ENDPOINT_EXTRA=kept",
 			"SKYPILOT_API_SERVER_ENDPOINT=http://127.0.0.1:46581",
 			"SKYPILOT_USER=ada@example.org",
+			"SKYPILOT_PROJECT_CONFIG=/p.yaml",
 		}},
 		{"help", helpEnviron(base), []string{
 			"PATH=/bin",

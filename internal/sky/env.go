@@ -54,10 +54,10 @@ func browserLoginEnviron(base []string) []string {
 }
 
 // environ returns the environment a forwarded command runs with: base with
-// the SkyPilot endpoint and user set to endpoint and email, replacing any
-// values base holds.
-func environ(base []string, endpoint, email string) []string {
-	return clientEnv(base, endpointVar+"="+endpoint, userVar+"="+email)
+// the SkyPilot endpoint, user and project configuration file set to endpoint,
+// email and project, replacing any values base holds.
+func environ(base []string, endpoint, email, project string) []string {
+	return clientEnv(base, endpointVar+"="+endpoint, userVar+"="+email, projectFileVar+"="+project)
 }
 
 // helpEnviron returns the environment sky's help runs with: base with the

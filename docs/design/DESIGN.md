@@ -804,8 +804,15 @@ API server belong to `axon login` and `axon logout`:
 A refused command is refused with `--help` too. Every other `api` command
 passes through.
 
-`axon sky` sets no task file, queue or label. What a command launches is
-decided by its arguments.
+`axon sky` marks each request: it runs the client with
+`SKYPILOT_PROJECT_CONFIG` naming a file in the state directory that sets the
+Kubernetes label `axon-client: "true"`. An organization's admin policy can
+hold requests made through `axon` to rules of its own
+[{D!}](decisions/sky-request-mark.md). The file replaces a project file of the
+user's, a `.sky.yaml` in the working directory or one the shell names in that
+variable, and `axon sky` prints a line when it does. `axon sky` sets no task
+file or queue, and what a command launches is otherwise decided by its
+arguments and the server.
 
 ### Help
 
