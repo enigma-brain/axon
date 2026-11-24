@@ -127,6 +127,7 @@ func assertLines(t *testing.T, text string, want ...string) {
 }
 
 func TestNothingStored(t *testing.T) {
+	t.Parallel()
 	dir, _ := newDir(t)
 	text, err := list(t, dir)
 	if err != nil {
@@ -139,6 +140,7 @@ func TestNothingStored(t *testing.T) {
 }
 
 func TestOneFileOnePathway(t *testing.T) {
+	t.Parallel()
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")
 	text, err := list(t, dir)
@@ -191,6 +193,7 @@ func TestSeveralFilesOneInUse(t *testing.T) {
 }
 
 func TestHandMadePathway(t *testing.T) {
+	t.Parallel()
 	dir, s := newDir(t)
 	if _, err := s.Put([]byte(handMade), configfile.PutOptions{Origin: configfile.HandMade}); err != nil {
 		t.Fatal(err)
@@ -215,6 +218,7 @@ func TestHandMadePathway(t *testing.T) {
 }
 
 func TestAddressWithQueryString(t *testing.T) {
+	t.Parallel()
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml?token=s3cret#frag")
 	text, err := list(t, dir)
@@ -234,6 +238,7 @@ func TestAddressWithQueryString(t *testing.T) {
 // A record written by an earlier axon holds only the source; a file may
 // also have no record at all.
 func TestOlderAndMissingRecords(t *testing.T) {
+	t.Parallel()
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")
 	record := filepath.Join(dir.RecordsPath(), "example-campus.toml")
@@ -272,6 +277,7 @@ func TestOlderAndMissingRecords(t *testing.T) {
 }
 
 func TestUnreadableFile(t *testing.T) {
+	t.Parallel()
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")
 	broken := s.Path("broken")
@@ -299,6 +305,7 @@ func TestUnreadableFile(t *testing.T) {
 }
 
 func TestOnlyUnreadableFiles(t *testing.T) {
+	t.Parallel()
 	dir, s := newDir(t)
 	if err := os.MkdirAll(filepath.Dir(s.Path("x")), 0o700); err != nil {
 		t.Fatal(err)
@@ -319,6 +326,7 @@ func TestOnlyUnreadableFiles(t *testing.T) {
 }
 
 func TestChosenPathwayInNoFile(t *testing.T) {
+	t.Parallel()
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")
 	if err := dir.SetPathway("gone"); err != nil {
@@ -337,6 +345,7 @@ func TestChosenPathwayInNoFile(t *testing.T) {
 }
 
 func TestUnreadablePathwayInUse(t *testing.T) {
+	t.Parallel()
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")
 	if err := os.WriteFile(dir.SettingsPath(), []byte("pathway = \n"), 0o600); err != nil {
@@ -360,6 +369,7 @@ func TestUnreadablePathwayInUse(t *testing.T) {
 // listed as unreadable, and neither its text nor the reason puts such a
 // character on the terminal.
 func TestControlCharactersRemoved(t *testing.T) {
+	t.Parallel()
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")
 	data := strings.Replace(campus, `name = "Campus"`, `name = "Cam\u001b[31mpus\u202e\u0007"`, 1)
@@ -384,6 +394,7 @@ func TestControlCharactersRemoved(t *testing.T) {
 // A record whose stored file is gone, and files a put left renamed aside,
 // are not listed.
 func TestRecordWithoutItsFileNotListed(t *testing.T) {
+	t.Parallel()
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")
 	if err := os.Rename(s.Path("example-campus"), s.Path("example-campus")+".removing"); err != nil {
@@ -400,6 +411,7 @@ func TestRecordWithoutItsFileNotListed(t *testing.T) {
 
 // Listing writes nothing: the directory's files are the same after it.
 func TestListingChangesNothing(t *testing.T) {
+	t.Parallel()
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")
 	before := testkit.SnapshotTimes(t, dir.Root())
@@ -417,6 +429,7 @@ type failingWriter struct{}
 func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("broken pipe") }
 
 func TestWriteErrorIsReturned(t *testing.T) {
+	t.Parallel()
 	empty, _ := newDir(t)
 	stored, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")
