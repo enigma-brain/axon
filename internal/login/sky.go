@@ -54,7 +54,7 @@ func (l *login) connectSky(ctx context.Context, p configfile.Pathway, opts Optio
 		}
 		return fmt.Errorf("install the SkyPilot client: %w. Check your network and run `axon login` again.", err)
 	}
-	sky, err := l.client.Path()
+	skyPath, err := l.client.Path()
 	if err != nil {
 		return fmt.Errorf("find the SkyPilot client: %w. Run `axon login` again.", err)
 	}
@@ -64,7 +64,7 @@ func (l *login) connectSky(ctx context.Context, p configfile.Pathway, opts Optio
 	var health apiserver.Health
 	switch p.Kind {
 	case configfile.KindDirect:
-		health, err = l.connectDirect(ctx, p, opts, sky, version)
+		health, err = l.connectDirect(ctx, p, opts, skyPath, version)
 	case configfile.KindTeleport:
 		// On this kind Teleport supplies the identity, so the identity
 		// check and the version sync below need no SkyPilot login: sky api
@@ -114,10 +114,10 @@ func (l *login) connectSky(ctx context.Context, p configfile.Pathway, opts Optio
 
 	// A teleport pathway's last step, with the synced client.
 	if p.Kind == configfile.KindTeleport {
-		if sky, err = l.client.Path(); err != nil {
+		if skyPath, err = l.client.Path(); err != nil {
 			return fmt.Errorf("find the SkyPilot client: %w. Run `axon login` again.", err)
 		}
-		if err := l.pointClient(ctx, p, opts, sky); err != nil {
+		if err := l.pointClient(ctx, p, opts, skyPath); err != nil {
 			return err
 		}
 	}

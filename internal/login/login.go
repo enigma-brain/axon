@@ -17,7 +17,7 @@ import (
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
-	skygroup "github.com/enigma-brain/axon/internal/sky"
+	"github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -103,7 +103,7 @@ func newLogin(home string, getenv func(string) string) *login {
 		client:       skyClient{dir: dir},
 		health:       apiserver.Fetch,
 		cookieFile:   apiserver.CookieFile(home, getenv),
-		endpoint:     skygroup.Endpoint,
+		endpoint:     sky.Endpoint,
 		loginWait:    loginWait,
 		environ:      os.Environ,
 		readConfig:   configfile.Read,

@@ -207,13 +207,13 @@ func (lo *logout) skyLogout(ctx context.Context, opts LogoutOptions) error {
 		fmt.Fprintln(opts.Out, lineSkyNoLogin)
 		return nil
 	}
-	sky, err := lo.client.Path()
+	skyPath, err := lo.client.Path()
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, skyLogoutWait)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, sky, "api", "logout")
+	cmd := exec.CommandContext(ctx, skyPath, "api", "logout")
 	// sky api logout refuses to run while the endpoint variable is set.
 	cmd.Env = withoutVars(lo.environ(), endpointVar)
 	cmd.WaitDelay = skyWaitDelay
