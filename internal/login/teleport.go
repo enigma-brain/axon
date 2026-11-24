@@ -210,7 +210,7 @@ func (l *login) skyLogin(ctx context.Context, opts Options, skyPath, endpoint st
 	ctx, cancel := context.WithTimeout(parent, skyLoginWait)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, skyPath, "api", "login", "-e", endpoint)
-	cmd.Env = withoutVars(l.environ(), endpointVar)
+	cmd.Env = skyEnv(l.environ())
 	cmd.WaitDelay = skyWaitDelay
 	cmd.Stdout = opts.Out
 	cmd.Stderr = opts.Err

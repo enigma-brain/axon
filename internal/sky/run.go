@@ -40,10 +40,11 @@ func forward(ctx context.Context, w io.Writer, dir axondir.Dir, args []string) e
 	return run(path, args, environ(os.Environ(), Endpoint(p), email))
 }
 
-// run replaces the axon process with the sky at path, given args and env.
+// run replaces the axon process with the sky at path, given args and env,
+// without the variables that point Python elsewhere.
 func run(path string, args, env []string) error {
 	argv := append([]string{path}, args...)
-	if err := execSky(path, argv, env); err != nil {
+	if err := execSky(path, argv, skyclient.ClientEnv(env)); err != nil {
 		return fmt.Errorf("run the SkyPilot client %s: %w", path, err)
 	}
 	return nil

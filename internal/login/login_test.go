@@ -174,6 +174,11 @@ func newHarness(t *testing.T) *harness {
 				"PATH=" + os.Getenv("PATH"),
 				"SKYPILOT_API_SERVER_ENDPOINT=http://elsewhere.example",
 				"BROWSER=chromium",
+				"PYTHONPATH=/elsewhere/lib",
+				"PYTHONHOME=/elsewhere",
+				"VIRTUAL_ENV=/elsewhere/venv",
+				"CONDA_PREFIX=/elsewhere/conda",
+				"UV_INDEX_URL=https://index.example.org",
 			}
 		},
 		readConfig: configfile.Read,
@@ -233,6 +238,20 @@ func (h *harness) skyRuns() int {
 	return n
 }
 
+// assertNoPythonVars fails the test when env holds a variable that points
+// Python elsewhere, or lacks the harness's UV_ variable, which is kept.
+func assertNoPythonVars(t *testing.T, env map[string]string) {
+	t.Helper()
+	for _, k := range []string{"PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "CONDA_PREFIX"} {
+		if v, ok := env[k]; ok {
+			t.Errorf("sky ran with %s=%s", k, v)
+		}
+	}
+	if env["UV_INDEX_URL"] != "https://index.example.org" {
+		t.Errorf("sky ran without the user's UV_INDEX_URL")
+	}
+}
+
 // skyEnv returns the environment of sky's nth run.
 func (h *harness) skyEnv(n int) map[string]string {
 	h.t.Helper()
@@ -283,6 +302,7 @@ func TestDirectFirstLogin(t *testing.T) {
 	if env["BROWSER"] != "chromium" {
 		t.Errorf("BROWSER = %q, want the user's own", env["BROWSER"])
 	}
+	assertNoPythonVars(t, env)
 	for _, word := range []string{"Firefox", "Chrome", "Chromium"} {
 		if strings.Contains(h.out.String(), word) {
 			t.Errorf("output names %s:\n%s", word, h.out.String())

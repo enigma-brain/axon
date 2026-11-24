@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -887,5 +888,22 @@ func TestReplaceFileLeavesNoTemporaryFile(t *testing.T) {
 	}
 	if len(entries) != 1 {
 		t.Errorf("directory holds %d entries, want only the file", len(entries))
+	}
+}
+
+func TestClientEnvDropsPythonVars(t *testing.T) {
+	env := []string{
+		"PATH=/usr/bin",
+		"PYTHONPATH=/elsewhere/lib",
+		"PYTHONHOME=/elsewhere",
+		"VIRTUAL_ENV=/elsewhere/venv",
+		"CONDA_PREFIX=/elsewhere/conda",
+		"UV_INDEX_URL=https://index.example.org",
+		"PYTHONPATHX=kept",
+		"HOME=/home/ada",
+	}
+	want := []string{"PATH=/usr/bin", "UV_INDEX_URL=https://index.example.org", "PYTHONPATHX=kept", "HOME=/home/ada"}
+	if got := ClientEnv(env); !slices.Equal(got, want) {
+		t.Errorf("ClientEnv = %q, want %q", got, want)
 	}
 }

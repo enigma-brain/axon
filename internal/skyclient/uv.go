@@ -169,19 +169,7 @@ func syncDir(dir string) {
 // that points uv or Python elsewhere, and with every directory uv writes to
 // placed under tools.
 func uvEnv(tools string) []string {
-	var env []string
-	for _, kv := range os.Environ() {
-		key, _, _ := strings.Cut(kv, "=")
-		switch {
-		case strings.HasPrefix(key, "UV_"),
-			key == "VIRTUAL_ENV",
-			key == "CONDA_PREFIX",
-			key == "PYTHONHOME",
-			key == "PYTHONPATH":
-			continue
-		}
-		env = append(env, kv)
-	}
+	env := without(os.Environ(), func(key string) bool { return strings.HasPrefix(key, "UV_") })
 	return append(env,
 		"UV_NO_CONFIG=1",
 		"UV_MANAGED_PYTHON=1",

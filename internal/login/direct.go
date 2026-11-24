@@ -14,6 +14,7 @@ import (
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/sky"
+	"github.com/enigma-brain/axon/internal/skyclient"
 )
 
 // needsAuth is the status sky api login ends with when the server still sees
@@ -61,7 +62,7 @@ func (l *login) connectDirect(ctx context.Context, p configfile.Pathway, opts Op
 // in the user's default browser, and waits for it up to loginWait. It reports whether sky's
 // output named the status needs_auth.
 func (l *login) browserLogin(ctx context.Context, opts Options, skyPath, endpoint string) (sawNeedsAuth bool, err error) {
-	env := withoutVars(l.environ(), endpointVar)
+	env := skyEnv(l.environ())
 	// sky's output goes through a pipe; unbuffered, it reaches the terminal
 	// as sky writes it.
 	env = append(withoutVars(env, "PYTHONUNBUFFERED"), "PYTHONUNBUFFERED=1")
@@ -138,6 +139,13 @@ func hasWord(text, word string) bool {
 // isWordEdge reports whether c is white space or one of punct.
 func isWordEdge(c byte, punct string) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || strings.IndexByte(punct, c) >= 0
+}
+
+// skyEnv returns the environment sky api login and sky api logout run with:
+// env without the endpoint variable, which both refuse to run with, and
+// without the variables that point Python elsewhere.
+func skyEnv(env []string) []string {
+	return withoutVars(skyclient.ClientEnv(env), endpointVar)
 }
 
 // withoutVars returns env without the variables named.
