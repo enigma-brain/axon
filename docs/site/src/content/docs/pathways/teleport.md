@@ -20,13 +20,13 @@ so you run no `tsh` command by hand.
 3. **It brings up a tunnel** to the API server, on port 46581 of your
    laptop. The tunnel runs in the background, outlives the terminal, and keeps
    its log in `~/.axon/state/tunnel.log`. `ssh` to a cluster, VS Code
-   Remote-SSH and the dashboard at `http://localhost:46581` all go through it.
+   Remote-SSH and the dashboard at `http://127.0.0.1:46581` all go through it.
 4. **It points each command group at the tunnel.** What this means for
    `axon sky` is on the
    [sky page](/axon/sky/#on-a-teleport-pathway).
 
 The tunnel is `axon`'s own: a process on port 46581 that is not `axon`'s
-tunnel makes `axon login` stop and name it.
+tunnel makes `axon login` and `axon sky` stop and name it.
 
 ## tsh, Teleport's client
 

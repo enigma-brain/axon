@@ -539,7 +539,8 @@ gone. It runs these steps in order:
    browser. Every other line of the file is kept as it was. The step runs
    whatever step 1's result, and when the client is not installed. With
    no cookie file, or no cookie for the endpoint, it is silent.
-3. Stop the recorded Teleport tunnel, when it runs.
+3. Stop the Teleport tunnel: the connected pathway's tunnel, whether or not
+   a record names it, and the tunnel the record names, when each runs.
 4. When the recorded pathway is a `teleport` pathway, end the Teleport
    session for its proxy with `tsh logout`
    [{D!}](decisions/logout.md), and check that the certificate is no
@@ -582,7 +583,7 @@ login` and before a command runs, begins `sky:`.
 | Pathway kind | Endpoint the SkyPilot client uses |
 |---|---|
 | `direct` | The pathway's `sky.endpoint` |
-| `teleport` | `http://localhost:46581`, a Teleport tunnel to the pathway's `sky.app` |
+| `teleport` | `http://127.0.0.1:46581`, a Teleport tunnel to the pathway's `sky.app` |
 
 The tunnel's port, 46581, is `axon`'s and is the same for every
 organization.
@@ -626,9 +627,12 @@ was not completed in the browser and to run `axon login` again.
 
 #### On a teleport pathway
 
-1. When the tunnel is up and the server reports the user's identity through
-   it, the tunnel is left running and steps 2 to 5 are skipped. A repeated
-   login does not interrupt `ssh` or VS Code sessions.
+1. `axon` checks port 46581. When a process that is not its tunnel holds
+   the port, `axon` reports the process, names the port, and stops. When
+   the tunnel is up, `axon` records it if no record names it. When the
+   tunnel is up and the server reports the user's identity through it, the
+   tunnel is left running and steps 2 to 5 are skipped. A repeated login
+   does not interrupt `ssh` or VS Code sessions.
 2. `axon` runs `tsh --proxy=<teleport.proxy> apps login <sky.app>`,
    which issues a fresh application certificate.
 3. `axon` stops its tunnel, if one is running.
@@ -636,14 +640,20 @@ was not completed in the browser and to run `axon login` again.
    tunnel holds the port, `axon` reports the process, names the port, and
    stops.
 5. `axon` starts the tunnel and waits up to 10 seconds for
-   `http://localhost:46581/api/health` to answer. When it does not and the
+   `http://127.0.0.1:46581/api/health` to answer. When it does not and the
    tunnel's process has exited, `axon` prints the end of the tunnel's log
    and stops. When the process is still running, `axon` reports the
    SkyPilot API server as not answering through the tunnel, says to retry
    later, and stops.
-6. `axon` runs `sky api login -e http://localhost:46581` when the client's
+6. `axon` runs `sky api login -e http://127.0.0.1:46581` when the client's
    stored endpoint differs. No browser opens: the identity comes from
-   Teleport.
+   Teleport. A client that an earlier `axon` pointed at
+   `http://localhost:46581` is pointed at the new endpoint this way.
+
+The tunnel listens on the IPv4 loopback address, and the endpoint names
+that address, `127.0.0.1`, rather than `localhost`, which a client resolves
+to the IPv6 loopback address first on some machines, where another process
+can listen on the same port.
 
 The port is 46581 and not 46580, because `http://localhost:46580` is the
 address SkyPilot reserves for an API server on the laptop itself. With that
@@ -673,17 +683,35 @@ ID has passed to another process, and `axon` leaves that process alone and
 discards the record.
 
 A tunnel started by hand with the same command, of which `axon` has no
-record, is adopted: `axon` uses it when it is up and replaces it when it is
-down. Any other process on port 46581 is reported and left running.
+record, is adopted: `axon` records it and uses it when it is up, and
+replaces it when it is down. A tunnel that is up always has a record, so
+that `axon logout` and leaving the pathway stop it. Any other process on
+port 46581 is reported and left running.
+
+The tunnel is up when the health request to
+`http://127.0.0.1:46581/api/health` answers and the address it reached is
+one the tunnel's process listens on; an answer from another process does
+not count. `axon login` and `axon sky` both make this check before they
+use the tunnel, so neither sends a request, nor points the client, at a
+process that is not the tunnel.
+
+Starting, stopping and recording the tunnel are done under a lock on a file
+in `~/.axon/state/`. Two `axon` commands that start the tunnel at once end
+with one running, recorded tunnel: the second waits for the first and finds
+its tunnel up. A start that fails removes the record only when the record
+names the process it started. The lock is the tunnel's own, apart from the
+lock on the config files, because a start holds it while it waits for the
+tunnel to serve, and a change to the config files does not wait on that.
 
 `ssh` to a cluster, VS Code Remote-SSH and the SkyPilot dashboard at
-`http://localhost:46581` use the tunnel without going through `axon`.
+`http://127.0.0.1:46581` use the tunnel without going through `axon`.
 
-The tunnel accepts every local connection to port 46581 and does not tell
-one local process from another. A request from any account on the machine
-reaches the API server with the identity of the user who ran `axon login`.
-A teleport pathway is for machines that only the user logs in to
-[{Q?}](questions/tunnel-local-access.md).
+The tunnel is for the user who ran `axon login`, and for the programs that
+user runs. It accepts every local connection to port 46581 and does not
+tell one local process from another: a request from any account on the
+machine, or from a web page open in the user's browser, reaches the API
+server with the user's identity. A teleport pathway is for machines that
+only the user logs in to [{Q?}](questions/tunnel-local-access.md).
 
 The tunnel does not survive the expiry of the Teleport certificate or a
 reboot. `axon login` restores it, and `axon sky` restores it when the
@@ -778,13 +806,17 @@ rewritten, so hints that `sky` prints name `sky` commands.
 ### Connection check
 
 Before it forwards a command, `axon sky` makes one request to the API
-server's health endpoint and acts on the result. It repairs only what needs
+server's health endpoint and acts on the result. On a teleport pathway it
+first checks port 46581, as `axon login` does: a tunnel that is up is
+recorded when no record names it, and a process that is not the tunnel
+stops the command. It repairs only what needs
 no action from the user [{D!}](decisions/connection-repair.md).
 
 | Condition | What `axon sky` does |
 |---|---|
 | The server answers, reports the user's identity, and its version equals the client's | Runs the command. |
 | No login has run on this laptop | Stops: "Run `axon login` first." |
+| Teleport: a process that is not the tunnel holds port 46581 | Stops: "port 46581 is held by process `<pid>` (`<command>`), which is not the Teleport tunnel. Stop that process and retry." The command does not run. |
 | Teleport: the tunnel is down and the Teleport certificate is valid | Restarts the tunnel once, says so in one line, repeats the request, and acts on the new result. |
 | Teleport: the tunnel's process is running and the server does not answer after that restart | Stops: "The SkyPilot API server is not answering. Retry later." |
 | Teleport: the tunnel's process exits during that restart | Stops with the end of the tunnel's log: "Couldn't restart the Teleport tunnel. Run `axon login`." |

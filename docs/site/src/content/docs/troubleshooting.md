@@ -497,19 +497,22 @@ sign-in in the browser.
 
 ```text
 port 46581 is held by process <pid> (<command>), which is not the Teleport tunnel. Stop that process and run `axon login` again.
+axon: port 46581 is held by process <pid> (<command>), which is not the Teleport tunnel. Stop that process and retry.
 ```
 
-Another program uses the tunnel's port. Stop it, then run `axon login` again. A tunnel
-started by an older `axon` is also such a process.
+Another program uses the tunnel's port. `axon login` and every `axon sky` command check
+the port first, and stop rather than send your requests to that program. Stop it, then
+run the command again. A tunnel started by an older `axon` is also such a process.
 
 ### The Teleport tunnel could not be stopped
 
 ```text
-could not stop the Teleport tunnel, process <pid>. Stop it with `kill -9 <pid>` and try again
+stop the Teleport tunnel: process <pid> did not exit. Stop it with `kill -9 <pid>` and try again
 ```
 
-`axon` could not stop its own tunnel. Run the command the message gives, then run
-`axon login` again.
+`axon` could not stop its own tunnel. The message begins with the command that tried,
+such as `axon: could not` from `axon logout`. Run the `kill` command it gives, then run
+the command again.
 
 ### The API server does not answer through the tunnel
 
@@ -648,6 +651,15 @@ axon: The SkyPilot API server is not answering. Retry later.
 
 The server itself is down, or on a Teleport pathway does not answer after a restart of
 the tunnel. Logging in again does not help. Retry later.
+
+### The Teleport tunnel could not be checked
+
+```text
+axon: Couldn't check the Teleport tunnel: <reason>. Run `axon login`.
+```
+
+`axon sky` could not find out which process holds the tunnel's port, so it did not run
+the command. Run `axon login`; when the message repeats, the reason says what failed.
 
 ### The Teleport tunnel could not be restarted
 
