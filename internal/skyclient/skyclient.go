@@ -217,16 +217,6 @@ func Path(dir axondir.Dir) (string, error) {
 	return skyPath(tools, version), nil
 }
 
-// Command returns a command that runs the client's sky with args. The
-// command names sky by absolute path, so a sky on PATH is never run.
-func Command(ctx context.Context, dir axondir.Dir, args ...string) (*exec.Cmd, error) {
-	path, err := Path(dir)
-	if err != nil {
-		return nil, err
-	}
-	return exec.CommandContext(ctx, path, args...), nil
-}
-
 func skyPath(tools, version string) string {
 	return filepath.Join(tools, skypilotDir, version, "bin", "sky")
 }

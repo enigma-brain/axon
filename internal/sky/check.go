@@ -84,10 +84,10 @@ var realProbes = probes{
 	},
 }
 
-// check holds the probes Check uses.
+// check holds the probes checkConnection uses.
 var check = realProbes
 
-// Check checks the connection to the API server before a command runs,
+// checkConnection checks the connection to the API server before a command runs,
 // repairs what needs no action from the user, and otherwise returns an
 // error that names the user's next step. It makes one health request. On
 // a teleport pathway it first checks that the process on the tunnel's port
@@ -100,7 +100,7 @@ var check = realProbes
 // once before the health request, so that the command runs with the same
 // ones. The pathway counts as connected only while its settings for
 // machines are the ones axon login recorded when it connected it.
-func Check(ctx context.Context, dir axondir.Dir, w io.Writer) (configfile.Pathway, string, error) {
+func checkConnection(ctx context.Context, dir axondir.Dir, w io.Writer) (configfile.Pathway, string, error) {
 	pw, err := activePathway(dir)
 	if err != nil {
 		return configfile.Pathway{}, "", err

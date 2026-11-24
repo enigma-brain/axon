@@ -43,9 +43,6 @@ func (d Dir) Lock() (unlock func(), err error) {
 	}, nil
 }
 
-// LockPath returns the path of the file Lock locks.
-func (d Dir) LockPath() string { return filepath.Join(d.StatePath(), lockFile) }
-
 // unwrapPath returns the error inside a *fs.PathError or *os.LinkError, so
 // that a message naming the path does not name it twice.
 func unwrapPath(err error) error {

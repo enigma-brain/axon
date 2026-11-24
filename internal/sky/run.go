@@ -29,7 +29,7 @@ var execSky = syscall.Exec
 // forward checks the connection, writing what the check repairs to w, then
 // replaces the axon process with sky and args.
 func forward(ctx context.Context, w io.Writer, dir axondir.Dir, args []string) error {
-	p, email, err := Check(ctx, dir, w)
+	p, email, err := checkConnection(ctx, dir, w)
 	if err != nil {
 		return err
 	}

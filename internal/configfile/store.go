@@ -38,6 +38,11 @@ func (s Store) Path(id string) string {
 	return filepath.Join(s.dir.ConfigsPath(), id+fileExt)
 }
 
+// lockStore takes the exclusive lock on changing the stored config files,
+// waiting while another process or goroutine holds it, and returns the
+// function that releases it. Tests replace it to see whether it is taken.
+var lockStore = axondir.Dir.Lock
+
 // Problem is a stored file that List left out, and why.
 type Problem struct {
 	// Path is the stored file's path.
@@ -45,8 +50,6 @@ type Problem struct {
 	// Err is the reason it was left out.
 	Err error
 }
-
-func (p Problem) Error() string { return p.Path + ": " + p.Err.Error() }
 
 // record is the content of a stored file's record. A record written by an
 // earlier axon holds only the source.
@@ -282,16 +285,6 @@ func sameProxy(a, b string) bool {
 	return ah == bh && ap == bp
 }
 
-// Add checks data as a config file from src and stores it, byte for
-// byte, replacing the stored file with the same id, and records src as its
-// source. It refuses data that fails the checks, that has the same pathway
-// name or identifier as another stored file, or that lowers the stored
-// copy's revision. A refused file writes nothing.
-func (s Store) Add(data []byte, src Source) (File, error) {
-	f, _, err := s.put(data, PutOptions{Origin: FromSource(src)}, "")
-	return f, err
-}
-
 // Put checks data and stores it as opts say: it removes the stored files
 // opts.Remove names, and stores data in place of the stored file with the
 // same id. It refuses data that fails the checks, that still clashes by
@@ -308,7 +301,7 @@ func (s Store) Put(data []byte, opts PutOptions) (File, error) {
 }
 
 // Refresh replaces the stored file id with data, fetched again from src,
-// as Add does, and refuses data whose id is not id. When data is the stored
+// as Put does with src as its origin, and refuses data whose id is not id. When data is the stored
 // file byte for byte, it writes nothing and reports no change. The boolean
 // reports whether the stored file changed.
 func (s Store) Refresh(id string, data []byte, src Source, allowLower bool) (File, bool, error) {
@@ -326,7 +319,7 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 	if id != "" && f.ID != id {
 		return File{}, false, &CheckError{Field: "id", Check: fmt.Sprintf("is %q, not %q, the id of the stored file", f.ID, id)}
 	}
-	unlock, err := s.lock()
+	unlock, err := lockStore(s.dir)
 	if err != nil {
 		return File{}, false, err
 	}
@@ -565,7 +558,7 @@ func (s Store) Recover() ([]string, error) {
 	if err != nil || !found {
 		return nil, err
 	}
-	unlock, err := s.lock()
+	unlock, err := lockStore(s.dir)
 	if err != nil {
 		return nil, err
 	}

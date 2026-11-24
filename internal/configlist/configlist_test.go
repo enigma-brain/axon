@@ -81,7 +81,7 @@ func add(t *testing.T, s configfile.Store, data, source string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Add([]byte(data), src); err != nil {
+	if _, err := s.Put([]byte(data), configfile.PutOptions{Origin: configfile.FromSource(src)}); err != nil {
 		t.Fatal(err)
 	}
 }

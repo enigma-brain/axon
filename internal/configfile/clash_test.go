@@ -181,7 +181,7 @@ func TestLowerRevision(t *testing.T) {
 		t.Fatalf("Inspect = %+v, %v; want a lower revision", c, err)
 	}
 	var lower *LowerRevisionError
-	if _, err := s.Add([]byte(withRevision(campusFile, "5")), mustSource(t, "-")); !errors.As(err, &lower) || lower.Stored != 7 || lower.New != 5 {
+	if _, err := addFile(s, []byte(withRevision(campusFile, "5")), mustSource(t, "-")); !errors.As(err, &lower) || lower.Stored != 7 || lower.New != 5 {
 		t.Fatalf("Add of a lower revision = %v", err)
 	}
 	if _, err := s.Put([]byte(withRevision(campusFile, "5")), PutOptions{Origin: FromSource(mustSource(t, "-")), AllowLower: true}); err != nil {
@@ -218,7 +218,7 @@ func TestSameIDAsAHandMadeFileClashes(t *testing.T) {
 	if err != nil || c.Previous != nil || len(c.Clashes) != 1 || !c.Clashes[0].SameFileID || !c.Clashes[0].StoredHandMade {
 		t.Fatalf("Inspect = %+v, %v", c, err)
 	}
-	if _, err := s.Add([]byte(directConfig("lab", "theirs", "Theirs", "https://t.example.org")), mustSource(t, "-")); !errors.As(err, new(*ClashError)) {
+	if _, err := addFile(s, []byte(directConfig("lab", "theirs", "Theirs", "https://t.example.org")), mustSource(t, "-")); !errors.As(err, new(*ClashError)) {
 		t.Errorf("Add over a hand-made file = %v", err)
 	}
 }

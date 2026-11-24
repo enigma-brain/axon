@@ -86,7 +86,7 @@ func storeConfig(t *testing.T, home string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := configfile.NewStore(axondir.New(home)).Add([]byte(exampleConfig), src); err != nil {
+	if _, err := configfile.NewStore(axondir.New(home)).Put([]byte(exampleConfig), configfile.PutOptions{Origin: configfile.FromSource(src)}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -558,7 +558,7 @@ func TestSkyNeverFetchesTheConfigFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := configfile.NewStore(dir).Add([]byte(exampleConfig), src); err != nil {
+	if _, err := configfile.NewStore(dir).Put([]byte(exampleConfig), configfile.PutOptions{Origin: configfile.FromSource(src)}); err != nil {
 		t.Fatal(err)
 	}
 	calls := capture(t)

@@ -54,9 +54,9 @@ func TestRealInstall(t *testing.T) {
 		}
 	}
 
-	cmd, err := Command(ctx, dir, "--version")
+	cmd, err := skyCommand(ctx, dir, "--version")
 	if err != nil {
-		t.Fatalf("Command: %v", err)
+		t.Fatalf("skyCommand: %v", err)
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
