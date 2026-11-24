@@ -58,20 +58,20 @@ func ParseSource(s string) (Source, error) {
 	case s == stdinValue:
 		return Source{kind: sourceStdin, value: stdinValue}, nil
 	case schemePattern.MatchString(s):
-		// Errors name the address with any password redacted, and say
-		// nothing of an address that does not parse, since it can hold one.
+		// Errors name the address as printable gives it, and say nothing
+		// of an address that does not parse, since it can hold a secret.
 		u, err := url.Parse(s)
 		if err != nil {
 			return Source{}, errors.New("the config file's address is not a valid URL")
 		}
 		if u.Scheme != "https" {
-			return Source{}, fmt.Errorf("%s: an address must start with https://", u.Redacted())
+			return Source{}, fmt.Errorf("%s: an address must start with https://", printable(u))
 		}
 		if u.Host == "" {
-			return Source{}, fmt.Errorf("%s: the address has no host", u.Redacted())
+			return Source{}, fmt.Errorf("%s: the address has no host", printable(u))
 		}
 		if u.User != nil {
-			return Source{}, fmt.Errorf("%s: an address must not carry a user name or password", u.Redacted())
+			return Source{}, fmt.Errorf("%s: an address must not carry a user name or password", printable(u))
 		}
 		return Source{kind: sourceAddress, value: s}, nil
 	}
@@ -90,9 +90,31 @@ func ParseSource(s string) (Source, error) {
 	return Source{kind: sourcePath, value: abs}, nil
 }
 
-// String returns the source as it is recorded: the address, the absolute
-// path, or "-".
-func (s Source) String() string { return s.value }
+// String returns the source as messages print it: the address without its
+// user information, query string or fragment, which can hold a token; the
+// absolute path; or "-".
+func (s Source) String() string {
+	if s.kind != sourceAddress {
+		return s.value
+	}
+	u, err := url.Parse(s.value)
+	if err != nil {
+		return s.value
+	}
+	return printable(u)
+}
+
+// raw returns the source as it is recorded and read: the whole address, the
+// absolute path, or "-". It is never printed.
+func (s Source) raw() string { return s.value }
+
+// printable returns u as a message prints it: the scheme, host and path,
+// without the user information, query string and fragment, which can hold
+// a token.
+func printable(u *url.URL) string {
+	c := url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path, RawPath: u.RawPath}
+	return c.String()
+}
 
 // IsAddress reports whether the source is an address, the one kind of
 // source that can be read again without the user.
@@ -110,7 +132,7 @@ func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
 		}
 		return data, nil
 	case sourceAddress:
-		return fetch(ctx, src.value)
+		return fetch(ctx, src.value, src.String())
 	case sourcePath:
 		f, err := os.Open(src.value)
 		if err != nil {
@@ -127,24 +149,24 @@ func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
 }
 
 // fetch gets address without credentials or cookies, following redirects
-// only to https addresses.
-func fetch(ctx context.Context, address string) ([]byte, error) {
+// only to https addresses. Errors name the address as shown.
+func fetch(ctx context.Context, address, shown string) ([]byte, error) {
 	fail := func(err error) error {
 		var uerr *url.Error
 		if errors.As(err, &uerr) {
 			err = uerr.Err
 		}
-		return fmt.Errorf("fetch %s: %w", address, err)
+		return fmt.Errorf("fetch %s: %w", shown, err)
 	}
 	client := &http.Client{
 		Transport: transport,
 		Timeout:   fetchTimeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if req.URL.Scheme != "https" {
-				return fmt.Errorf("redirected to %s, which is not an https address", req.URL.Redacted())
+				return fmt.Errorf("redirected to %s, which is not an https address", printable(req.URL))
 			}
 			if req.URL.User != nil {
-				return fmt.Errorf("redirected to %s, which carries a user name or password", req.URL.Redacted())
+				return fmt.Errorf("redirected to %s, which carries a user name or password", printable(req.URL))
 			}
 			if len(via) >= 10 {
 				return errors.New("stopped after 10 redirects")
