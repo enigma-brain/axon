@@ -836,22 +836,12 @@ func TestDamagedVersionRecordIsNoClient(t *testing.T) {
 			if err := damage(current); err != nil {
 				t.Fatal(err)
 			}
-			if name == "directory" {
-				// The directory is not replaced by a rename; the install
-				// below reports that rather than the damage.
-				t.Cleanup(func() { os.RemoveAll(current) })
-			}
-
 			if v, ok, err := Version(f.dir); err != nil || ok || v != "" {
 				t.Errorf("Version = %q, %v, %v; want \"\", false, nil", v, ok, err)
 			}
 			if _, err := Path(f.dir); !errors.Is(err, ErrNotInstalled) {
 				t.Errorf("Path error = %v, want ErrNotInstalled", err)
 			}
-			if name == "directory" {
-				return
-			}
-
 			// An install repairs it.
 			from, to, err := Ensure(context.Background(), f.dir, "0.13.0", nil)
 			if err != nil {

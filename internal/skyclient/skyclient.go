@@ -162,7 +162,15 @@ func installClient(ctx context.Context, uv string, env []string, tools, version 
 	if !isExecutable(filepath.Join(venv, "bin", "sky")) {
 		return errors.New("the package installed no sky executable")
 	}
-	if err := writeFile(filepath.Join(root, currentFile), version+"\n"); err != nil {
+	// A rename cannot replace a directory, so a directory where the record
+	// belongs is removed first.
+	current := filepath.Join(root, currentFile)
+	if info, err := os.Lstat(current); err == nil && info.IsDir() {
+		if err := os.RemoveAll(current); err != nil {
+			return err
+		}
+	}
+	if err := writeFile(current, version+"\n"); err != nil {
 		return err
 	}
 	removeOthers(root, version, currentFile)
