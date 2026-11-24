@@ -101,7 +101,7 @@ func TestLogoutTeleport(t *testing.T) {
 	if r.err != nil {
 		t.Fatalf("logout: %v\n%s", r.err, r.errOut.String())
 	}
-	orgs := filepath.Join(h.home, ".axon", "orgs")
+	orgs := filepath.Join(h.home, ".axon", "configs")
 	wantLines(t, r.out.String(),
 		lineSkyLoggedOut,
 		"sky: stopping the Teleport tunnel on port 46581",
@@ -156,7 +156,7 @@ func TestLogoutDirect(t *testing.T) {
 		lineSkyLoggedOut,
 		"sky: removed the saved login for "+campusEndpoint,
 		lineRemoved,
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "configs")+"; run `axon login` to log in again",
 	)
 	if lastSkyArgs(t, h) != "api logout" {
 		t.Errorf("sky ran with %q", lastSkyArgs(t, h))
@@ -220,7 +220,7 @@ func TestLogoutRemovesTheCookieWithoutAClient(t *testing.T) {
 		lineSkyNoClient,
 		"sky: removed the saved login for "+campusEndpoint,
 		lineRemoved,
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "configs")+"; run `axon login` to log in again",
 	)
 	wantCookieFile(t, h, otherServerCookie)
 }
@@ -240,7 +240,7 @@ func TestLogoutRemovesTheCookieWhenSkyLogoutFails(t *testing.T) {
 	}
 	wantLines(t, r.out.String(),
 		"sky: removed the saved login for "+campusEndpoint,
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "configs")+"; run `axon login` to log in again",
 	)
 	wantCookieFile(t, h, otherServerCookie)
 }
@@ -260,7 +260,7 @@ func TestLogoutWithNoCookieFile(t *testing.T) {
 	wantLines(t, r.out.String(),
 		lineSkyLoggedOut,
 		lineRemoved,
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "configs")+"; run `axon login` to log in again",
 	)
 	if _, err := os.Stat(h.cookieFile); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("the cookie file exists after the logout: %v", err)
@@ -288,7 +288,7 @@ func TestLogoutWithNoCookieForTheServer(t *testing.T) {
 	wantLines(t, r.out.String(),
 		lineSkyLoggedOut,
 		lineRemoved,
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "configs")+"; run `axon login` to log in again",
 	)
 	wantCookieFile(t, h, otherServerCookie)
 }
@@ -319,7 +319,7 @@ func TestLogoutWhenTheCookieFileCannotBeRewritten(t *testing.T) {
 	}
 	wantLines(t, r.out.String(),
 		lineSkyLoggedOut,
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "configs")+"; run `axon login` to log in again",
 	)
 	// The records stay, so that logging out again retries.
 	if _, ok, _ := axondir.New(h.home).Email(); !ok {
@@ -349,7 +349,7 @@ func TestLogoutSkipsSteps(t *testing.T) {
 		"sky: stopping the Teleport tunnel on port 46581",
 		"teleport: skipped logging out of teleport.example.org: tsh is not on PATH",
 		lineRemoved,
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "configs")+"; run `axon login` to log in again",
 	)
 	if h.skyRuns() != runs {
 		t.Error("sky ran without a client")
@@ -410,7 +410,7 @@ func TestLogoutFailingStepDoesNotStopTheOthers(t *testing.T) {
 	wantLines(t, r.out.String(),
 		"sky: stopping the Teleport tunnel on port 46581",
 		"teleport: logged out of teleport.example.org",
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "configs")+"; run `axon login` to log in again",
 	)
 	if calls := h.tshCalls(); !contains(calls, "logout --proxy=teleport.example.org") {
 		t.Errorf("tsh calls = %q", calls)
@@ -443,7 +443,7 @@ func TestLogoutWithAnEarlierAxonsRecord(t *testing.T) {
 		"sky: stopping the Teleport tunnel on port 46581",
 		lineTeleportOld,
 		lineRemoved,
-		"Kept the config files in "+filepath.Join(h.home, ".axon", "orgs")+"; run `axon login` to log in again",
+		"Kept the config files in "+filepath.Join(h.home, ".axon", "configs")+"; run `axon login` to log in again",
 	)
 	if calls := h.tshCalls(); len(calls) != 0 {
 		t.Errorf("tsh ran: %q", calls)

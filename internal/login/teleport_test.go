@@ -439,7 +439,7 @@ func TestSwitchStopsRecordedTunnelByItsRecord(t *testing.T) {
 	}
 	// Disconnecting needs no config file: with the file that named
 	// the pathway gone, the records are enough.
-	if err := os.Remove(filepath.Join(h.home, ".axon", "orgs", "example.toml")); err != nil {
+	if err := os.Remove(filepath.Join(h.home, ".axon", "configs", "example.toml")); err != nil {
 		t.Fatal(err)
 	}
 	h.store(otherOrg)
@@ -615,7 +615,7 @@ func lastFileGone(t *testing.T, gone func(h *metaHarness)) {
 
 func TestLastFileDeletedStopsTunnel(t *testing.T) {
 	lastFileGone(t, func(h *metaHarness) {
-		if err := os.Remove(filepath.Join(h.home, ".axon", "orgs", "example.toml")); err != nil {
+		if err := os.Remove(filepath.Join(h.home, ".axon", "configs", "example.toml")); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -623,7 +623,7 @@ func TestLastFileDeletedStopsTunnel(t *testing.T) {
 
 func TestLastFileFailingChecksStopsTunnel(t *testing.T) {
 	lastFileGone(t, func(h *metaHarness) {
-		if err := os.WriteFile(filepath.Join(h.home, ".axon", "orgs", "example.toml"), []byte("not toml ["), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(h.home, ".axon", "configs", "example.toml"), []byte("not toml ["), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	})

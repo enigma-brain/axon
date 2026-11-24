@@ -49,7 +49,7 @@ func TestRecordHoldsTimeAndFingerprint(t *testing.T) {
 	if rec.HandMade || rec.Source.String() != "https://example.org/campus.toml" || !rec.StoredAt.Equal(at) || len(rec.SHA256) != 64 {
 		t.Errorf("record = %+v", rec)
 	}
-	data, _ := os.ReadFile(filepath.Join(home, ".axon", "state", "orgs", "example-campus.toml"))
+	data, _ := os.ReadFile(filepath.Join(home, ".axon", "state", "configs", "example-campus.toml"))
 	for _, want := range []string{`source = "https://example.org/campus.toml"`, `stored_at = "2026-11-23T12:00:00Z"`, `sha256 = "` + rec.SHA256 + `"`} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("record file %q lacks %s", data, want)
@@ -60,7 +60,7 @@ func TestRecordHoldsTimeAndFingerprint(t *testing.T) {
 func TestRecordWrittenByAnEarlierAxon(t *testing.T) {
 	s, home := newStore(t)
 	add(t, s, campusFile, "-")
-	path := filepath.Join(home, ".axon", "state", "orgs", "example-campus.toml")
+	path := filepath.Join(home, ".axon", "state", "configs", "example-campus.toml")
 	if err := os.WriteFile(path, []byte("source = \"https://example.org/campus.toml\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestPutRemovesAndStores(t *testing.T) {
 	if got := pathwayIDs(files); !reflect.DeepEqual(got, []string{"b/two", "keep/keep"}) {
 		t.Errorf("stored = %v", got)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".axon", "state", "orgs", "a.toml")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(home, ".axon", "state", "configs", "a.toml")); !os.IsNotExist(err) {
 		t.Errorf("the removed file's record is still there: %v", err)
 	}
 }
@@ -291,13 +291,13 @@ func TestPutRestoresEverythingWhenAStepFails(t *testing.T) {
 		fail func(t *testing.T, home string, s Store)
 	}{
 		{"setting aside the old record", func(t *testing.T, home string, s Store) {
-			failOn(t, &renameFile, filepath.Join(home, ".axon", "state", "orgs", "a.toml"))
+			failOn(t, &renameFile, filepath.Join(home, ".axon", "state", "configs", "a.toml"))
 		}},
 		{"writing the new file", func(t *testing.T, home string, s Store) {
 			failReplaceOn(t, s.Path("b"))
 		}},
 		{"writing the new record", func(t *testing.T, home string, s Store) {
-			failReplaceOn(t, filepath.Join(home, ".axon", "state", "orgs", "b.toml"))
+			failReplaceOn(t, filepath.Join(home, ".axon", "state", "configs", "b.toml"))
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -322,7 +322,7 @@ func TestRollbackContinuesAfterAStepFails(t *testing.T) {
 	s, home := newStore(t)
 	added, old := clashing(t, s)
 	original, _ := os.ReadFile(s.Path("a"))
-	failReplaceOn(t, filepath.Join(home, ".axon", "state", "orgs", "b.toml"))
+	failReplaceOn(t, filepath.Join(home, ".axon", "state", "configs", "b.toml"))
 	failOn(t, &renameFile, s.Path("a")+removingExt)
 	_, err := s.Put(added, PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{old}})
 	if err == nil || !strings.Contains(err.Error(), s.Path("a")+" could not be put back from "+s.Path("a")+removingExt) {
@@ -331,7 +331,7 @@ func TestRollbackContinuesAfterAStepFails(t *testing.T) {
 	if data, _ := os.ReadFile(s.Path("a") + removingExt); string(data) != string(original) {
 		t.Errorf("the old content is not beside the file: %q", data)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".axon", "state", "orgs", "a.toml")); err != nil {
+	if _, err := os.Stat(filepath.Join(home, ".axon", "state", "configs", "a.toml")); err != nil {
 		t.Errorf("the old record was not put back: %v", err)
 	}
 	if _, err := os.Stat(s.Path("b")); !os.IsNotExist(err) {
@@ -344,7 +344,7 @@ func TestRollbackContinuesAfterAStepFails(t *testing.T) {
 func TestALeftoverRemovingFileIsIgnored(t *testing.T) {
 	s, home := newStore(t)
 	add(t, s, directOrg("a", "one", "Campus", "https://a.example.org"), "-")
-	for _, p := range []string{s.Path("a"), filepath.Join(home, ".axon", "state", "orgs", "a.toml")} {
+	for _, p := range []string{s.Path("a"), filepath.Join(home, ".axon", "state", "configs", "a.toml")} {
 		data, _ := os.ReadFile(p)
 		if err := os.WriteFile(p+removingExt, data, 0o600); err != nil {
 			t.Fatal(err)

@@ -85,7 +85,7 @@ func TestSmokeLogin(t *testing.T) {
 		t.Errorf("axon login did not stop at the reachability check, before the browser login")
 	}
 
-	stored, err := os.ReadFile(filepath.Join(home, ".axon", "orgs", "example-smoke.toml"))
+	stored, err := os.ReadFile(filepath.Join(home, ".axon", "configs", "example-smoke.toml"))
 	if err != nil {
 		t.Errorf("read the stored config file: %v", err)
 	} else if string(stored) != smokeFile {

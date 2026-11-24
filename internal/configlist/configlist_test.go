@@ -234,7 +234,7 @@ func TestAddressWithQueryString(t *testing.T) {
 func TestOlderAndMissingRecords(t *testing.T) {
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")
-	record := filepath.Join(dir.Root(), "state", "orgs", "example-campus.toml")
+	record := filepath.Join(dir.RecordsPath(), "example-campus.toml")
 	if _, err := os.Stat(record); err != nil {
 		t.Fatalf("the record is not where this test expects it: %v", err)
 	}
@@ -337,7 +337,7 @@ func TestChosenPathwayInNoFile(t *testing.T) {
 func TestUnreadablePathwayInUse(t *testing.T) {
 	dir, s := newDir(t)
 	add(t, s, campus, "https://example.org/campus.toml")
-	if err := os.WriteFile(dir.ConfigPath(), []byte("pathway = \n"), 0o600); err != nil {
+	if err := os.WriteFile(dir.SettingsPath(), []byte("pathway = \n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	text, err := list(t, dir)
@@ -346,7 +346,7 @@ func TestUnreadablePathwayInUse(t *testing.T) {
 	}
 	// Where the line wraps depends on the length of the temporary path, so
 	// compare the words.
-	if !strings.HasPrefix(strings.Join(strings.Fields(text), " "), "The pathway in use is not known: read "+dir.ConfigPath()+":") {
+	if !strings.HasPrefix(strings.Join(strings.Fields(text), " "), "The pathway in use is not known: read "+dir.SettingsPath()+":") {
 		t.Errorf("listing:\n%s", text)
 	}
 	if !strings.Contains(text, "    Campus  --pathway campus\n") {

@@ -42,7 +42,7 @@ func storeOrg(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	orgs := filepath.Join(home, ".axon", "orgs")
+	orgs := filepath.Join(home, ".axon", "configs")
 	if err := os.MkdirAll(orgs, 0o700); err != nil {
 		t.Fatal(err)
 	}

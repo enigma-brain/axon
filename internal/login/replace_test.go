@@ -73,13 +73,13 @@ func TestConfigNameClashYes(t *testing.T) {
 		t.Fatalf("login: %v\n%s", err, h.out.String())
 	}
 	out := h.out.String()
-	path := filepath.Join(h.home, ".axon", "orgs", "example.toml")
+	path := filepath.Join(h.home, ".axon", "configs", "example.toml")
 	for _, want := range []string{
 		"The stored pathway \"Campus\" has the same name as the pathway you are adding.\n" +
 			"Replacing it removes the config file " + path + " and all its pathways: Campus and Remote.\n" +
 			"Replace it? [y/N, Enter for no]: ",
 		"Removed the config file " + path + "\n",
-		"Stored the config file " + filepath.Join(h.home, ".axon", "orgs", "other.toml") + "\n",
+		"Stored the config file " + filepath.Join(h.home, ".axon", "configs", "other.toml") + "\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
@@ -95,7 +95,7 @@ func TestConfigNameClashNo(t *testing.T) {
 	before := snapshot(t, filepath.Join(h.home, ".axon"))
 	err := h.login(Options{Config: writeOrg(t, otherCampus), In: strings.NewReader("\n")})
 	want := `add the config file: not added, since its pathway "campus" has the same name as a stored pathway in ` +
-		filepath.Join(h.home, ".axon", "orgs", "example.toml") + ". Run the command again with --replace to replace that file."
+		filepath.Join(h.home, ".axon", "configs", "example.toml") + ". Run the command again with --replace to replace that file."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
@@ -108,7 +108,7 @@ func TestConfigClashWithoutATerminal(t *testing.T) {
 	h := newHarness(t)
 	err := h.login(Options{Config: writeOrg(t, otherCampus)})
 	want := `add the config file: its pathway "campus" clashes with the stored pathway "Campus" in ` +
-		filepath.Join(h.home, ".axon", "orgs", "example.toml") +
+		filepath.Join(h.home, ".axon", "configs", "example.toml") +
 		", and there is no terminal to ask whether to replace it. Run the command again with --replace to replace it."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
@@ -153,7 +153,7 @@ func TestTeleportServerClash(t *testing.T) {
 	h := newHarness(t)
 	h.servers(nil)
 	err := h.login(Options{TeleportProxy: "TELEPORT.example.org:443", Name: "Elsewhere"})
-	want := `make the pathway: it clashes with the stored pathway "Remote" in ` + filepath.Join(h.home, ".axon", "orgs", "example.toml") +
+	want := `make the pathway: it clashes with the stored pathway "Remote" in ` + filepath.Join(h.home, ".axon", "configs", "example.toml") +
 		", and there is no terminal to ask whether to replace it. Run the command again with --replace to replace it."
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
@@ -259,7 +259,7 @@ func TestLowerRevisionAsks(t *testing.T) {
 			if err := h.login(Options{Config: writeOrg(t, revised("5")), Pathway: "campus", Replace: tc.replace, In: strings.NewReader(tc.answer)}); err != nil {
 				t.Fatalf("login: %v\n%s", err, h.out.String())
 			}
-			path := filepath.Join(h.home, ".axon", "orgs", "example.toml")
+			path := filepath.Join(h.home, ".axon", "configs", "example.toml")
 			for _, want := range tc.want {
 				want = strings.ReplaceAll(want, "%PATH%", path)
 				if !strings.Contains(h.out.String(), want) {
@@ -294,7 +294,7 @@ func TestStoredAndUpdatedLinesNameTheRevision(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
 	h.logIn()
-	path := filepath.Join(h.home, ".axon", "orgs", "example.toml")
+	path := filepath.Join(h.home, ".axon", "configs", "example.toml")
 	if err := h.login(Options{Config: writeOrg(t, revised("3")), Pathway: "campus"}); err != nil {
 		t.Fatal(err)
 	}
@@ -407,7 +407,7 @@ func TestPipedConfigAsksTheLowerRevisionOnTheTerminal(t *testing.T) {
 // anything is removed.
 func TestReplacingWithAnUnreadableActivePathwayStops(t *testing.T) {
 	h := newHarness(t)
-	if err := os.WriteFile(axondir.New(h.home).ConfigPath(), []byte("pathway = [\n"), 0o600); err != nil {
+	if err := os.WriteFile(axondir.New(h.home).SettingsPath(), []byte("pathway = [\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	before := h.storedIDs()
@@ -422,7 +422,7 @@ func TestReplacingWithAnUnreadableActivePathwayStops(t *testing.T) {
 // A file a stopped replacement left aside does not stop a login.
 func TestLoginWithALeftoverRemovingFile(t *testing.T) {
 	h := newHarness(t)
-	path := filepath.Join(h.home, ".axon", "orgs", "example.toml")
+	path := filepath.Join(h.home, ".axon", "configs", "example.toml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

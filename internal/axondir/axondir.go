@@ -1,9 +1,9 @@
 // Package axondir owns ~/.axon, the one directory axon keeps on the laptop.
 //
-// The directory holds the config files, the configuration file, the
-// tools axon installs for its own use, and the state it records. Directories are created on first
-// use, readable by the user only; files are written readable by the user
-// only.
+// The directory holds the config files, the settings file, the tools axon
+// installs for its own use, and the state it records. Every name in it is
+// defined here. Directories are created on first use, readable by the user
+// only; files are written readable by the user only.
 package axondir
 
 import (
@@ -23,11 +23,17 @@ const (
 	dirMode  fs.FileMode = 0o700
 	fileMode fs.FileMode = 0o600
 
-	configFile = "config.toml"
-	orgsDir    = "orgs"
-	toolsDir   = "tools"
-	stateDir   = "state"
-	emailFile  = "email"
+	settingsFile = "settings.toml"
+	configsDir   = "configs"
+	toolsDir     = "tools"
+	stateDir     = "state"
+	emailFile    = "email"
+	// recordsDir, under the state directory, holds a record of each stored
+	// config file.
+	recordsDir = "configs"
+	// lockFile, under the state directory, is the file whose lock
+	// serializes changes to the stored config files.
+	lockFile = "configs.lock"
 )
 
 // Dir is the axon directory under one home directory.
@@ -35,8 +41,8 @@ type Dir struct {
 	root string
 }
 
-// config is the content of config.toml.
-type config struct {
+// settings is the content of the settings file.
+type settings struct {
 	Pathway string `toml:"pathway"`
 }
 
@@ -57,12 +63,21 @@ func New(home string) Dir {
 // Root returns the path of the axon directory.
 func (d Dir) Root() string { return d.root }
 
-// ConfigPath returns the path of the configuration file.
-func (d Dir) ConfigPath() string { return filepath.Join(d.root, configFile) }
+// SettingsPath returns the path of the settings file, which holds the
+// user's choices.
+func (d Dir) SettingsPath() string { return filepath.Join(d.root, settingsFile) }
 
-// OrgsDir returns the directory for the config files, creating it
+// ConfigsDir returns the directory for the config files, creating it
 // when it does not exist.
-func (d Dir) OrgsDir() (string, error) { return d.ensure(orgsDir) }
+func (d Dir) ConfigsDir() (string, error) { return d.ensure(configsDir) }
+
+// ConfigsPath returns the path of the directory for the config files,
+// without creating it.
+func (d Dir) ConfigsPath() string { return filepath.Join(d.root, configsDir) }
+
+// RecordsPath returns the path of the directory that holds a record of each
+// stored config file, without creating it.
+func (d Dir) RecordsPath() string { return filepath.Join(d.root, stateDir, recordsDir) }
 
 // ToolsDir returns the directory for the tools axon installs, creating it
 // when it does not exist.
@@ -76,21 +91,25 @@ func (d Dir) ToolsPath() string { return filepath.Join(d.root, toolsDir) }
 // when it does not exist.
 func (d Dir) StateDir() (string, error) { return d.ensure(stateDir) }
 
+// StatePath returns the path of the directory for the state axon records,
+// without creating it.
+func (d Dir) StatePath() string { return filepath.Join(d.root, stateDir) }
+
 // Pathway returns the identifier of the active pathway. The boolean is
 // false when none is stored. The identifier is not checked against the
 // config files: whether a stored file still has it is the caller's
 // question.
 func (d Dir) Pathway() (string, bool, error) {
-	data, err := os.ReadFile(d.ConfigPath())
+	data, err := os.ReadFile(d.SettingsPath())
 	if errors.Is(err, fs.ErrNotExist) {
 		return "", false, nil
 	}
 	if err != nil {
-		return "", false, fmt.Errorf("read %s: %w", d.ConfigPath(), err)
+		return "", false, fmt.Errorf("read %s: %w", d.SettingsPath(), err)
 	}
-	var c config
+	var c settings
 	if _, err := toml.Decode(string(data), &c); err != nil {
-		return "", false, fmt.Errorf("read %s: %w", d.ConfigPath(), err)
+		return "", false, fmt.Errorf("read %s: %w", d.SettingsPath(), err)
 	}
 	if c.Pathway == "" {
 		return "", false, nil
@@ -98,7 +117,7 @@ func (d Dir) Pathway() (string, bool, error) {
 	return c.Pathway, true, nil
 }
 
-// SetPathway stores id as the active pathway in the configuration file.
+// SetPathway stores id as the active pathway in the settings file.
 func (d Dir) SetPathway(id string) error {
 	if id == "" || strings.ContainsAny(id, "\r\n") {
 		return fmt.Errorf("store the pathway: %q is not a pathway identifier", id)
@@ -107,16 +126,16 @@ func (d Dir) SetPathway(id string) error {
 		return err
 	}
 	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(config{Pathway: id}); err != nil {
-		return fmt.Errorf("write %s: %w", d.ConfigPath(), err)
+	if err := toml.NewEncoder(&buf).Encode(settings{Pathway: id}); err != nil {
+		return fmt.Errorf("write %s: %w", d.SettingsPath(), err)
 	}
-	return ReplaceFile(d.ConfigPath(), buf.Bytes())
+	return ReplaceFile(d.SettingsPath(), buf.Bytes())
 }
 
 // Email returns the recorded email of the logged-in user. The boolean is
 // false when none is recorded.
 func (d Dir) Email() (string, bool, error) {
-	path := filepath.Join(d.root, stateDir, emailFile)
+	path := filepath.Join(d.StatePath(), emailFile)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return "", false, nil
@@ -143,7 +162,7 @@ func (d Dir) SetEmail(email string) error {
 
 // RemoveEmail deletes the recorded email, when there is one.
 func (d Dir) RemoveEmail() error {
-	path := filepath.Join(d.root, stateDir, emailFile)
+	path := filepath.Join(d.StatePath(), emailFile)
 	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("remove %s: %w", path, err)
 	}
@@ -165,7 +184,7 @@ func (d Dir) ensure(sub string) (string, error) {
 				return "", fmt.Errorf("create %s: it exists and is not a directory", p)
 			}
 		} else if err != nil {
-			return "", fmt.Errorf("create %s: %w", p, err)
+			return "", fmt.Errorf("create %s: %w", p, unwrapPath(err))
 		}
 		path = p
 	}

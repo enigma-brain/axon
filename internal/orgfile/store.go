@@ -20,16 +20,11 @@ import (
 	"github.com/enigma-brain/axon/internal/axondir"
 )
 
-const (
-	fileExt = ".toml"
-	// stateSub is the subdirectory of axon's state directory that records
-	// each stored file's source.
-	stateSub = "orgs"
-)
+const fileExt = ".toml"
 
-// Store is the set of config files kept in an axon directory: each
-// file in ~/.axon/orgs/<id>.toml, and its source in
-// ~/.axon/state/orgs/<id>.toml.
+// Store is the set of config files kept in an axon directory: each file as
+// <id>.toml in the directory's config files directory, and its record as
+// <id>.toml in its records directory.
 type Store struct {
 	dir axondir.Dir
 }
@@ -39,7 +34,7 @@ func NewStore(dir axondir.Dir) Store { return Store{dir: dir} }
 
 // Path returns the path of the stored file with the given id.
 func (s Store) Path(id string) string {
-	return filepath.Join(s.dir.Root(), "orgs", id+fileExt)
+	return filepath.Join(s.dir.ConfigsPath(), id+fileExt)
 }
 
 // Problem is a stored file that List left out, and why.
@@ -354,11 +349,11 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 		return File{}, false, &LowerRevisionError{Stored: change.Previous.Revision, New: f.Revision}
 	}
 
-	orgs, err := s.dir.OrgsDir()
+	configs, err := s.dir.ConfigsDir()
 	if err != nil {
 		return File{}, false, err
 	}
-	path := filepath.Join(orgs, f.ID+fileExt)
+	path := filepath.Join(configs, f.ID+fileExt)
 	var previous []byte
 	info, err := os.Stat(path)
 	hadPrevious := err == nil
@@ -543,12 +538,12 @@ func copyFile(from, to string) error {
 // It takes the store's lock only when it finds such a copy, so with none it
 // writes nothing.
 func (s Store) Recover() ([]string, error) {
-	entries, err := os.ReadDir(filepath.Join(s.dir.Root(), "orgs"))
+	entries, err := os.ReadDir(s.dir.ConfigsPath())
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", filepath.Join(s.dir.Root(), "orgs"), err)
+		return nil, fmt.Errorf("read %s: %w", s.dir.ConfigsPath(), err)
 	}
 	found := false
 	for _, e := range entries {
@@ -567,7 +562,7 @@ func (s Store) Recover() ([]string, error) {
 
 // recoverPrevious is Recover, with the store's lock held.
 func (s Store) recoverPrevious() ([]string, error) {
-	dir := filepath.Join(s.dir.Root(), "orgs")
+	dir := s.dir.ConfigsPath()
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -676,17 +671,16 @@ var (
 )
 
 func (s Store) recordPath(id string) string {
-	return filepath.Join(s.dir.Root(), "state", stateSub, id+fileExt)
+	return filepath.Join(s.dir.RecordsPath(), id+fileExt)
 }
 
 // writeRecord records the origin of the stored file id, when it was stored
 // and the fingerprint of its bytes, data.
 func (s Store) writeRecord(id string, origin Origin, data []byte) error {
-	state, err := s.dir.StateDir()
-	if err != nil {
+	if _, err := s.dir.StateDir(); err != nil {
 		return err
 	}
-	dir := filepath.Join(state, stateSub)
+	dir := s.dir.RecordsPath()
 	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
 		return fmt.Errorf("create %s: %w", dir, err)
 	}
@@ -754,7 +748,7 @@ func (s Store) Source(id string) (Source, bool, error) {
 // that a file earlier in that order already has. Files whose names are not
 // <id>.toml for a valid id are ignored.
 func (s Store) List() ([]File, []Problem, error) {
-	dir := filepath.Join(s.dir.Root(), "orgs")
+	dir := s.dir.ConfigsPath()
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil, nil

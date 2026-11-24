@@ -47,9 +47,9 @@ func TestNewCreatesNothing(t *testing.T) {
 func TestDirectoriesCreatedOnFirstUse(t *testing.T) {
 	d, home := newDir(t)
 	for name, get := range map[string]func() (string, error){
-		"orgs":  d.OrgsDir,
-		"tools": d.ToolsDir,
-		"state": d.StateDir,
+		"configs": d.ConfigsDir,
+		"tools":   d.ToolsDir,
+		"state":   d.StateDir,
 	} {
 		path, err := get()
 		if err != nil {
@@ -99,15 +99,15 @@ func TestPathwayRoundTrip(t *testing.T) {
 			t.Fatalf("Pathway() = %q, %v, %v, want %q", got, ok, err, want)
 		}
 	}
-	assertMode(t, d.ConfigPath(), 0o600)
+	assertMode(t, d.SettingsPath(), 0o600)
 	assertMode(t, d.Root(), 0o700)
 
-	data, err := os.ReadFile(d.ConfigPath())
+	data, err := os.ReadFile(d.SettingsPath())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, want := string(data), "pathway = \"remote\"\n"; got != want {
-		t.Errorf("config.toml = %q, want %q", got, want)
+		t.Errorf("settings.toml = %q, want %q", got, want)
 	}
 }
 
@@ -126,7 +126,7 @@ func TestPathwayRejectsBadConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, content := range []string{"pathway = \n", "pathway = 3\n"} {
-		if err := os.WriteFile(d.ConfigPath(), []byte(content), 0o600); err != nil {
+		if err := os.WriteFile(d.SettingsPath(), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if _, _, err := d.Pathway(); err == nil {

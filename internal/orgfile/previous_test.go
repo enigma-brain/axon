@@ -25,7 +25,7 @@ func updated(t *testing.T) (Store, string, []byte) {
 }
 
 func recordOf(home, id string) string {
-	return filepath.Join(home, ".axon", "state", "orgs", id+".toml")
+	return filepath.Join(home, ".axon", "state", "configs", id+".toml")
 }
 
 func noPrevious(t *testing.T, s Store) {
@@ -283,4 +283,34 @@ func TestRecoverStopsWhenTheCopyCannotBeDeleted(t *testing.T) {
 	if _, err := s.Add([]byte(directOrg("b", "two", "B", "https://b.example.org")), mustSource(t, "-")); err == nil {
 		t.Fatal("Add succeeded with a copy that cannot be deleted")
 	}
+}
+
+// A previous copy left under the old names of axon v0.3.0 moves with its
+// directory, and recovery deals with it there.
+func TestRecoverAfterMovingTheOldNames(t *testing.T) {
+	s, home, newer := updated(t)
+	old, _ := os.ReadFile(s.Path("a"))
+	// The new file was written and its record was not.
+	leftover(t, s, home, newer, old, old)
+	axon := filepath.Join(home, ".axon")
+	for from, to := range map[string]string{"configs": "orgs", filepath.Join("state", "configs"): filepath.Join("state", "orgs")} {
+		if err := os.Rename(filepath.Join(axon, from), filepath.Join(axon, to)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := axondir.New(home).MoveOldNames(); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := s.Recover()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{s.Path("a")}; !reflect.DeepEqual(restored, want) {
+		t.Errorf("Recover = %v, want %v", restored, want)
+	}
+	if got, _ := os.ReadFile(s.Path("a")); string(got) != string(old) {
+		t.Errorf("stored file = %q, want the previous copy %q", got, old)
+	}
+	noPrevious(t, s)
 }

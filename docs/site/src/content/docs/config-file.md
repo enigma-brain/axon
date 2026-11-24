@@ -141,7 +141,7 @@ At the top of the file:
 | Field | Holds |
 |---|---|
 | `format` | The file's format. It is `2`. |
-| `id` | The file's identifier: lowercase letters, digits and hyphens, starting with a letter, at most 32 characters. `axon` stores the file as `~/.axon/orgs/<id>.toml`. A file with the same `id` replaces the stored one. |
+| `id` | The file's identifier: lowercase letters, digits and hyphens, starting with a letter, at most 32 characters. `axon` stores the file as `~/.axon/configs/<id>.toml`. A file with the same `id` replaces the stored one. |
 | `revision` | Optional. A whole number, 0 or more, that you raise each time you change the file. |
 
 Keep the file's `id` the same from one change to the next, and raise `revision`

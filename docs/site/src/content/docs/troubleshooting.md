@@ -333,7 +333,7 @@ axon: left out <path>: <reason>
 
 A stored config file fails the checks, so `axon` leaves it out of this login.
 The reason is one of the refusals above. Ask your organization for a new file and add
-it with `axon login --config <source>`, or delete the stored file from `~/.axon/orgs/`.
+it with `axon login --config <source>`, or delete the stored file from `~/.axon/configs/`.
 
 ### The config file could not be updated
 

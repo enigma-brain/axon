@@ -211,18 +211,21 @@ flag, such as the pathway, is answered by the flag, and `axon` stops and
 names the flag when it is missing. A question with no flag is answered
 "no".
 
-`axon` stores the file as `~/.axon/orgs/<id>.toml`, named by the file's
+`axon` stores the file as `~/.axon/configs/<id>.toml`, named by the file's
 `id`. Beside it, in `~/.axon/state/`, it records the file's source, when the
 file was stored, and the SHA-256 of its bytes. Adding a file leaves the
 other stored files as they are, apart from the ones the user agrees to
 replace. When it stores a file that has a `revision`, `axon` says the
 revision.
 
-Removing a file is deleting it from `~/.axon/orgs/`. There is no command
+Removing a file is deleting it from `~/.axon/configs/`. There is no command
 for it. `axon config list` shows the stored files, each with its source or
 that it is hand-made, its revision and when it was stored, their pathways,
 and the pathway in use. It reads only files on the laptop: it contacts no
-server, runs no client, takes no lock and changes nothing. A stored file
+server and runs no client, and beyond the renaming of old names that every
+command does first, as described under
+[Files and directories](#files-and-directories), it takes no lock and
+changes nothing. A stored file
 that cannot be read is listed with the reason, and the command then exits
 with an error.
 
@@ -264,7 +267,7 @@ with the same `id` are a clash.
 
 A file being removed is renamed with the suffix `.removing` and deleted once
 the addition is stored. When `axon` stops in between, such a file is left in
-`~/.axon/orgs/` or `~/.axon/state/orgs/`; `axon` never reads it, and it is
+`~/.axon/configs/` or `~/.axon/state/configs/`; `axon` never reads it, and it is
 safe to delete.
 
 A stored config file that an update replaces is first kept beside itself
@@ -313,7 +316,7 @@ does not answer is reported and asked for again. With flags, `axon login`
 stops with an error.
 
 The pathway is then stored as a format 2 config file that `axon` writes
-into `~/.axon/orgs/`, with one pathway and no `revision`, and its record
+into `~/.axon/configs/`, with one pathway and no `revision`, and its record
 says that it is hand-made. The pathway's identifier is its name in
 lowercase, with each run of other characters than letters and digits made
 one hyphen. The file's `id` is that identifier, made to fit the form of a
@@ -389,13 +392,29 @@ These are all of `axon`'s commands.
 
 | Path | Holds |
 |---|---|
-| `~/.axon/orgs/` | The config files, one per file added, each `<id>.toml` as its source gave it, and the hand-made files `axon` writes. |
-| `~/.axon/config.toml` | The active pathway, by its identifier. |
+| `~/.axon/configs/` | The config files, one per file added, each `<id>.toml` as its source gave it, and the hand-made files `axon` writes. |
+| `~/.axon/settings.toml` | The user's choices: the active pathway, by its identifier. |
 | `~/.axon/tools/` | What `axon` installs for its own use. |
 | `~/.axon/state/` | What `axon` records about running state, such as each config file's record (its source or that it is hand-made, when it was stored, and its SHA-256), the settings the pathway had when it was connected, the tunnel's process, and the logged-in email. |
 
-`axon` writes a file in `~/.axon/orgs/` only by replacing it whole, and
+`axon` writes a file in `~/.axon/configs/` only by replacing it whole, and
 never writes the active pathway into it.
+
+`axon` `v0.3.0` and earlier kept the config files in `~/.axon/orgs/`, their
+records in `~/.axon/state/orgs/` and the user's choices in
+`~/.axon/config.toml`. Every command that reads or writes `~/.axon` first
+renames each of them that it finds to its name in the table, with its
+contents, leftover `.removing` and `.previous` files included, and prints
+one line that says what it renamed. It makes the renames under the lock
+that changes to the stored config files take, so two commands started
+together rename each name once; each rename is one step, and a command that
+finds some of them made makes the rest. When an old name and its new name
+both exist, `axon` uses the new one, leaves the old one as it is, and on
+every command prints one line that names both and says the old one is safe
+to delete. A rename that fails stops the command with a message that names
+the path and the reason. `axon update` and `axon --version` do not use `~/.axon` and
+rename nothing. An `axon` of `v0.3.0` or earlier, run after the renames,
+finds nothing stored.
 
 Removing `~/.axon` removes everything `axon` installed for its own use and
 everything it recorded, the config files included. The next `axon login`
@@ -429,7 +448,7 @@ nothing and reports each connection as good.
 
 One pathway is active at a time, chosen from the pathways of every stored
 config file. `axon` stores the active pathway's identifier in
-`~/.axon/config.toml` [{D!}](decisions/pathway-selection.md), and later
+`~/.axon/settings.toml` [{D!}](decisions/pathway-selection.md), and later
 logins use it without asking.
 
 When there is no active pathway, `axon login` chooses one. With one
@@ -455,7 +474,7 @@ it:
 - its file is replaced, by `--config` or by a fetch from an address, and the
   new file does not have the pathway or has different settings for
   machines for it;
-- its file has been deleted from `~/.axon/orgs/`, or fails the checks when
+- its file has been deleted from `~/.axon/configs/`, or fails the checks when
   it is read.
 
 A change to the pathway's text for people alone, its `name`, `description`

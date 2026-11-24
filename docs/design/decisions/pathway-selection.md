@@ -14,7 +14,7 @@ before it does anything else.
 
 When no pathway is active, `axon login` asks which of the stored pathways
 the user is on, offering each by its name with the one-line description its
-file gives, and saves the answer in `axon`'s own configuration file. A user
+file gives, and saves the answer in `axon`'s own settings file. A user
 who follows the setup instructions with no prior knowledge gets a question
 they are able to answer, in the organization's own words, not an error. The
 answer is asked for once, because it is a fact about the user and not about

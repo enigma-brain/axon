@@ -134,7 +134,7 @@ default is the address. Flags give the same answers without a question:
     axon login --teleport-proxy teleport.example.org --sky-app skypilot
 
 Nothing is stored until the server answers. The pathway is stored as a
-hand-made config file in `~/.axon/orgs/`, and its identifier, for
+hand-made config file in `~/.axon/configs/`, and its identifier, for
 `--pathway`, is its name in lowercase with dashes. With no pathway, no
 flags and no terminal, `axon login` stops and names the flags and
 `--config`.
@@ -148,9 +148,9 @@ login adds with `--config`, from one of three sources:
     axon login --config ~/Downloads/axon.toml
     <command that prints the file> | axon login --config -
 
-The file is checked and stored as `~/.axon/orgs/<id>.toml`, named by the
+The file is checked and stored as `~/.axon/configs/<id>.toml`, named by the
 `id` it holds. Its source, when it was stored and its SHA-256 are recorded
-in `~/.axon/state/orgs/`. A file that fails a check is refused with a
+in `~/.axon/state/configs/`. A file that fails a check is refused with a
 message naming the field, and nothing changes. A file may carry a
 `revision`, which `axon` prints when it stores or updates the file.
 
@@ -223,7 +223,7 @@ non-zero.
 ### Removing a file
 
 Delete the file named by its `id`, as `axon config list` shows it, from
-`~/.axon/orgs/`; there is no command for it. When it held
+`~/.axon/configs/`; there is no command for it. When it held
 the active pathway, the next `axon login` chooses another from the stored
 files and, once one is chosen, disconnects the pathway you left. When it
 was the last file, `axon login` disconnects the pathway you left, stopping
@@ -243,7 +243,7 @@ Otherwise it chooses the pathway, logs you in, and connects `axon sky`.
 ### Choosing the pathway
 
 One pathway is active at a time, stored by its identifier in
-`~/.axon/config.toml`; later logins use it without asking.
+`~/.axon/settings.toml`; later logins use it without asking.
 
 - **One pathway in all the stored files:** it is used without asking.
 - **More than one:** the first login asks which one you are on, offering
@@ -554,8 +554,8 @@ instead of the latest. CI runs it on Linux when `internal/update/` or
 | `internal/configlist` | `axon config list`: printing the stored config files, their pathways and the pathway in use. |
 | `internal/update` | `axon update`: finding a release, verifying its archive, and replacing the running binary. |
 | `internal/fail` | Prints failures to standard error, prefixed `axon:`, and exits non-zero. |
-| `internal/orgfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/orgs/`. |
-| `internal/axondir` | `~/.axon`: the configuration file, `tools/` and `state/`. |
+| `internal/orgfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/configs/`. |
+| `internal/axondir` | `~/.axon`: every name in it, the settings file, `tools/`, `state/`, the store's lock, and renaming what `v0.3.0` and earlier kept under other names. |
 | `internal/connected` | The record of the connected pathway and its settings, in `~/.axon/state/pathway.toml`. |
 | `internal/login` | `axon login` and `axon logout` (`logout.go`): adding a file, choosing the pathway, disconnecting the one left, the stages, the sky group's connect steps, and each kind's login in `direct.go` and `teleport.go`. `browser.go` holds the length of the browser wait. |
 | `internal/sky` | The `axon sky` command group: its refusals, its connection check, and each pathway kind's endpoint. |
