@@ -5,15 +5,15 @@ import (
 	"testing"
 
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 )
 
-func remote() orgfile.Pathway {
-	return orgfile.Pathway{
-		File: "example", ID: "remote", Kind: orgfile.KindTeleport,
+func remote() configfile.Pathway {
+	return configfile.Pathway{
+		File: "example", ID: "remote", Kind: configfile.KindTeleport,
 		Name: "Remote", Description: "From anywhere.",
-		Teleport: &orgfile.Teleport{Proxy: "teleport.example.org"},
-		Sky:      orgfile.Sky{App: "skypilot"},
+		Teleport: &configfile.Teleport{Proxy: "teleport.example.org"},
+		Sky:      configfile.Sky{App: "skypilot"},
 	}
 }
 
@@ -53,10 +53,10 @@ func TestIs(t *testing.T) {
 	if same, _ := Is(dir, renamed); !same {
 		t.Error("a change of text for people alone is another pathway")
 	}
-	for name, change := range map[string]func(*orgfile.Pathway){
-		"id":    func(p *orgfile.Pathway) { p.ID = "elsewhere" },
-		"proxy": func(p *orgfile.Pathway) { p.Teleport = &orgfile.Teleport{Proxy: "teleport.example.org:3080"} },
-		"app":   func(p *orgfile.Pathway) { p.Sky.App = "other" },
+	for name, change := range map[string]func(*configfile.Pathway){
+		"id":    func(p *configfile.Pathway) { p.ID = "elsewhere" },
+		"proxy": func(p *configfile.Pathway) { p.Teleport = &configfile.Teleport{Proxy: "teleport.example.org:3080"} },
+		"app":   func(p *configfile.Pathway) { p.Sky.App = "other" },
 	} {
 		p := remote()
 		change(&p)

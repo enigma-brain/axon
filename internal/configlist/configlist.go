@@ -13,7 +13,7 @@ import (
 	"unicode"
 
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 )
 
 // timeLayout is how a stored file's time is printed, in local time.
@@ -54,7 +54,7 @@ func Run(opts Options) error {
 		loc = time.Local
 	}
 	w := &writer{w: opts.Out}
-	store := orgfile.NewStore(opts.Dir)
+	store := configfile.NewStore(opts.Dir)
 
 	files, problems, err := store.List()
 	if err != nil {
@@ -76,7 +76,7 @@ func Run(opts Options) error {
 		return w.result(unreadable)
 	}
 
-	var inUse *orgfile.Pathway
+	var inUse *configfile.Pathway
 	if hasActive {
 		for i := range files {
 			for j := range files[i].Pathways {
@@ -141,9 +141,9 @@ func Run(opts Options) error {
 }
 
 // server describes where a pathway reaches its server, after its kind.
-func server(p orgfile.Pathway) string {
+func server(p configfile.Pathway) string {
 	switch p.Kind {
-	case orgfile.KindTeleport:
+	case configfile.KindTeleport:
 		proxy := ""
 		if p.Teleport != nil {
 			proxy = p.Teleport.Proxy

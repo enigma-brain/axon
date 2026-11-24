@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 )
 
 const campus = `format = 2
@@ -69,15 +69,15 @@ endpoint = "https://sky.example.net"
 
 var storedLine = regexp.MustCompile(`, stored \d{4}-\d\d-\d\d \d\d:\d\d UTC$`)
 
-func newDir(t *testing.T) (axondir.Dir, orgfile.Store) {
+func newDir(t *testing.T) (axondir.Dir, configfile.Store) {
 	t.Helper()
 	dir := axondir.New(t.TempDir())
-	return dir, orgfile.NewStore(dir)
+	return dir, configfile.NewStore(dir)
 }
 
-func add(t *testing.T, s orgfile.Store, data, source string) {
+func add(t *testing.T, s configfile.Store, data, source string) {
 	t.Helper()
-	src, err := orgfile.ParseSource(source)
+	src, err := configfile.ParseSource(source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestSeveralFilesOneInUse(t *testing.T) {
 
 func TestHandMadePathway(t *testing.T) {
 	dir, s := newDir(t)
-	if _, err := s.Put([]byte(handMade), orgfile.PutOptions{Origin: orgfile.HandMade}); err != nil {
+	if _, err := s.Put([]byte(handMade), configfile.PutOptions{Origin: configfile.HandMade}); err != nil {
 		t.Fatal(err)
 	}
 	if err := dir.SetPathway("sky-example-net"); err != nil {

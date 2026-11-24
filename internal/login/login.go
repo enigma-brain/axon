@@ -16,7 +16,7 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 	skygroup "github.com/enigma-brain/axon/internal/sky"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
@@ -64,13 +64,13 @@ type login struct {
 	// inherit the environment that chose it, so they use the same file.
 	cookieFile string
 	// endpoint returns the API server endpoint of a pathway.
-	endpoint func(orgfile.Pathway) string
+	endpoint func(configfile.Pathway) string
 	// loginWait bounds the browser login.
 	loginWait time.Duration
 	// environ is the environment the commands login runs start from.
 	environ func() []string
 	// readOrg reads a config file from its source.
-	readOrg func(ctx context.Context, src orgfile.Source, stdin io.Reader) ([]byte, error)
+	readOrg func(ctx context.Context, src configfile.Source, stdin io.Reader) ([]byte, error)
 	// openTerminal opens the terminal, where questions are asked when
 	// standard input is the config file.
 	openTerminal func() (io.ReadCloser, error)
@@ -106,7 +106,7 @@ func newLogin(home string, getenv func(string) string) *login {
 		endpoint:     skygroup.Endpoint,
 		loginWait:    loginWait,
 		environ:      os.Environ,
-		readOrg:      orgfile.Read,
+		readOrg:      configfile.Read,
 		openTerminal: func() (io.ReadCloser, error) { return os.Open("/dev/tty") },
 		teleport: teleport{
 			ensure:    tsh.Ensure,
@@ -137,7 +137,7 @@ func (l *login) run(ctx context.Context, opts Options) error {
 
 	// A config file update that stopped part way left the previous copy
 	// beside the stored file; it is dealt with before anything is read.
-	restored, err := orgfile.NewStore(l.dir).Recover()
+	restored, err := configfile.NewStore(l.dir).Recover()
 	if err != nil {
 		return fmt.Errorf("read the config files: %w", err)
 	}
@@ -148,7 +148,7 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	// 1. Add the config file that --config gives. With --config -,
 	// standard input is the file, and questions go to the terminal.
 	answers := opts.In
-	var added *orgfile.File
+	var added *configfile.File
 	if opts.Config != "" {
 		f, in, closeIn, err := l.addOrg(ctx, opts)
 		if err != nil {
@@ -207,7 +207,7 @@ func (l *login) run(ctx context.Context, opts Options) error {
 
 	// A teleport pathway needs tsh. Without it the login stops here, before
 	// the pathway that was connected is left or the active one changes.
-	if p.Kind == orgfile.KindTeleport {
+	if p.Kind == configfile.KindTeleport {
 		path, err := l.teleport.ensure(ctx, p.Teleport.Proxy)
 		var unreachable *tsh.UnreachableError
 		if errors.As(err, &unreachable) {
@@ -235,7 +235,7 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	}
 
 	// 4. Establish the pathway's session.
-	if p.Kind == orgfile.KindTeleport {
+	if p.Kind == configfile.KindTeleport {
 		if err := l.establishTeleportSession(ctx, p, opts); err != nil {
 			return fmt.Errorf("establish the Teleport session: %w", err)
 		}
@@ -284,14 +284,14 @@ func (l *login) noOrg(opts Options) error {
 // no terminal, answers come from an empty input, so that a question with a
 // flag stops and names the flag, and one without is answered no. closeIn
 // releases the terminal.
-func (l *login) addOrg(ctx context.Context, opts Options) (f orgfile.File, in io.Reader, closeIn func(), err error) {
-	src, err := orgfile.ParseSource(opts.Config)
+func (l *login) addOrg(ctx context.Context, opts Options) (f configfile.File, in io.Reader, closeIn func(), err error) {
+	src, err := configfile.ParseSource(opts.Config)
 	if err != nil {
-		return orgfile.File{}, nil, nil, err
+		return configfile.File{}, nil, nil, err
 	}
 	data, err := l.readOrg(ctx, src, opts.In)
 	if err != nil {
-		return orgfile.File{}, nil, nil, err
+		return configfile.File{}, nil, nil, err
 	}
 	in, closeIn = opts.In, func() {}
 	if src.String() == "-" {
@@ -300,14 +300,14 @@ func (l *login) addOrg(ctx context.Context, opts Options) (f orgfile.File, in io
 			in, closeIn = tty, func() { tty.Close() }
 		}
 	}
-	fail := func(err error) (orgfile.File, io.Reader, func(), error) {
+	fail := func(err error) (configfile.File, io.Reader, func(), error) {
 		closeIn()
-		return orgfile.File{}, nil, nil, err
+		return configfile.File{}, nil, nil, err
 	}
 
-	store := orgfile.NewStore(l.dir)
+	store := configfile.NewStore(l.dir)
 	change, err := store.Inspect(data, false)
-	if errors.Is(err, orgfile.ErrEmpty) {
+	if errors.Is(err, configfile.ErrEmpty) {
 		name := src.String()
 		if name == "-" {
 			name = msgStdin
@@ -330,7 +330,7 @@ func (l *login) addOrg(ctx context.Context, opts Options) (f orgfile.File, in io
 		return fail(fmt.Errorf(msgConfigNotAdded, c.Added.Name, store.Path(c.Stored.ID)))
 	}
 
-	put := orgfile.PutOptions{Origin: orgfile.FromSource(src), Remove: outcome.remove}
+	put := configfile.PutOptions{Origin: configfile.FromSource(src), Remove: outcome.remove}
 	if change.Lower() {
 		prev := change.Previous
 		yes := opts.Replace
@@ -370,8 +370,8 @@ func (l *login) addOrg(ctx context.Context, opts Options) (f orgfile.File, in io
 
 // storedFiles returns the stored config files that pass the checks,
 // and writes one line to warn for each one left out.
-func (l *login) storedFiles(warn io.Writer) ([]orgfile.File, error) {
-	files, problems, err := orgfile.NewStore(l.dir).List()
+func (l *login) storedFiles(warn io.Writer) ([]configfile.File, error) {
+	files, problems, err := configfile.NewStore(l.dir).List()
 	if err != nil {
 		return nil, err
 	}

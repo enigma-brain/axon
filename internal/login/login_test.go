@@ -18,7 +18,7 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/skyclient"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -162,8 +162,8 @@ func newHarness(t *testing.T) *harness {
 		client:     h.client,
 		health:     apiserver.Fetch,
 		cookieFile: h.cookieFile,
-		endpoint: func(p orgfile.Pathway) string {
-			if p.Kind == orgfile.KindTeleport {
+		endpoint: func(p configfile.Pathway) string {
+			if p.Kind == configfile.KindTeleport {
 				return "http://localhost:" + strconv.Itoa(testPort)
 			}
 			return h.directURL
@@ -176,7 +176,7 @@ func newHarness(t *testing.T) *harness {
 				"BROWSER=chromium",
 			}
 		},
-		readOrg: orgfile.Read,
+		readOrg: configfile.Read,
 		// The tests never reach the real terminal.
 		openTerminal: func() (io.ReadCloser, error) { return nil, errors.New("no terminal in tests") },
 		teleport: teleport{
@@ -193,11 +193,11 @@ func newHarness(t *testing.T) *harness {
 // store adds data as a config file.
 func (h *harness) store(data string) {
 	h.t.Helper()
-	src, err := orgfile.ParseSource("-")
+	src, err := configfile.ParseSource("-")
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	if _, err := orgfile.NewStore(axondir.New(h.home)).Add([]byte(data), src); err != nil {
+	if _, err := configfile.NewStore(axondir.New(h.home)).Add([]byte(data), src); err != nil {
 		h.t.Fatal(err)
 	}
 }
@@ -555,7 +555,7 @@ func TestFormatWait(t *testing.T) {
 func TestLoginPutsBackAnInterruptedUpdate(t *testing.T) {
 	h := newHarness(t)
 	h.script("ok")
-	path := orgfile.NewStore(axondir.New(h.home)).Path("example")
+	path := configfile.NewStore(axondir.New(h.home)).Path("example")
 	if err := os.Rename(path, path+".previous"); err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/enigma-brain/axon/internal/apiserver"
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 	skygroup "github.com/enigma-brain/axon/internal/sky"
 )
 
@@ -33,7 +33,7 @@ const skyWaitDelay = 2 * time.Second
 // connectDirect connects the sky group on a direct pathway. It returns the
 // server's health when the existing session is good; after a browser login it
 // returns an empty Health and the identity check that follows asks the server.
-func (l *login) connectDirect(ctx context.Context, p orgfile.Pathway, opts Options, sky, clientVersion string) (apiserver.Health, error) {
+func (l *login) connectDirect(ctx context.Context, p configfile.Pathway, opts Options, sky, clientVersion string) (apiserver.Health, error) {
 	endpoint := l.endpoint(p)
 	h, err := l.health(ctx, endpoint, apiserver.Options{ClientVersion: clientVersion, CookieFile: l.cookieFile})
 	switch {

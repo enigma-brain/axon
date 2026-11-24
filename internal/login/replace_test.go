@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
-	"github.com/enigma-brain/axon/internal/orgfile"
 )
 
 // writeOrg writes data to a file in a temporary directory and returns its
@@ -55,7 +55,7 @@ endpoint = "https://sky.example.org/"
 
 func (h *harness) storedIDs() []string {
 	h.t.Helper()
-	files, _, err := orgfile.NewStore(axondir.New(h.home)).List()
+	files, _, err := configfile.NewStore(axondir.New(h.home)).List()
 	if err != nil {
 		h.t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestHandMadeReplacesAHandMadePathway(t *testing.T) {
 		t.Errorf("output:\n%s", h.out.String())
 	}
 	// The plain identifier is reused for the file.
-	f, err := orgfile.Parse([]byte(h.stored("lab")))
+	f, err := configfile.Parse([]byte(h.stored("lab")))
 	if err != nil || f.Pathways[0].Sky.Endpoint != "https://lab2.example.org" {
 		t.Errorf("stored = %+v, %v", f, err)
 	}
@@ -216,7 +216,7 @@ func TestHandMadeReplacesAHandMadePathway(t *testing.T) {
 func TestReplacingTheActivePathwayLeavesIt(t *testing.T) {
 	h := newHarness(t)
 	dir := axondir.New(h.home)
-	files, _, _ := orgfile.NewStore(dir).List()
+	files, _, _ := configfile.NewStore(dir).List()
 	campus := files[0].Pathways[0]
 	if err := dir.SetPathway(campus.ID); err != nil {
 		t.Fatal(err)
@@ -224,7 +224,7 @@ func TestReplacingTheActivePathwayLeavesIt(t *testing.T) {
 	if err := connected.Write(dir, campus); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.l.leaveRemoved([]orgfile.File{files[0]}, Options{Out: &h.out}); err != nil {
+	if err := h.l.leaveRemoved([]configfile.File{files[0]}, Options{Out: &h.out}); err != nil {
 		t.Fatal(err)
 	}
 	if same, err := connected.Is(dir, campus); err != nil || same {

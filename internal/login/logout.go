@@ -14,8 +14,8 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
-	"github.com/enigma-brain/axon/internal/orgfile"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -161,7 +161,7 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 
 	// 4. The Teleport session of the connected pathway.
 	switch {
-	case hasRecord && rec.Kind == string(orgfile.KindTeleport) && rec.TeleportProxy != "":
+	case hasRecord && rec.Kind == string(configfile.KindTeleport) && rec.TeleportProxy != "":
 		if err := lo.teleportLogout(ctx, opts, rec.TeleportProxy); err != nil {
 			fail("log out of Teleport", err)
 		}

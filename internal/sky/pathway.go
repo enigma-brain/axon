@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
@@ -19,8 +19,8 @@ var ErrNoLogin = errors.New("Run `axon login` first.")
 // Endpoint returns the URL of the SkyPilot API server that the client uses
 // on p: the pathway's own endpoint on a direct pathway, and the tunnel's
 // local address on a teleport pathway.
-func Endpoint(p orgfile.Pathway) string {
-	if p.Kind == orgfile.KindTeleport {
+func Endpoint(p configfile.Pathway) string {
+	if p.Kind == configfile.KindTeleport {
 		return "http://localhost:" + strconv.Itoa(tunnel.Port)
 	}
 	return p.Sky.Endpoint
@@ -36,7 +36,7 @@ func Host(endpoint string) string {
 
 // Unreachable returns the message for a host that does not answer, followed
 // by the pathway's hint when it has one.
-func Unreachable(p orgfile.Pathway, endpoint string) string {
+func Unreachable(p configfile.Pathway, endpoint string) string {
 	msg := fmt.Sprintf("Can't reach %s.", Host(endpoint))
 	if p.UnreachableHint != "" {
 		msg += " " + p.UnreachableHint
@@ -48,17 +48,17 @@ func Unreachable(p orgfile.Pathway, endpoint string) string {
 // files. A stored file that fails the checks is left out without a word:
 // only axon login reports it. It returns ErrNoLogin when there is no active
 // pathway or no stored file has it.
-func activePathway(dir axondir.Dir) (orgfile.Pathway, error) {
+func activePathway(dir axondir.Dir) (configfile.Pathway, error) {
 	id, ok, err := dir.Pathway()
 	if err != nil {
-		return orgfile.Pathway{}, err
+		return configfile.Pathway{}, err
 	}
 	if !ok {
-		return orgfile.Pathway{}, ErrNoLogin
+		return configfile.Pathway{}, ErrNoLogin
 	}
-	files, _, err := orgfile.NewStore(dir).List()
+	files, _, err := configfile.NewStore(dir).List()
 	if err != nil {
-		return orgfile.Pathway{}, err
+		return configfile.Pathway{}, err
 	}
 	for _, f := range files {
 		for _, p := range f.Pathways {
@@ -67,5 +67,5 @@ func activePathway(dir axondir.Dir) (orgfile.Pathway, error) {
 			}
 		}
 	}
-	return orgfile.Pathway{}, ErrNoLogin
+	return configfile.Pathway{}, ErrNoLogin
 }

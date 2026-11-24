@@ -17,9 +17,9 @@ import (
 	"testing"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/fail"
-	"github.com/enigma-brain/axon/internal/orgfile"
 	"github.com/enigma-brain/axon/internal/skyclient"
 )
 
@@ -82,19 +82,19 @@ var pathways = map[string]string{
 // storeOrg stores exampleOrg under home.
 func storeOrg(t *testing.T, home string) {
 	t.Helper()
-	src, err := orgfile.ParseSource("-")
+	src, err := configfile.ParseSource("-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := orgfile.NewStore(axondir.New(home)).Add([]byte(exampleOrg), src); err != nil {
+	if _, err := configfile.NewStore(axondir.New(home)).Add([]byte(exampleOrg), src); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // pathwayOf returns the stored pathway id.
-func pathwayOf(t *testing.T, id string) orgfile.Pathway {
+func pathwayOf(t *testing.T, id string) configfile.Pathway {
 	t.Helper()
-	f, err := orgfile.Parse([]byte(exampleOrg))
+	f, err := configfile.Parse([]byte(exampleOrg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func pathwayOf(t *testing.T, id string) orgfile.Pathway {
 		}
 	}
 	t.Fatalf("no pathway %q", id)
-	return orgfile.Pathway{}
+	return configfile.Pathway{}
 }
 
 // login sets HOME to a new directory, stores exampleOrg, and records a
@@ -521,11 +521,11 @@ func TestSkyNeverFetchesTheOrganizationFile(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	dir := login(t, "campus", "ada@example.org")
-	src, err := orgfile.ParseSource(srv.URL + "/axon.toml")
+	src, err := configfile.ParseSource(srv.URL + "/axon.toml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := orgfile.NewStore(dir).Add([]byte(exampleOrg), src); err != nil {
+	if _, err := configfile.NewStore(dir).Add([]byte(exampleOrg), src); err != nil {
 		t.Fatal(err)
 	}
 	calls := capture(t)

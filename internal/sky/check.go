@@ -9,8 +9,8 @@ import (
 
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
-	"github.com/enigma-brain/axon/internal/orgfile"
 	"github.com/enigma-brain/axon/internal/skyclient"
 	"github.com/enigma-brain/axon/internal/tsh"
 	"github.com/enigma-brain/axon/internal/tunnel"
@@ -38,7 +38,7 @@ const (
 // realProbes; tests replace them.
 type probes struct {
 	// endpoint returns the URL the health request goes to on a pathway.
-	endpoint func(orgfile.Pathway) string
+	endpoint func(configfile.Pathway) string
 	// health makes one request to the health endpoint.
 	health func(ctx context.Context, endpoint string, opts apiserver.Options) (apiserver.Health, error)
 	// cookieFile returns SkyPilot's cookie file.
@@ -89,25 +89,25 @@ var check = realProbes
 // once before the health request, so that the command runs with the same
 // ones. The pathway counts as connected only while its settings for
 // machines are the ones axon login recorded when it connected it.
-func Check(ctx context.Context, dir axondir.Dir, w io.Writer) (orgfile.Pathway, string, error) {
+func Check(ctx context.Context, dir axondir.Dir, w io.Writer) (configfile.Pathway, string, error) {
 	pw, err := activePathway(dir)
 	if err != nil {
-		return orgfile.Pathway{}, "", err
+		return configfile.Pathway{}, "", err
 	}
 	email, hasEmail, err := dir.Email()
 	if err != nil {
-		return orgfile.Pathway{}, "", err
+		return configfile.Pathway{}, "", err
 	}
 	if !hasEmail {
-		return orgfile.Pathway{}, "", ErrNoLogin
+		return configfile.Pathway{}, "", ErrNoLogin
 	}
 	if err := check.run(ctx, dir, pw, w); err != nil {
-		return orgfile.Pathway{}, "", err
+		return configfile.Pathway{}, "", err
 	}
 	return pw, email, nil
 }
 
-func (p probes) run(ctx context.Context, dir axondir.Dir, pw orgfile.Pathway, w io.Writer) error {
+func (p probes) run(ctx context.Context, dir axondir.Dir, pw configfile.Pathway, w io.Writer) error {
 	// A pathway whose settings changed after it was connected, such as by
 	// a file that --config replaced, is not the one connected.
 	same, err := connected.Is(dir, pw)
@@ -129,7 +129,7 @@ func (p probes) run(ctx context.Context, dir axondir.Dir, pw orgfile.Pathway, w 
 	// is known to be up, whatever listens on the local port is unknown, so
 	// SkyPilot's cookies go only to a direct pathway's endpoint.
 	var cookies string
-	if pw.Kind == orgfile.KindDirect {
+	if pw.Kind == configfile.KindDirect {
 		if cookies, err = p.cookieFile(); err != nil {
 			return err
 		}
@@ -138,7 +138,7 @@ func (p probes) run(ctx context.Context, dir axondir.Dir, pw orgfile.Pathway, w 
 	endpoint := p.endpoint(pw)
 	opts := apiserver.Options{ClientVersion: version, CookieFile: cookies}
 	h, err := p.health(ctx, endpoint, opts)
-	if err != nil && pw.Kind == orgfile.KindTeleport && !errors.Is(err, apiserver.ErrNotLoggedIn) && ctx.Err() == nil {
+	if err != nil && pw.Kind == configfile.KindTeleport && !errors.Is(err, apiserver.ErrNotLoggedIn) && ctx.Err() == nil {
 		if err := p.restartTunnel(ctx, dir, pw, w); err != nil {
 			return err
 		}
@@ -155,13 +155,13 @@ func (p probes) run(ctx context.Context, dir axondir.Dir, pw orgfile.Pathway, w 
 
 // failure returns the error the check stops with when the health request
 // failed with err.
-func failure(ctx context.Context, p orgfile.Pathway, endpoint string, err error) error {
+func failure(ctx context.Context, p configfile.Pathway, endpoint string, err error) error {
 	switch {
 	case ctx.Err() != nil:
 		return ctx.Err()
 	case errors.Is(err, apiserver.ErrNotLoggedIn):
 		return errSessionExpired
-	case p.Kind == orgfile.KindDirect && errors.Is(err, apiserver.ErrUnreachable):
+	case p.Kind == configfile.KindDirect && errors.Is(err, apiserver.ErrUnreachable):
 		return errors.New(Unreachable(p, endpoint))
 	default:
 		return errNotAnswering
@@ -170,7 +170,7 @@ func failure(ctx context.Context, p orgfile.Pathway, endpoint string, err error)
 
 // restartTunnel restarts the tunnel when the Teleport certificate is valid.
 // It returns nil once the restarted tunnel serves.
-func (p probes) restartTunnel(ctx context.Context, dir axondir.Dir, pw orgfile.Pathway, w io.Writer) error {
+func (p probes) restartTunnel(ctx context.Context, dir axondir.Dir, pw configfile.Pathway, w io.Writer) error {
 	tshPath, err := p.findTsh()
 	switch {
 	case errors.Is(err, tsh.ErrNotFound):

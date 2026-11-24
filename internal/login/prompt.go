@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 )
 
 // determinePathway returns the pathway this login uses, chosen from the
@@ -20,8 +20,8 @@ import (
 //     picks.
 //   - Otherwise the active pathway, when a stored file has it.
 //   - Otherwise the only stored pathway, or one the user picks.
-func (l *login) determinePathway(files []orgfile.File, added *orgfile.File, opts Options) (orgfile.Pathway, error) {
-	var all []orgfile.Pathway
+func (l *login) determinePathway(files []configfile.File, added *configfile.File, opts Options) (configfile.Pathway, error) {
+	var all []configfile.Pathway
 	for _, f := range files {
 		all = append(all, f.Pathways...)
 	}
@@ -30,14 +30,14 @@ func (l *login) determinePathway(files []orgfile.File, added *orgfile.File, opts
 		if p, ok := find(all, opts.Pathway); ok {
 			return p, nil
 		}
-		return orgfile.Pathway{}, fmt.Errorf("no stored config file has the pathway %q. The stored pathways are %s.",
+		return configfile.Pathway{}, fmt.Errorf("no stored config file has the pathway %q. The stored pathways are %s.",
 			opts.Pathway, idList(all))
 	}
 
 	// An active pathway that no stored file has is no active pathway.
 	activeID, _, err := l.dir.Pathway()
 	if err != nil {
-		return orgfile.Pathway{}, fmt.Errorf("%w. Run `axon login --pathway <id>` to replace it.", err)
+		return configfile.Pathway{}, fmt.Errorf("%w. Run `axon login --pathway <id>` to replace it.", err)
 	}
 	active, hasActive := find(all, activeID)
 
@@ -57,17 +57,17 @@ func (l *login) determinePathway(files []orgfile.File, added *orgfile.File, opts
 }
 
 // find returns the pathway in ps whose identifier is id.
-func find(ps []orgfile.Pathway, id string) (orgfile.Pathway, bool) {
+func find(ps []configfile.Pathway, id string) (configfile.Pathway, bool) {
 	for _, p := range ps {
 		if p.ID == id {
 			return p, true
 		}
 	}
-	return orgfile.Pathway{}, false
+	return configfile.Pathway{}, false
 }
 
 // idList writes the identifiers of ps for a message: "a, b and c".
-func idList(ps []orgfile.Pathway) string {
+func idList(ps []configfile.Pathway) string {
 	ids := make([]string, len(ps))
 	for i, p := range ps {
 		ids[i] = p.ID
@@ -82,7 +82,7 @@ func idList(ps []orgfile.Pathway) string {
 // with its description, until it gets an answer it accepts: a number from
 // the list or a pathway's identifier. At the end of input it stops and
 // names --pathway.
-func askPathway(ps []orgfile.Pathway, in io.Reader, out io.Writer) (orgfile.Pathway, error) {
+func askPathway(ps []configfile.Pathway, in io.Reader, out io.Writer) (configfile.Pathway, error) {
 	fmt.Fprintln(out, "Which pathway are you on?")
 	width := 0
 	for _, p := range ps {
@@ -104,22 +104,22 @@ func askPathway(ps []orgfile.Pathway, in io.Reader, out io.Writer) (orgfile.Path
 		}
 		if errors.Is(err, io.EOF) {
 			fmt.Fprintln(out)
-			return orgfile.Pathway{}, fmt.Errorf("no pathway chosen. Run `axon login --pathway <id>` with one of %s.", idList(ps))
+			return configfile.Pathway{}, fmt.Errorf("no pathway chosen. Run `axon login --pathway <id>` with one of %s.", idList(ps))
 		}
 		if err != nil {
-			return orgfile.Pathway{}, fmt.Errorf("read the answer: %w", err)
+			return configfile.Pathway{}, fmt.Errorf("read the answer: %w", err)
 		}
 	}
 }
 
 // parseAnswer returns the pathway of ps that answer names, by its number in
 // the list or by its identifier.
-func parseAnswer(ps []orgfile.Pathway, answer string) (orgfile.Pathway, bool) {
+func parseAnswer(ps []configfile.Pathway, answer string) (configfile.Pathway, bool) {
 	if n, err := strconv.Atoi(answer); err == nil {
 		if n >= 1 && n <= len(ps) {
 			return ps[n-1], true
 		}
-		return orgfile.Pathway{}, false
+		return configfile.Pathway{}, false
 	}
 	return find(ps, strings.ToLower(answer))
 }

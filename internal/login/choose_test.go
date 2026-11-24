@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
-	"github.com/enigma-brain/axon/internal/orgfile"
 )
 
 // otherOrg is a second config file, with one direct pathway, lab.
@@ -272,7 +272,7 @@ func TestOrgFromAddress(t *testing.T) {
 	h := newHarness(t)
 	h.noFiles()
 	const address = "https://example.org/axon.toml"
-	h.l.readOrg = func(_ context.Context, src orgfile.Source, _ io.Reader) ([]byte, error) {
+	h.l.readOrg = func(_ context.Context, src configfile.Source, _ io.Reader) ([]byte, error) {
 		if src.String() != address || !src.IsAddress() {
 			t.Errorf("read %q", src)
 		}
@@ -282,7 +282,7 @@ func TestOrgFromAddress(t *testing.T) {
 	if err := h.login(Options{Config: address}); err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	src, ok, err := orgfile.NewStore(axondir.New(h.home)).Source("other")
+	src, ok, err := configfile.NewStore(axondir.New(h.home)).Source("other")
 	if err != nil || !ok || src.String() != address {
 		t.Errorf("recorded source = %q, %v, %v", src, ok, err)
 	}
@@ -333,7 +333,7 @@ func TestOrgKeepsActivePathwayInTheAddedFile(t *testing.T) {
 	if err := axondir.New(h.home).SetPathway("remote"); err != nil {
 		t.Fatal(err)
 	}
-	h.l.readOrg = func(context.Context, orgfile.Source, io.Reader) ([]byte, error) { return []byte(otherOrg), nil }
+	h.l.readOrg = func(context.Context, configfile.Source, io.Reader) ([]byte, error) { return []byte(otherOrg), nil }
 	h.logIn()
 	// The active pathway is not in the added file, which has one pathway.
 	if err := h.login(Options{Config: "https://example.org/other.toml"}); err != nil {
@@ -355,7 +355,7 @@ func TestOrgKeepsActivePathwayInTheAddedFile(t *testing.T) {
 	if err := axondir.New(h.home).SetPathway("campus"); err != nil {
 		t.Fatal(err)
 	}
-	h.l.readOrg = func(context.Context, orgfile.Source, io.Reader) ([]byte, error) { return []byte(exampleOrg), nil }
+	h.l.readOrg = func(context.Context, configfile.Source, io.Reader) ([]byte, error) { return []byte(exampleOrg), nil }
 	h.out.Reset()
 	if err := h.login(Options{Config: "https://example.org/example.toml"}); err != nil {
 		t.Fatal(err)
@@ -372,7 +372,7 @@ func TestOrgOffersOnlyTheAddedFilesPathways(t *testing.T) {
 	if err := axondir.New(h.home).SetPathway("lab"); err != nil {
 		t.Fatal(err)
 	}
-	h.l.readOrg = func(context.Context, orgfile.Source, io.Reader) ([]byte, error) { return []byte(exampleOrg), nil }
+	h.l.readOrg = func(context.Context, configfile.Source, io.Reader) ([]byte, error) { return []byte(exampleOrg), nil }
 	err := h.login(Options{Config: "https://example.org/example.toml"})
 	if err == nil || !strings.HasSuffix(err.Error(), "with one of campus and remote.") {
 		t.Fatalf("err = %v", err)
@@ -421,7 +421,7 @@ func TestConnectedRecord(t *testing.T) {
 func TestDisconnectRemovesTheEmailOnlyOnAChange(t *testing.T) {
 	h := newHarness(t)
 	dir := axondir.New(h.home)
-	files, _, err := orgfile.NewStore(dir).List()
+	files, _, err := configfile.NewStore(dir).List()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,7 +474,7 @@ func TestDisconnectRemovesTheEmailOnlyOnAChange(t *testing.T) {
 }
 
 func TestAskPathway(t *testing.T) {
-	ps := []orgfile.Pathway{
+	ps := []configfile.Pathway{
 		{ID: "campus", Name: "Campus", Description: "On campus."},
 		{ID: "remote", Name: "Remote", Description: "From anywhere."},
 	}
@@ -503,7 +503,7 @@ func TestAskPathway(t *testing.T) {
 }
 
 func TestAskPathwayLeavesLaterInput(t *testing.T) {
-	ps := []orgfile.Pathway{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}}
+	ps := []configfile.Pathway{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}}
 	in := strings.NewReader("1\nTOKEN\n")
 	if _, err := askPathway(ps, in, io.Discard); err != nil {
 		t.Fatal(err)
@@ -578,11 +578,11 @@ func TestConfigEmpty(t *testing.T) {
 			h := newHarness(t)
 			h.noFiles()
 			// An address is answered by a fake; nothing is fetched.
-			h.l.readOrg = func(ctx context.Context, src orgfile.Source, stdin io.Reader) ([]byte, error) {
+			h.l.readOrg = func(ctx context.Context, src configfile.Source, stdin io.Reader) ([]byte, error) {
 				if src.IsAddress() {
 					return nil, nil
 				}
-				return orgfile.Read(ctx, src, stdin)
+				return configfile.Read(ctx, src, stdin)
 			}
 			err := h.login(tc.opts)
 			if err == nil || err.Error() != tc.want {

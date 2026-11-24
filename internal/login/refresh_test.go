@@ -14,8 +14,8 @@ import (
 	"testing"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
-	"github.com/enigma-brain/axon/internal/orgfile"
 )
 
 // orgServer is a local TLS server that publishes config files, one
@@ -51,9 +51,9 @@ func (h *harness) serveOrgs() *orgServer {
 	}))
 	h.t.Cleanup(s.srv.Close)
 
-	h.l.readOrg = func(ctx context.Context, src orgfile.Source, stdin io.Reader) ([]byte, error) {
+	h.l.readOrg = func(ctx context.Context, src configfile.Source, stdin io.Reader) ([]byte, error) {
 		if !src.IsAddress() {
-			return orgfile.Read(ctx, src, stdin)
+			return configfile.Read(ctx, src, stdin)
 		}
 		u, err := url.Parse(src.String())
 		if err != nil || u.Host != "example.org" {
@@ -114,11 +114,11 @@ func (s *orgServer) total() int {
 // address of path.
 func (h *harness) storeFrom(path, data string) {
 	h.t.Helper()
-	src, err := orgfile.ParseSource("https://example.org" + path)
+	src, err := configfile.ParseSource("https://example.org" + path)
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	if _, err := orgfile.NewStore(axondir.New(h.home)).Add([]byte(data), src); err != nil {
+	if _, err := configfile.NewStore(axondir.New(h.home)).Add([]byte(data), src); err != nil {
 		h.t.Fatal(err)
 	}
 }

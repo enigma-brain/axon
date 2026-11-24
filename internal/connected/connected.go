@@ -18,7 +18,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/enigma-brain/axon/internal/axondir"
-	"github.com/enigma-brain/axon/internal/orgfile"
+	"github.com/enigma-brain/axon/internal/configfile"
 )
 
 const (
@@ -42,7 +42,7 @@ type Record struct {
 }
 
 // Of returns the record of p.
-func Of(p orgfile.Pathway) Record {
+func Of(p configfile.Pathway) Record {
 	r := Record{
 		Format:      format,
 		ID:          p.ID,
@@ -80,7 +80,7 @@ func Read(dir axondir.Dir) (Record, bool, error) {
 }
 
 // Write records p as the connected pathway.
-func Write(dir axondir.Dir, p orgfile.Pathway) error {
+func Write(dir axondir.Dir, p configfile.Pathway) error {
 	if _, err := dir.StateDir(); err != nil {
 		return err
 	}
@@ -93,7 +93,7 @@ func Write(dir axondir.Dir, p orgfile.Pathway) error {
 
 // Is reports whether the record in dir is p with its present settings for
 // machines.
-func Is(dir axondir.Dir, p orgfile.Pathway) (bool, error) {
+func Is(dir axondir.Dir, p configfile.Pathway) (bool, error) {
 	r, ok, err := Read(dir)
 	return ok && r == Of(p), err
 }

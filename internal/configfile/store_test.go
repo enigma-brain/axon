@@ -1,4 +1,4 @@
-package orgfile
+package configfile
 
 import (
 	"errors"
