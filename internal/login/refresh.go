@@ -49,6 +49,11 @@ func (l *login) refresh(ctx context.Context, p configfile.Pathway, added *config
 	}
 
 	data, err := l.readConfig(ctx, src, nil)
+	// A fetch cut short by the login's own cancellation is not a failure
+	// to fall back from: the login stops.
+	if err != nil && ctx.Err() != nil {
+		return configfile.Pathway{}, ctx.Err()
+	}
 	var (
 		f       configfile.File
 		changed bool

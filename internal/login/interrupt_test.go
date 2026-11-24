@@ -16,6 +16,7 @@ import (
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/configfile"
+	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/interrupt"
 	"github.com/enigma-brain/axon/internal/tunnel"
 )
@@ -330,4 +331,60 @@ func TestInterruptWhileTheTunnelStarts(t *testing.T) {
 		t.Fatalf("login returned %v, want the cancellation\n%s", err, out.String())
 	}
 	h.assertRunningAndRecorded(false)
+}
+
+// TestInterruptWhileTheConfigFileIsFetched cancels the login while it
+// fetches the pathway's config file: the login stops, without the warning
+// of a failed fetch, and leaves the active pathway as it was.
+func TestInterruptWhileTheConfigFileIsFetched(t *testing.T) {
+	h := newHarness(t)
+	h.noFiles()
+	h.storeFrom("/example.toml", exampleConfig)
+	if err := axondir.New(h.home).SetPathway("remote"); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.l.readConfig = func(context.Context, configfile.Source, io.Reader) ([]byte, error) {
+		cancel()
+		return nil, errors.New("fetch https://example.org/example.toml: context canceled")
+	}
+	err := h.l.run(ctx, Options{Pathway: "campus", In: strings.NewReader(""), Out: &h.out, Err: &h.errOut})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("login returned %v, want the cancellation\n%s", err, h.out.String())
+	}
+	if strings.Contains(h.errOut.String(), "could not update") {
+		t.Errorf("the cancelled fetch was reported as a failure: %s", h.errOut.String())
+	}
+	if h.active() != "remote" {
+		t.Errorf("the active pathway is %q, want remote, as it was", h.active())
+	}
+}
+
+// TestInterruptLogout cancels axon logout while Teleport's session ends:
+// logout reports no failed step of its own and keeps the records, so that
+// logging out again retries.
+func TestInterruptLogout(t *testing.T) {
+	h := newMetaHarness(t)
+	if err := h.run("remote"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	lo := newLogout(h.harness, fakeTsh)
+	lo.tshLogout = func(context.Context, string, string) error {
+		cancel()
+		return errors.New("tsh logout: signal: killed")
+	}
+	var out, errOut bytes.Buffer
+	err := lo.run(ctx, LogoutOptions{Out: &out, Err: &errOut})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("logout returned %v, want the cancellation", err)
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("logout reported %q, want nothing beyond the interrupt", errOut.String())
+	}
+	if _, ok, err := connected.Read(axondir.New(h.home)); !ok || err != nil {
+		t.Errorf("the record of the connection is gone (%v), want it kept for a retry", err)
+	}
 }

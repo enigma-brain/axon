@@ -115,7 +115,11 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 	failed := false
 	fail := func(step string, err error) {
 		failed = true
-		fmt.Fprintf(opts.Err, "axon: could not %s: %v\n", step, err)
+		// A step cut short by an interrupt did not fail; axon reports the
+		// interrupt once, when logout returns.
+		if ctx.Err() == nil {
+			fmt.Fprintf(opts.Err, "axon: could not %s: %v\n", step, err)
+		}
 	}
 
 	// What is recorded. A record that cannot be read is reported, and the
@@ -198,6 +202,9 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 		}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	fmt.Fprintf(opts.Out, lineKept+"\n", lo.dir.ConfigsPath())
 	if failed {
 		return errLogoutFailed

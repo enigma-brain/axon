@@ -224,6 +224,12 @@ func (l *login) run(ctx context.Context, opts Options) error {
 		l.teleport.path = path
 	}
 
+	// A login cancelled while it chose or refreshed the pathway changes
+	// nothing from here on.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	// Leaving the pathway that was connected, or its settings for
 	// machines, disconnects it by what was recorded when it connected,
 	// before the new pathway is stored: when that fails, the active
