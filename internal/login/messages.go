@@ -26,6 +26,7 @@ const (
 	msgNotHostPort = "%q is not a host or host:port."
 	msgNotApp      = "%q is not a Teleport application name."
 	msgNameEmpty   = "The name needs at least one letter or digit."
+	msgNameUnsafe  = "The name must not hold control characters or Unicode format characters."
 
 	// The address.
 	msgChecking = "Checking %s\n"

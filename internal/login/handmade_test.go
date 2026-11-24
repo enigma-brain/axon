@@ -428,6 +428,26 @@ func TestCleanProxy(t *testing.T) {
 	}
 }
 
+// A hand-made pathway's answers are refused when they hold a control or
+// format character, which a config file may not hold.
+func TestCleanRefusesUnsafeCharacters(t *testing.T) {
+	if _, err := cleanName("Lab\u202e"); err == nil || err.Error() != msgNameUnsafe {
+		t.Errorf("cleanName with a format character: %v", err)
+	}
+	if _, err := cleanName("La\x1b[2Jb"); err == nil || err.Error() != msgNameUnsafe {
+		t.Errorf("cleanName with an escape: %v", err)
+	}
+	if _, err := cleanEndpoint("https://sky.example.org/\u202e"); err == nil {
+		t.Error("cleanEndpoint accepted a format character")
+	}
+	if _, err := cleanApp("sky\u200b"); err == nil {
+		t.Error("cleanApp accepted a format character")
+	}
+	if got, err := cleanName("Lab"); err != nil || got != "Lab" {
+		t.Errorf("cleanName(%q) = %q, %v", "Lab", got, err)
+	}
+}
+
 // netFailure is the error a request to address fails with when its dial
 // fails with cause, wrapped as Go wraps it. Nothing is contacted.
 func netFailure(address string, cause error) error {

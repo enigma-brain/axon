@@ -16,6 +16,7 @@ import (
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/netreason"
+	"github.com/enigma-brain/axon/internal/termtext"
 	"github.com/enigma-brain/axon/internal/tsh"
 )
 
@@ -100,7 +101,7 @@ func cleanEndpoint(s string) (string, error) {
 		addr = "https://" + addr
 	}
 	u, err := url.Parse(addr)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Opaque != "" || u.RawQuery != "" || u.Fragment != "" {
+	if err != nil || termtext.HasUnsafe(s) || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Opaque != "" || u.RawQuery != "" || u.Fragment != "" {
 		return "", fmt.Errorf(msgNotHTTPS, s)
 	}
 	return strings.TrimRight(addr, "/"), nil
@@ -126,7 +127,7 @@ func cleanProxy(s string) (string, error) {
 // cleanApp returns s as a Teleport application name.
 func cleanApp(s string) (string, error) {
 	s = strings.TrimSpace(s)
-	if tsh.CheckApp(s) != nil {
+	if tsh.CheckApp(s) != nil || termtext.HasUnsafe(s) {
 		return "", fmt.Errorf(msgNotApp, s)
 	}
 	return s, nil
@@ -137,6 +138,9 @@ func cleanName(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if identifier(s) == "" {
 		return "", errors.New(msgNameEmpty)
+	}
+	if termtext.HasUnsafe(s) {
+		return "", errors.New(msgNameUnsafe)
 	}
 	return s, nil
 }

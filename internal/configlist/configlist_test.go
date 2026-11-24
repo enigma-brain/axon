@@ -354,20 +354,27 @@ func TestUnreadablePathwayInUse(t *testing.T) {
 	}
 }
 
+// A stored file from before control and format characters were refused is
+// listed as unreadable, and neither its text nor the reason puts such a
+// character on the terminal.
 func TestControlCharactersRemoved(t *testing.T) {
 	dir, s := newDir(t)
+	add(t, s, campus, "https://example.org/campus.toml")
 	data := strings.Replace(campus, `name = "Campus"`, `name = "Cam\u001b[31mpus\u202e\u0007"`, 1)
-	add(t, s, data, "https://example.org/campus.toml")
-	text, err := list(t, dir)
-	if err != nil {
+	data = strings.Replace(data, `description = `, "\"k\\u001b[2J\\u202e\" = 1\ndescription = ", 1)
+	if err := os.WriteFile(s.Path("example-campus"), []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(text, "    Cam[31mpus  --pathway campus\n") {
+	text, err := list(t, dir)
+	if err == nil {
+		t.Fatal("no error")
+	}
+	if !strings.Contains(text, "cannot be read") {
 		t.Errorf("listing:\n%q", text)
 	}
 	for _, r := range []rune{'\x1b', '\u202e', '\a'} {
 		if strings.ContainsRune(text, r) {
-			t.Errorf("listing holds %U", r)
+			t.Errorf("listing holds %U:\n%q", r, text)
 		}
 	}
 }
