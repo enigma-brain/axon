@@ -42,6 +42,7 @@ func sum(s string) string {
 }
 
 func TestFetch(t *testing.T) {
+	t.Parallel()
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "content")
 	})
@@ -65,6 +66,7 @@ func TestFetch(t *testing.T) {
 }
 
 func TestFetchChecksumMismatch(t *testing.T) {
+	t.Parallel()
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "tampered")
 	})
@@ -78,6 +80,7 @@ func TestFetchChecksumMismatch(t *testing.T) {
 // A status line is printed cleaned of anything that acts on the terminal,
 // and the address without its query string.
 func TestFetchStatus(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// net/http writes the status text it knows; hijack to send a raw one.
@@ -107,6 +110,7 @@ func TestFetchStatus(t *testing.T) {
 }
 
 func TestFetchEndsWhenHeadersStall(t *testing.T) {
+	t.Parallel()
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) { hang(t, r) })
 	start := time.Now()
 	err := Fetch(context.Background(), url, io.Discard, Options{Limit: 1 << 20, Stall: 100 * time.Millisecond})
@@ -122,6 +126,7 @@ func TestFetchEndsWhenHeadersStall(t *testing.T) {
 // A stall reads in full where it is printed as it is, and as "timed out"
 // where it is shortened.
 func TestFetchEndsWhenBodyStalls(t *testing.T) {
+	t.Parallel()
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "1000")
 		w.Write([]byte("partial"))
@@ -145,6 +150,7 @@ func TestFetchEndsWhenBodyStalls(t *testing.T) {
 }
 
 func TestFetchKeepsASlowBodyThatMoves(t *testing.T) {
+	t.Parallel()
 	// Each piece arrives well within the stall limit, but the whole body
 	// takes several times as long.
 	const pieces = 12
@@ -167,6 +173,7 @@ func TestFetchKeepsASlowBodyThatMoves(t *testing.T) {
 
 // Cancelling the context ends a download part way through its body at once.
 func TestFetchCancelledMidBody(t *testing.T) {
+	t.Parallel()
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "1000")
 		w.Write([]byte("partial"))
@@ -198,6 +205,7 @@ func (c *cancelOnWrite) Write(p []byte) (int, error) {
 }
 
 func TestFetchRefusesADeclaredSizeOverTheLimit(t *testing.T) {
+	t.Parallel()
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", strconv.Itoa(2<<20))
 		w.(http.Flusher).Flush()
@@ -217,6 +225,7 @@ func TestFetchRefusesADeclaredSizeOverTheLimit(t *testing.T) {
 }
 
 func TestFetchRefusesAnUndeclaredSizeOverTheLimit(t *testing.T) {
+	t.Parallel()
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		// No Content-Length: the body is sent in chunks.
 		chunk := bytes.Repeat([]byte("x"), 64<<10)
@@ -235,6 +244,7 @@ func TestFetchRefusesAnUndeclaredSizeOverTheLimit(t *testing.T) {
 }
 
 func TestFetchFollowsRedirectsOnLoopbackHTTP(t *testing.T) {
+	t.Parallel()
 	var target string
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/moved" {
@@ -256,6 +266,7 @@ func TestFetchFollowsRedirectsOnLoopbackHTTP(t *testing.T) {
 // A redirect does not hand the next server the address redirected from,
 // whose query string can hold a token.
 func TestFetchSendsNoRefererOnARedirect(t *testing.T) {
+	t.Parallel()
 	referer := "unset"
 	to := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		referer = r.Header.Get("Referer")
@@ -274,6 +285,7 @@ func TestFetchSendsNoRefererOnARedirect(t *testing.T) {
 
 // An address that does not parse is not printed, since it can hold a token.
 func TestFetchInvalidAddress(t *testing.T) {
+	t.Parallel()
 	err := Fetch(context.Background(), "https://example.org/%zz?token=secret", io.Discard, Options{Limit: 1 << 20})
 	if err == nil || strings.Contains(err.Error(), "secret") {
 		t.Errorf("Fetch = %v, want an error without the address", err)
@@ -281,6 +293,7 @@ func TestFetchInvalidAddress(t *testing.T) {
 }
 
 func TestFetchRefusesARedirectAwayFromHTTPS(t *testing.T) {
+	t.Parallel()
 	url := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "http://example.org/file?token=secret", http.StatusFound)
 	})
@@ -294,6 +307,7 @@ func TestFetchRefusesARedirectAwayFromHTTPS(t *testing.T) {
 }
 
 func TestAllowed(t *testing.T) {
+	t.Parallel()
 	parse := func(s string) *url.URL {
 		u, err := url.Parse(s)
 		if err != nil {
@@ -320,6 +334,7 @@ func TestAllowed(t *testing.T) {
 }
 
 func TestRedact(t *testing.T) {
+	t.Parallel()
 	for raw, want := range map[string]string{
 		"https://user:pass@example.org/path/file?token=secret#frag": "https://example.org/path/file",
 		"https://example.org:8443/a%2Fb":                            "https://example.org:8443/a%2Fb",
@@ -364,6 +379,7 @@ func archive(t *testing.T, entries ...string) []byte {
 }
 
 func TestExtractFile(t *testing.T) {
+	t.Parallel()
 	data := archive(t, "README", "readme", "dist/uv/", "", "dist/uvx", "other", "dist/uv", "the program", "uv", "second")
 	r, err := ExtractFile(bytes.NewReader(data), "uv", 1<<20)
 	if err != nil {
@@ -376,6 +392,7 @@ func TestExtractFile(t *testing.T) {
 }
 
 func TestExtractFileMissing(t *testing.T) {
+	t.Parallel()
 	data := archive(t, "README", "readme", "uv/", "")
 	if _, err := ExtractFile(bytes.NewReader(data), "uv", 1<<20); !errors.Is(err, ErrNotInArchive) {
 		t.Errorf("ExtractFile = %v, want ErrNotInArchive", err)
@@ -383,6 +400,7 @@ func TestExtractFileMissing(t *testing.T) {
 }
 
 func TestExtractFileTooLarge(t *testing.T) {
+	t.Parallel()
 	data := archive(t, "uv", strings.Repeat("x", 100))
 	r, err := ExtractFile(bytes.NewReader(data), "uv", 99)
 	if err != nil {
@@ -402,12 +420,14 @@ func TestExtractFileTooLarge(t *testing.T) {
 }
 
 func TestExtractFileNotAnArchive(t *testing.T) {
+	t.Parallel()
 	if _, err := ExtractFile(strings.NewReader("not gzip"), "uv", 1<<20); err == nil || !strings.HasPrefix(err.Error(), "read the archive: ") {
 		t.Errorf("ExtractFile = %v, want an archive error", err)
 	}
 }
 
 func TestInBytesAndWords(t *testing.T) {
+	t.Parallel()
 	for n, want := range map[int64]string{1 << 20: "1 MiB", 256 << 20: "256 MiB", 99: "99 bytes", 1<<20 + 1: "1048577 bytes"} {
 		if got := inBytes(n); got != want {
 			t.Errorf("inBytes(%d) = %q, want %q", n, got, want)
