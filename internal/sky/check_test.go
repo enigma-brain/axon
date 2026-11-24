@@ -505,9 +505,10 @@ func TestCheckNeverInstallsOrOpensABrowser(t *testing.T) {
 	}
 	fset := token.NewFileSet()
 	// decls holds every top-level declaration by the name it declares,
-	// and imports the names each file imports.
+	// and imports, for each declaration, the names its file imports under,
+	// each mapped to the base of the package's path.
 	decls := map[string][]ast.Node{}
-	imports := map[ast.Node]map[string]bool{}
+	imports := map[ast.Node]map[string]string{}
 	for _, name := range files {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
@@ -516,9 +517,14 @@ func TestCheckNeverInstallsOrOpensABrowser(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		imported := map[string]bool{}
+		imported := map[string]string{}
 		for _, imp := range f.Imports {
-			imported[path.Base(strings.Trim(imp.Path.Value, `"`))] = true
+			pkg := path.Base(strings.Trim(imp.Path.Value, `"`))
+			name := pkg
+			if imp.Name != nil {
+				name = imp.Name.Name
+			}
+			imported[name] = pkg
 		}
 		add := func(n string, d ast.Node) {
 			decls[n] = append(decls[n], d)
@@ -566,10 +572,11 @@ func TestCheckNeverInstallsOrOpensABrowser(t *testing.T) {
 			ast.Inspect(d, func(n ast.Node) bool {
 				switch n := n.(type) {
 				case *ast.SelectorExpr:
-					if pkg, ok := n.X.(*ast.Ident); ok && imported[pkg.Name] {
-						for _, fn := range forbidden[pkg.Name] {
+					if id, ok := n.X.(*ast.Ident); ok && imported[id.Name] != "" {
+						pkg := imported[id.Name]
+						for _, fn := range forbidden[pkg] {
 							if n.Sel.Name == fn {
-								t.Errorf("%s: Run reaches %s, which uses %s.%s", fset.Position(n.Pos()), name, pkg.Name, fn)
+								t.Errorf("%s: Run reaches %s, which uses %s.%s", fset.Position(n.Pos()), name, pkg, fn)
 							}
 						}
 						// Another package's name is not this package's.
