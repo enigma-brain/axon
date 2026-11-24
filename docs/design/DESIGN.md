@@ -915,11 +915,15 @@ the signal it received, so the shell reports the command as interrupted. A
 command that finished its work before it acted on the signal has printed its
 result and ends as it would have.
 
-A program `axon` runs and waits for, such as the browser login of `sky` and
-Teleport's `tsh login`, shares the terminal and receives SIGINT from it, so
-`axon` sends it nothing more and waits for it to end. SIGTERM reaches `axon`
-alone, and `axon` passes it on. A program that has not ended after a few
-seconds, ten for a `tsh` that runs on the terminal, is killed. The Teleport
+A program `axon` runs and waits for, such as Teleport's `tsh login`, shares
+the terminal and receives SIGINT from it, so `axon` sends it nothing more and
+waits for it to end. SIGTERM reaches `axon` alone, and `axon` passes it on.
+The SkyPilot client's `sky api login`, in the browser login and against a
+Teleport pathway's tunnel, is the exception: it reads an interrupt as a
+request to log in another way, so it runs in a process group of its own,
+with no input from the terminal and its output passed on by `axon`, and on
+either signal `axon` sends its group SIGTERM. A program that has not ended
+after a few seconds, ten for a `tsh` that runs on the terminal, is killed. The Teleport
 tunnel runs in a session of its own and is not interrupted with `axon`.
 
 A second interrupt while `axon` stops ends it at once.

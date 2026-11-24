@@ -14,7 +14,9 @@ process group, so the terminal delivers Ctrl-C to them as well as to
 `axon`. Some of them, such as `tsh login`, change the terminal's settings
 while they run and put them back as they end. A shell running a script
 stops the script when a command it ran was ended by SIGINT, and not when the
-command exited with a status of its own.
+command exited with a status of its own. The SkyPilot client's `sky api
+login` reads its first SIGINT as a request to log in another way, opening
+another browser page or asking for a token, and not as a request to stop.
 
 ## Rationale
 
@@ -41,6 +43,14 @@ as the cause, and puts the signal's default action back.
   passes it on. Either way `axon` waits for the program, up to a grace
   period, so that a program on the terminal puts the terminal back before
   `axon` exits.
+- `sky api login` runs in a process group of its own, so the terminal's
+  SIGINT reaches `axon` alone, and on SIGINT or SIGTERM `axon` sends the
+  group SIGTERM, which the client does not read as a request to carry on.
+  A program outside the terminal's group is stopped when it reads from the
+  terminal, or writes to it under `stty tostop`, so the client gets no
+  input and writes through pipes that `axon` copies out. It changes no
+  terminal settings, so it leaves none to put back. The cost is its last
+  way to log in, a token pasted at a prompt, which then ends at once.
 
 ## Alternatives considered
 
@@ -60,3 +70,9 @@ as the cause, and puts the signal's default action back.
 - **Kill every program `axon` runs when the command is cancelled.** A
   program that changed the terminal's settings ends without putting them
   back.
+- **Kill `sky api login` as soon as `axon` receives SIGINT, in the
+  terminal's group.** The client receives the same SIGINT and can open the
+  next browser page before it is killed.
+- **Give `sky api login` the terminal as input in a group of its own.** A
+  read from the terminal stops the client, and the login waits out its
+  whole time limit.

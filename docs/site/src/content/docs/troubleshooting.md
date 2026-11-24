@@ -488,9 +488,14 @@ file yourself, then log in again.
 
 ```text
 the SkyPilot login failed (<reason>). Run `axon login` again.
+the SkyPilot login failed (<reason>). The login could not be completed in a browser. Run `axon login` again.
 ```
 
 SkyPilot's login stopped with an error. Read the reason, and run `axon login` again.
+The second form means that no login through the browser worked, and the client
+fell back to asking for a token, which it cannot read while `axon` runs it.
+Check that the API server is reachable from this laptop and that a browser can
+open here, then run `axon login` again.
 
 ## Signing in on a Teleport pathway
 
@@ -810,9 +815,11 @@ command. What the command had not finished is undone: a download leaves no
 file behind, `axon update` leaves the `axon` you ran in place, the SkyPilot
 client stays at the version it was, a stored config file is as it was or as
 the command was making it, and a Teleport tunnel that the login started
-either runs or does not. A program that `axon` was running, such as the
-browser login or Teleport's login, received your Ctrl-C from the terminal
-too, or SIGTERM from `axon`, and `axon` waited for it to end. Run the command again when you want it.
+either runs or does not. A program that `axon` was running, such as
+Teleport's login, received your Ctrl-C from the terminal too, or SIGTERM from
+`axon`, and `axon` waited for it to end. The SkyPilot client's browser login
+does not receive your Ctrl-C: `axon` ends it, so it opens no other browser
+page and asks for no token. Run the command again when you want it.
 
 Pressing Ctrl-C a second time while `axon` stops ends it at once, and can
 leave a temporary file whose name begins with a dot beside the file `axon`
