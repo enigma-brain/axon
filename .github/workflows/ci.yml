@@ -60,7 +60,7 @@ jobs:
           if matches "\.go\$|^go\.(mod|sum)\$|^internal/|^install\.sh\$|^\.goreleaser\.yaml\$|^\.github/release-gate/|^\.github/workflows/release\.yml\$|$workflow"; then
             code=true
           fi
-          if matches "^internal/update/|^update_test\.go\$|$workflow"; then update=true; fi
+          if matches "^internal/update/|^internal/download/|^update_test\.go\$|$workflow"; then update=true; fi
           {
             echo "code=$code"
             echo "update=$update"

@@ -178,8 +178,8 @@ first job reads the change, the pull request's diff or the commits a push to
 - **code**: any `.go` file, `go.mod`, `go.sum`, anything under `internal/`,
   `install.sh`, `.goreleaser.yaml`, anything under `.github/release-gate/`,
   `release.yml`, `go.yml`, or `ci.yml` itself;
-- **update**: anything under `internal/update/`, `update_test.go`,
-  `go.yml`, or `ci.yml`.
+- **update**: anything under `internal/update/` or `internal/download/`,
+  `update_test.go`, `go.yml`, or `ci.yml`.
 
 When the change cannot be read, as on the first push of a branch, every
 flag is set. A change to documentation alone sets none.
