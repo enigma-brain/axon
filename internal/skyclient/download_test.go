@@ -13,13 +13,10 @@ import (
 	"time"
 )
 
-// setDownloadLimits replaces the stall timeout and the size limit for one
-// test.
-func setDownloadLimits(t *testing.T, stall time.Duration, limit int64) {
-	t.Helper()
-	oldStall, oldLimit := stallTimeout, maxDownload
-	stallTimeout, maxDownload = stall, limit
-	t.Cleanup(func() { stallTimeout, maxDownload = oldStall, oldLimit })
+// setDownloadLimits sets the stall timeout and the size limit f installs
+// with.
+func setDownloadLimits(f *fixture, stall time.Duration, limit int64) {
+	f.d.stallTimeout, f.d.maxDownload = stall, limit
 }
 
 // serve starts a loopback server with handler and returns its address.
@@ -40,12 +37,12 @@ func hang(t *testing.T, r *http.Request) {
 
 func TestEnsureStalledDownloadSaysSo(t *testing.T) {
 	f := newFixture(t)
-	setDownloadLimits(t, 100*time.Millisecond, 1<<20)
-	uvBaseURL = serve(t, func(w http.ResponseWriter, r *http.Request) {
+	setDownloadLimits(f, 100*time.Millisecond, 1<<20)
+	f.d.uvBaseURL = serve(t, func(w http.ResponseWriter, r *http.Request) {
 		hang(t, r)
 	})
 
-	_, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil)
+	_, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil)
 	want := "download uv " + uvVersion + ": the download stopped because no data arrived for 100ms"
 	if err == nil || err.Error() != want {
 		t.Errorf("Ensure error = %v, want %q", err, want)
@@ -69,7 +66,7 @@ func TestEnsureStalledDownloadSaysSo(t *testing.T) {
 func TestEnsureCancelledMidDownloadLeavesNothing(t *testing.T) {
 	f := newFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	uvBaseURL = serve(t, func(w http.ResponseWriter, r *http.Request) {
+	f.d.uvBaseURL = serve(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "1000")
 		w.Write(bytes.Repeat([]byte("x"), 300))
 		w.(http.Flusher).Flush()
@@ -80,7 +77,7 @@ func TestEnsureCancelledMidDownloadLeavesNothing(t *testing.T) {
 	progress := &cancelAt{mark: "25%", cancel: cancel}
 
 	start := time.Now()
-	_, _, err := Ensure(ctx, f.dir, "0.13.0", progress)
+	_, _, err := f.d.ensure(ctx, f.dir, "0.13.0", progress)
 	if !progress.seen {
 		t.Fatalf("the download was not cancelled part way through; progress: %q, error: %v", progress.buf.String(), err)
 	}

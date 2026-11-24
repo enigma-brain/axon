@@ -83,13 +83,16 @@ const testTarget = "test-target"
 
 // fixture is a fake uv release served over HTTP, and an empty home.
 type fixture struct {
+	// d is what the tests install with: it downloads uv from the fake
+	// server, for the made-up platform test/platform.
+	d        deps
 	dir      axondir.Dir
 	tools    string
 	log      string
 	requests atomic.Int32
 }
 
-// newFixture serves a fake uv archive and points the package at it.
+// newFixture serves a fake uv archive and builds deps that download it.
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	archive := uvArchive(t, testTarget, fakeUV)
@@ -106,9 +109,12 @@ func newFixture(t *testing.T) *fixture {
 	}))
 	t.Cleanup(srv.Close)
 
-	setPackageVars(t, srv.URL, "test/platform", map[string]uvBuild{
+	f.d = defaults()
+	f.d.uvBaseURL = srv.URL
+	f.d.platform = "test/platform"
+	f.d.uvBuilds = map[string]uvBuild{
 		"test/platform": {target: testTarget, sha256: hex.EncodeToString(sum[:])},
-	})
+	}
 
 	home := t.TempDir()
 	f.dir = axondir.New(home)
@@ -121,15 +127,6 @@ func newFixture(t *testing.T) *fixture {
 	t.Setenv("FAKEUV_PIP_RELEASE", "")
 	t.Setenv("FAKEUV_PIP_SLEEP", "")
 	return f
-}
-
-// setPackageVars replaces the download address, the platform and the
-// checksum table for one test.
-func setPackageVars(t *testing.T, baseURL, plat string, builds map[string]uvBuild) {
-	t.Helper()
-	oldURL, oldPlat, oldBuilds := uvBaseURL, platform, uvBuilds
-	uvBaseURL, platform, uvBuilds = baseURL, plat, builds
-	t.Cleanup(func() { uvBaseURL, platform, uvBuilds = oldURL, oldPlat, oldBuilds })
 }
 
 // uvArchive returns a .tar.gz laid out as uv's release archives are, with
@@ -207,7 +204,7 @@ func TestEnsureFirstInstall(t *testing.T) {
 	f := newFixture(t)
 	var progress bytes.Buffer
 
-	from, to, err := Ensure(context.Background(), f.dir, "0.13.0", &progress)
+	from, to, err := f.d.ensure(context.Background(), f.dir, "0.13.0", &progress)
 	if err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
@@ -250,7 +247,7 @@ func TestEnsureFirstInstall(t *testing.T) {
 func TestEnsureKeepsUVOutputQuiet(t *testing.T) {
 	f := newFixture(t)
 	var progress bytes.Buffer
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", &progress); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", &progress); err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
 	for _, unwanted := range []string{"+ ", "==", "Activate with", "Creating virtual environment", "Installed 2 packages"} {
@@ -267,11 +264,11 @@ func TestEnsureKeepsUVOutputQuiet(t *testing.T) {
 
 func TestEnsureReinstallOpensWithLocation(t *testing.T) {
 	f := newFixture(t)
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 		t.Fatal(err)
 	}
 	var progress bytes.Buffer
-	if _, _, err := Ensure(context.Background(), f.dir, "0.14.1", &progress); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.14.1", &progress); err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
 	want := "sky: installing the SkyPilot client 0.14.1, with its own uv and Python, into " + f.tools + ".\n" +
@@ -286,13 +283,11 @@ func TestEnsureReinstallOpensWithLocation(t *testing.T) {
 
 func TestEnsureLongStepShowsItIsWorking(t *testing.T) {
 	f := newFixture(t)
-	old := tickInterval
-	tickInterval = 20 * time.Millisecond
-	t.Cleanup(func() { tickInterval = old })
+	f.d.tickInterval = 20 * time.Millisecond
 	t.Setenv("FAKEUV_PIP_SLEEP", "0.3")
 
 	var progress bytes.Buffer
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", &progress); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", &progress); err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
 	if !strings.Contains(progress.String(), "sky: SkyPilot 0.13.0 ...") {
@@ -305,7 +300,7 @@ func TestEnsureLongStepShowsItIsWorking(t *testing.T) {
 
 func TestEnsureEmptyVersionInstallsDefault(t *testing.T) {
 	f := newFixture(t)
-	_, to, err := Ensure(context.Background(), f.dir, "", nil)
+	_, to, err := f.d.ensure(context.Background(), f.dir, "", nil)
 	if err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
@@ -316,13 +311,13 @@ func TestEnsureEmptyVersionInstallsDefault(t *testing.T) {
 
 func TestEnsureSameVersionDownloadsNothing(t *testing.T) {
 	f := newFixture(t)
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 		t.Fatal(err)
 	}
 	requests, log := f.requests.Load(), f.uvLog(t)
 
 	var progress bytes.Buffer
-	from, to, err := Ensure(context.Background(), f.dir, "0.13.0", &progress)
+	from, to, err := f.d.ensure(context.Background(), f.dir, "0.13.0", &progress)
 	if err != nil {
 		t.Fatalf("second Ensure: %v", err)
 	}
@@ -342,11 +337,11 @@ func TestEnsureSameVersionDownloadsNothing(t *testing.T) {
 
 func TestEnsureOtherVersionReinstalls(t *testing.T) {
 	f := newFixture(t)
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 		t.Fatal(err)
 	}
 
-	from, to, err := Ensure(context.Background(), f.dir, "0.14.1", nil)
+	from, to, err := f.d.ensure(context.Background(), f.dir, "0.14.1", nil)
 	if err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
@@ -366,13 +361,13 @@ func TestEnsureOtherVersionReinstalls(t *testing.T) {
 
 func TestEnsureFailedPackageKeepsPreviousClient(t *testing.T) {
 	f := newFixture(t)
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("FAKEUV_FAIL_PIP", "1")
 
 	var progress bytes.Buffer
-	_, _, err := Ensure(context.Background(), f.dir, "0.14.1", &progress)
+	_, _, err := f.d.ensure(context.Background(), f.dir, "0.14.1", &progress)
 	if err == nil {
 		t.Fatal("Ensure succeeded with a failing package install")
 	}
@@ -400,7 +395,7 @@ func TestEnsureFailedPackageKeepsPreviousClient(t *testing.T) {
 
 	// The next attempt starts over and succeeds.
 	t.Setenv("FAKEUV_FAIL_PIP", "")
-	if _, _, err := Ensure(context.Background(), f.dir, "0.14.1", nil); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.14.1", nil); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
 	if out := runSky(t, f.dir, "status"); out != "private sky 0.14.1 status" {
@@ -411,7 +406,7 @@ func TestEnsureFailedPackageKeepsPreviousClient(t *testing.T) {
 func TestEnsureFailedPythonNamesPython(t *testing.T) {
 	f := newFixture(t)
 	t.Setenv("FAKEUV_FAIL_PYTHON", "1")
-	_, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil)
+	_, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil)
 	if err == nil {
 		t.Fatal("Ensure succeeded with a failing Python install")
 	}
@@ -431,7 +426,7 @@ func TestEnsureFailedPythonNamesPython(t *testing.T) {
 func TestEnsureLongResolverErrorIsUnavailable(t *testing.T) {
 	f := newFixture(t)
 	t.Setenv("FAKEUV_NO_BUILD", "long")
-	_, _, err := Ensure(context.Background(), f.dir, "0.14.1", nil)
+	_, _, err := f.d.ensure(context.Background(), f.dir, "0.14.1", nil)
 	if !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("Ensure error = %v, want ErrUnavailable", err)
 	}
@@ -459,12 +454,12 @@ func TestTailFindsResolverHeaderAcrossWrites(t *testing.T) {
 
 func TestEnsureNoPrebuiltPackageIsUnavailable(t *testing.T) {
 	f := newFixture(t)
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("FAKEUV_NO_BUILD", "1")
 
-	_, _, err := Ensure(context.Background(), f.dir, "0.14.1", nil)
+	_, _, err := f.d.ensure(context.Background(), f.dir, "0.14.1", nil)
 	if !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("Ensure error = %v, want ErrUnavailable", err)
 	}
@@ -487,12 +482,12 @@ func TestEnsureNoPrebuiltPackageIsUnavailable(t *testing.T) {
 
 func TestEnsureChecksumMismatchNamesUV(t *testing.T) {
 	f := newFixture(t)
-	b := uvBuilds["test/platform"]
+	b := f.d.uvBuilds["test/platform"]
 	b.sha256 = strings.Repeat("0", 64)
-	uvBuilds["test/platform"] = b
+	f.d.uvBuilds["test/platform"] = b
 
 	var progress bytes.Buffer
-	_, _, err := Ensure(context.Background(), f.dir, "0.13.0", &progress)
+	_, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", &progress)
 	if err == nil {
 		t.Fatal("Ensure succeeded with a wrong checksum")
 	}
@@ -517,11 +512,11 @@ func TestEnsureChecksumMismatchNamesUV(t *testing.T) {
 
 func TestEnsureDownloadFailureNamesUV(t *testing.T) {
 	f := newFixture(t)
-	b := uvBuilds["test/platform"]
+	b := f.d.uvBuilds["test/platform"]
 	b.target = "missing"
-	uvBuilds["test/platform"] = b
+	f.d.uvBuilds["test/platform"] = b
 
-	_, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil)
+	_, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil)
 	if err == nil || !strings.Contains(err.Error(), "download uv "+uvVersion) {
 		t.Errorf("Ensure error = %v, want one naming the uv download", err)
 	}
@@ -532,8 +527,8 @@ func TestEnsureDownloadFailureNamesUV(t *testing.T) {
 
 func TestEnsureUnsupportedPlatform(t *testing.T) {
 	f := newFixture(t)
-	platform = "plan9/386"
-	_, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil)
+	f.d.platform = "plan9/386"
+	_, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil)
 	if err == nil || !strings.Contains(err.Error(), "plan9/386") {
 		t.Errorf("Ensure error = %v, want one naming the platform", err)
 	}
@@ -548,7 +543,7 @@ func TestEnsureUnsupportedPlatform(t *testing.T) {
 func TestEnsureRejectsMalformedVersion(t *testing.T) {
 	f := newFixture(t)
 	for _, v := range []string{"../evil", "latest", "0.13.0 extra", "0.13.0/x", ">=0.13"} {
-		if _, _, err := Ensure(context.Background(), f.dir, v, nil); err == nil {
+		if _, _, err := f.d.ensure(context.Background(), f.dir, v, nil); err == nil {
 			t.Errorf("Ensure accepted version %q", v)
 		}
 	}
@@ -563,7 +558,7 @@ func TestUVEnvironmentStaysInsideTools(t *testing.T) {
 	t.Setenv("UV_CACHE_DIR", "/elsewhere/cache")
 	t.Setenv("VIRTUAL_ENV", "/elsewhere/venv")
 
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 		t.Fatal(err)
 	}
 	log := f.uvLog(t)
@@ -593,7 +588,7 @@ func TestUVEnvironmentStaysInsideTools(t *testing.T) {
 // ever compiled on the laptop.
 func TestEnsureInstallsPrebuiltPackagesOnly(t *testing.T) {
 	f := newFixture(t)
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 		t.Fatal(err)
 	}
 	python := filepath.Join(f.tools, skypilotDir, "0.13.0", "bin", "python")
@@ -605,7 +600,7 @@ func TestEnsureInstallsPrebuiltPackagesOnly(t *testing.T) {
 
 func TestCommandIgnoresSkyOnPath(t *testing.T) {
 	f := newFixture(t)
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -637,7 +632,7 @@ func TestNotInstalled(t *testing.T) {
 
 func TestVersionNeedsTheExecutable(t *testing.T) {
 	f := newFixture(t)
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(f.tools, "skypilot", "0.13.0", "bin", "sky")); err != nil {
@@ -648,7 +643,7 @@ func TestVersionNeedsTheExecutable(t *testing.T) {
 	}
 
 	// Ensure repairs it.
-	if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+	if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 		t.Fatal(err)
 	}
 	if out := runSky(t, f.dir, "--version"); out != "private sky 0.13.0 --version" {
@@ -717,7 +712,7 @@ func concurrentEnsure(t *testing.T, f *fixture, first, second string) (a, b ensu
 	installs.Add(1)
 	go func() {
 		defer installs.Done()
-		from, to, err := Ensure(context.Background(), f.dir, first, nil)
+		from, to, err := f.d.ensure(context.Background(), f.dir, first, nil)
 		firstDone <- ensureResult{from, to, err}
 	}()
 	waitFor("the first install to reach its package stage", func() bool {
@@ -729,7 +724,7 @@ func concurrentEnsure(t *testing.T, f *fixture, first, second string) (a, b ensu
 	installs.Add(1)
 	go func() {
 		defer installs.Done()
-		from, to, err := Ensure(context.Background(), f.dir, second, &progress)
+		from, to, err := f.d.ensure(context.Background(), f.dir, second, &progress)
 		secondDone <- ensureResult{from, to, err}
 	}()
 	waitFor("the second install to report that it waits", func() bool {
@@ -799,7 +794,7 @@ func TestEnsureWaitHonorsCancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 	var progress bytes.Buffer
-	_, _, err = Ensure(ctx, f.dir, "0.13.0", &progress)
+	_, _, err = f.d.ensure(ctx, f.dir, "0.13.0", &progress)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Ensure error = %v, want the context's deadline", err)
 	}
@@ -837,7 +832,7 @@ func TestDamagedVersionRecordIsNoClient(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
-			if _, _, err := Ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
+			if _, _, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil); err != nil {
 				t.Fatal(err)
 			}
 			current := filepath.Join(f.tools, "skypilot", "current")
@@ -851,7 +846,7 @@ func TestDamagedVersionRecordIsNoClient(t *testing.T) {
 				t.Errorf("Path error = %v, want ErrNotInstalled", err)
 			}
 			// An install repairs it.
-			from, to, err := Ensure(context.Background(), f.dir, "0.13.0", nil)
+			from, to, err := f.d.ensure(context.Background(), f.dir, "0.13.0", nil)
 			if err != nil {
 				t.Fatalf("Ensure: %v", err)
 			}

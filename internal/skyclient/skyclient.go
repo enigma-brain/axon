@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -80,6 +81,39 @@ var versionPattern = regexp.MustCompile(`^[0-9][0-9A-Za-z.+!-]*$`)
 // Concurrent calls on one axon directory, from this process or another, run
 // one at a time: a call that finds another installing says so and waits.
 func Ensure(ctx context.Context, dir axondir.Dir, version string, progress io.Writer) (from, to string, err error) {
+	return defaults().ensure(ctx, dir, version, progress)
+}
+
+// deps are what an install depends on outside its arguments. Ensure uses
+// defaults(); tests build their own.
+type deps struct {
+	// uvBaseURL is where uv's release archives are downloaded from.
+	uvBaseURL string
+	// platform is the GOOS/GOARCH this binary runs on.
+	platform string
+	// uvBuilds maps GOOS/GOARCH to the uv archive for that platform.
+	uvBuilds map[string]uvBuild
+	// maxDownload bounds the size of a download. uv's release archives
+	// are a fraction of it.
+	maxDownload int64
+	// stallTimeout ends a download when no data arrives for this long.
+	stallTimeout time.Duration
+	// tickInterval is how often a running step adds a dot to its line.
+	tickInterval time.Duration
+}
+
+func defaults() deps {
+	return deps{
+		uvBaseURL:    "https://github.com/astral-sh/uv/releases/download",
+		platform:     runtime.GOOS + "/" + runtime.GOARCH,
+		uvBuilds:     uvBuilds,
+		maxDownload:  64 << 20,
+		stallTimeout: 30 * time.Second,
+		tickInterval: 5 * time.Second,
+	}
+}
+
+func (d deps) ensure(ctx context.Context, dir axondir.Dir, version string, progress io.Writer) (from, to string, err error) {
 	if version == "" {
 		version = DefaultVersion
 	}
@@ -113,20 +147,20 @@ func Ensure(ctx context.Context, dir axondir.Dir, version string, progress io.Wr
 	fmt.Fprintf(progress, "sky: installing the SkyPilot client %s, with its own uv and Python, into %s.\n", version, tools)
 	fmt.Fprintln(progress, "sky: your system's Python and packages are not changed.")
 
-	uv, err := ensureUV(ctx, tools, progress)
+	uv, err := d.ensureUV(ctx, tools, progress)
 	if err != nil {
 		return "", "", err
 	}
 	env := uvEnv(tools)
 
-	err = step(progress, "Python "+pythonVersion, true, func(io.Writer) error {
+	err = d.step(progress, "Python "+pythonVersion, true, func(io.Writer) error {
 		return runUV(ctx, uv, env, "python", "install", pythonVersion, "--no-bin")
 	})
 	if err != nil {
 		return "", "", fmt.Errorf("install Python %s: %w", pythonVersion, err)
 	}
 
-	err = step(progress, "SkyPilot "+version, true, func(io.Writer) error {
+	err = d.step(progress, "SkyPilot "+version, true, func(io.Writer) error {
 		return installClient(ctx, uv, env, tools, version)
 	})
 	if err != nil {

@@ -3,18 +3,10 @@ package skyclient
 import (
 	"fmt"
 	"io"
-	"time"
 )
 
-var (
-	// stallTimeout ends a download when no data arrives for this long.
-	stallTimeout = 30 * time.Second
-	// maxDownload bounds the size of a download. uv's release archives are
-	// a fraction of it.
-	maxDownload int64 = 64 << 20
-	// maxUV bounds the size of the uv executable in its archive.
-	maxUV int64 = 256 << 20
-)
+// maxUV bounds the size of the uv executable in its archive.
+const maxUV int64 = 256 << 20
 
 // quarters returns a progress report that writes the percentage done to
 // out, on the current line, each time the bytes received pass a further
