@@ -32,6 +32,7 @@ func get(address string, limit time.Duration) error {
 
 // The lookup is made up, so that no test asks a real resolver.
 func TestNameThatDoesNotResolve(t *testing.T) {
+	t.Parallel()
 	err := &url.Error{Op: "Get", URL: "https://sky.wrong.example/api/health", Err: &net.OpError{
 		Op: "dial", Net: "tcp",
 		Err: &net.DNSError{Err: "no such host", Name: "sky.wrong.example", IsNotFound: true},
@@ -42,6 +43,7 @@ func TestNameThatDoesNotResolve(t *testing.T) {
 }
 
 func TestRefusedConnection(t *testing.T) {
+	t.Parallel()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +60,7 @@ func TestRefusedConnection(t *testing.T) {
 }
 
 func TestTimeouts(t *testing.T) {
+	t.Parallel()
 	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -98,6 +101,7 @@ func (marked) Error() string { return "GET https://p/webapi/ping: no data for 30
 func (marked) Timeout() bool { return true }
 
 func TestNoShorterForm(t *testing.T) {
+	t.Parallel()
 	cert := &url.Error{Op: "Get", URL: "https://sky.example.org/api/health", Err: x509.UnknownAuthorityError{}}
 	cases := map[string]struct {
 		err  error
