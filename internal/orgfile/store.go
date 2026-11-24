@@ -482,20 +482,37 @@ const previousExt = ".previous"
 
 // keepPrevious keeps the stored file at path beside itself, at
 // path+previousExt: by a hard link, or, where linking fails, by a copy
-// synced to disk. The stored file stays in place.
+// synced to disk. The directory is synced too, so the copy's name is on
+// disk before the stored file is replaced. The stored file stays in place.
 func keepPrevious(path string) error {
 	aside := path + previousExt
 	if err := removeFile(aside); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("keep %s: %w", path, unwrapPath(err))
 	}
-	if linkFile(path, aside) == nil {
-		return nil
+	if linkFile(path, aside) != nil {
+		if err := copyFile(path, aside); err != nil {
+			removeFile(aside)
+			return fmt.Errorf("keep %s: %w", path, unwrapPath(err))
+		}
 	}
-	if err := copyFile(path, aside); err != nil {
+	if err := syncDir(filepath.Dir(path)); err != nil {
 		removeFile(aside)
 		return fmt.Errorf("keep %s: %w", path, unwrapPath(err))
 	}
 	return nil
+}
+
+// syncDir syncs the directory dir, so the names in it are on disk.
+var syncDir = func(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	if err := d.Sync(); err != nil {
+		d.Close()
+		return err
+	}
+	return d.Close()
 }
 
 // copyFile copies the regular file from to a new file to, with the same
@@ -602,7 +619,11 @@ func (s Store) putBack(id, path string) (bool, error) {
 		return false, fmt.Errorf("read %s: %w", path, unwrapPath(err))
 	}
 	rec, ok, err := s.Record(id)
-	if err != nil || !ok || rec.SHA256 == "" {
+	if err != nil {
+		// The copy is kept for a later recovery that can read the record.
+		return false, err
+	}
+	if !ok || rec.SHA256 == "" {
 		return false, nil
 	}
 	if fingerprint(stored) == rec.SHA256 {

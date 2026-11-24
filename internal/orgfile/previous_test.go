@@ -226,3 +226,40 @@ func TestListIgnoresAPreviousCopy(t *testing.T) {
 		t.Fatalf("List = %v, %v, %v", pathwayIDs(files), problems, err)
 	}
 }
+
+// A record that cannot be read stops recovery, and the copy is kept for a
+// later one.
+func TestRecoverKeepsTheCopyWhenTheRecordCannotBeRead(t *testing.T) {
+	s, home, newer := updated(t)
+	old, _ := os.ReadFile(s.Path("a"))
+	leftover(t, s, home, newer, old, old)
+	if err := os.Remove(recordOf(home, "a")); err != nil {
+		t.Fatal(err)
+	}
+	// A directory in place of the record makes reading it fail.
+	if err := os.Mkdir(recordOf(home, "a"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Recover(); err == nil {
+		t.Fatal("Recover succeeded with an unreadable record")
+	}
+	if data, _ := os.ReadFile(s.Path("a") + previousExt); string(data) != string(old) {
+		t.Errorf("previous copy = %q, want it kept", data)
+	}
+}
+
+// An update whose copy cannot be synced to disk stops before the stored
+// file is replaced.
+func TestAnUpdateStopsWhenTheCopyCannotBeSynced(t *testing.T) {
+	s, home, newer := updated(t)
+	before := snapshot(t, filepath.Join(home, ".axon"))
+	real := syncDir
+	syncDir = func(string) error { return errors.New("injected failure") }
+	t.Cleanup(func() { syncDir = real })
+	if _, err := s.Add(newer, mustSource(t, "-")); err == nil || !strings.Contains(err.Error(), "injected failure") {
+		t.Fatalf("Add = %v, want the injected failure", err)
+	}
+	if after := snapshot(t, filepath.Join(home, ".axon")); !reflect.DeepEqual(before, after) {
+		t.Errorf("a stopped update left changes:\nbefore %v\nafter  %v", before, after)
+	}
+}
