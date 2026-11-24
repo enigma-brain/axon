@@ -193,6 +193,7 @@ func TestParseRefuses(t *testing.T) {
 		{"teleport with port 0", teleportFile("[pathway.teleport]\nproxy = \"teleport.example.org:0\"\n", "app = \"sky\"\n"), `pathway "remote": teleport.proxy`, "hostname"},
 		{"teleport with port too large", teleportFile("[pathway.teleport]\nproxy = \"teleport.example.org:65536\"\n", "app = \"sky\"\n"), `pathway "remote": teleport.proxy`, "hostname"},
 		{"teleport with empty port", teleportFile("[pathway.teleport]\nproxy = \"teleport.example.org:\"\n", "app = \"sky\"\n"), `pathway "remote": teleport.proxy`, "hostname"},
+		{"teleport with a port with a leading zero", teleportFile("[pathway.teleport]\nproxy = \"teleport.example.org:0443\"\n", "app = \"sky\"\n"), `pathway "remote": teleport.proxy`, "hostname"},
 		{"teleport with bad label", teleportFile("[pathway.teleport]\nproxy = \"-teleport.example.org\"\n", "app = \"sky\"\n"), `pathway "remote": teleport.proxy`, "hostname"},
 		{"teleport without app", teleportFile("[pathway.teleport]\nproxy = \"teleport.example.org\"\n", ""), `pathway "remote": sky.app`, "required"},
 		{"teleport with endpoint", teleportFile("[pathway.teleport]\nproxy = \"teleport.example.org\"\n", "app = \"sky\"\nendpoint = \"https://sky.example.org\"\n"), `pathway "remote": sky.endpoint`, "not allowed on a teleport"},
@@ -241,28 +242,6 @@ func TestParseRefuses(t *testing.T) {
 				t.Errorf("check = %q, want it to contain %q", ce.Check, tt.checkPart)
 			}
 		})
-	}
-}
-
-func TestIsHostPort(t *testing.T) {
-	for s, want := range map[string]bool{
-		"teleport.example.org":       true,
-		"teleport.example.org:443":   true,
-		"teleport.example.org:65535": true,
-		"localhost":                  true,
-		"TELEPORT.example.org":       true,
-		"":                           false,
-		":443":                       false,
-		"teleport.example.org:+443":  false,
-		"teleport..example.org":      false,
-		"teleport.example.org.":      false,
-		"teleport_x.example.org":     false,
-		"teleport.example.org:1:2":   false,
-		strings.Repeat("a", 64):      false,
-	} {
-		if got := isHostPort(s); got != want {
-			t.Errorf("isHostPort(%q) = %v, want %v", s, got, want)
-		}
 	}
 }
 

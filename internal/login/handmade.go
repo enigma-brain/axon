@@ -118,7 +118,7 @@ func cleanProxy(s string) (string, error) {
 	} else {
 		proxy = strings.TrimSuffix(proxy, ".")
 	}
-	if tsh.CheckProxy(proxy) != nil || !configfile.IsHostPort(proxy) {
+	if tsh.CheckProxy(proxy) != nil {
 		return "", fmt.Errorf(msgNotHostPort, s)
 	}
 	return proxy, nil

@@ -335,6 +335,59 @@ func TestBadProxyIsRefused(t *testing.T) {
 	}
 }
 
+func TestCheckProxy(t *testing.T) {
+	for proxy, want := range map[string]bool{
+		"teleport.example.org":                   true,
+		"teleport.example.org:443":               true,
+		"teleport.example.org:65535":             true,
+		"teleport.example.org:1":                 true,
+		"localhost":                              true,
+		"TELEPORT.example.org":                   true,
+		"tele-port.example.org":                  true,
+		strings.Repeat("a", 63) + ".example.org": true,
+		"":                                       false,
+		":443":                                   false,
+		"teleport.example.org:":                  false,
+		"teleport.example.org:0":                 false,
+		"teleport.example.org:65536":             false,
+		"teleport.example.org:0443":              false,
+		"teleport.example.org:+443":              false,
+		"teleport.example.org:1:2":               false,
+		"teleport..example.org":                  false,
+		"teleport.example.org.":                  false,
+		".example.org":                           false,
+		"-teleport.example.org":                  false,
+		"teleport-.example.org":                  false,
+		"teleport_x.example.org":                 false,
+		"teleport example.org":                   false,
+		"[::1]:443":                              false,
+		strings.Repeat("a", 64):                  false,
+		strings.Repeat("a.", 127) + "a":          false,
+	} {
+		if got := CheckProxy(proxy) == nil; got != want {
+			t.Errorf("CheckProxy(%q) accepted = %v, want %v", proxy, got, want)
+		}
+	}
+}
+
+func TestSameProxy(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		want bool
+	}{
+		{"teleport.example.org", "teleport.example.org", true},
+		{"teleport.example.org", "TELEPORT.example.org:443", true},
+		{"teleport.example.org:443", "teleport.example.org", true},
+		{"teleport.example.org:3080", "teleport.example.org", false},
+		{"teleport.example.org:3080", "teleport.example.org:3080", true},
+		{"teleport.example.org", "other.example.org", false},
+	} {
+		if got := SameProxy(tc.a, tc.b); got != tc.want {
+			t.Errorf("SameProxy(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
 func TestVersionIsReadFromTheProxyPassed(t *testing.T) {
 	for _, proxy := range []string{testProxy, "teleport.example.org:3080"} {
 		t.Run(proxy, func(t *testing.T) {

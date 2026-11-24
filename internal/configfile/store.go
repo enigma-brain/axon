@@ -19,6 +19,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/enigma-brain/axon/internal/axondir"
+	"github.com/enigma-brain/axon/internal/tsh"
 )
 
 const fileExt = ".toml"
@@ -245,7 +246,7 @@ func SameServer(a, b Pathway) bool {
 	case KindDirect:
 		return sameEndpoint(a.Sky.Endpoint, b.Sky.Endpoint)
 	case KindTeleport:
-		return a.Teleport != nil && b.Teleport != nil && sameProxy(a.Teleport.Proxy, b.Teleport.Proxy) && a.Sky.App == b.Sky.App
+		return a.Teleport != nil && b.Teleport != nil && tsh.SameProxy(a.Teleport.Proxy, b.Teleport.Proxy) && a.Sky.App == b.Sky.App
 	}
 	return false
 }
@@ -265,21 +266,6 @@ func sameEndpoint(a, b string) bool {
 		return u.String()
 	}
 	return norm(a) == norm(b)
-}
-
-// sameProxy reports whether the proxy addresses a and b name the same
-// proxy: the same host, ignoring case, and the same port, 443 when one
-// names none.
-func sameProxy(a, b string) bool {
-	split := func(p string) (string, string) {
-		if i := strings.LastIndexByte(p, ':'); i >= 0 {
-			return strings.ToLower(p[:i]), p[i+1:]
-		}
-		return strings.ToLower(p), "443"
-	}
-	ah, ap := split(a)
-	bh, bp := split(b)
-	return ah == bh && ap == bp
 }
 
 // Add checks data as a config file from src and stores it, byte for
