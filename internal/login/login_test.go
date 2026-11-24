@@ -310,7 +310,7 @@ func TestDirectIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	configBefore, _ := os.ReadFile(axondir.New(h.home).ConfigPath())
+	configBefore, _ := os.ReadFile(axondir.New(h.home).SettingsPath())
 	h.out.Reset()
 
 	// The second login uses the stored pathway.
@@ -327,7 +327,7 @@ func TestDirectIdempotent(t *testing.T) {
 	if !after.ModTime().Equal(before.ModTime()) {
 		t.Error("the email file was rewritten")
 	}
-	configAfter, _ := os.ReadFile(axondir.New(h.home).ConfigPath())
+	configAfter, _ := os.ReadFile(axondir.New(h.home).SettingsPath())
 	if !bytes.Equal(configBefore, configAfter) {
 		t.Error("the configuration changed")
 	}

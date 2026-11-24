@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 
 	"github.com/enigma-brain/axon/internal/connected"
 	"github.com/enigma-brain/axon/internal/orgfile"
@@ -40,7 +39,7 @@ func (l *login) disconnectUnless(p orgfile.Pathway, opts Options) error {
 // when it runs, and removes the recorded email. With nothing recorded it
 // changes nothing, and creates no directory.
 func (l *login) disconnect(opts Options) error {
-	stateDir := filepath.Join(l.dir.Root(), "state")
+	stateDir := l.dir.StatePath()
 	if _, err := os.Stat(stateDir); errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}

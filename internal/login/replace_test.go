@@ -407,7 +407,7 @@ func TestPipedConfigAsksTheLowerRevisionOnTheTerminal(t *testing.T) {
 // anything is removed.
 func TestReplacingWithAnUnreadableActivePathwayStops(t *testing.T) {
 	h := newHarness(t)
-	if err := os.WriteFile(axondir.New(h.home).ConfigPath(), []byte("pathway = [\n"), 0o600); err != nil {
+	if err := os.WriteFile(axondir.New(h.home).SettingsPath(), []byte("pathway = [\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	before := h.storedIDs()

@@ -391,7 +391,7 @@ func TestAddReleasesTheLock(t *testing.T) {
 		t.Fatalf("Add of a file claiming a stored pathway: err = %v", err)
 	}
 	add(t, s, oneDirect("org-b", "b"), "-")
-	if _, err := os.Stat(filepath.Join(home, ".axon", "state", lockFile)); err != nil {
+	if _, err := os.Stat(axondir.New(home).LockPath()); err != nil {
 		t.Errorf("lock file: %v", err)
 	}
 }

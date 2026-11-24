@@ -3,7 +3,7 @@
 // A config file is a TOML file that names an organization's
 // pathways: the ways a user reaches its services. The package parses and
 // checks a file, reads one from an https address, a file path or standard
-// input, stores accepted files in ~/.axon/orgs and lists them.
+// input, stores accepted files in ~/.axon and lists them.
 package orgfile
 
 import (

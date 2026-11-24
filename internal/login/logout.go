@@ -102,7 +102,7 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 	if opts.Err == nil {
 		opts.Err = io.Discard
 	}
-	stateDir := filepath.Join(lo.dir.Root(), "state")
+	stateDir := lo.dir.StatePath()
 
 	failed := false
 	fail := func(step string, err error) {
@@ -178,7 +178,7 @@ func (lo *logout) run(ctx context.Context, opts LogoutOptions) error {
 		}
 	}
 
-	fmt.Fprintf(opts.Out, lineKept+"\n", filepath.Join(lo.dir.Root(), "orgs"))
+	fmt.Fprintf(opts.Out, lineKept+"\n", lo.dir.ConfigsPath())
 	if failed {
 		return errLogoutFailed
 	}

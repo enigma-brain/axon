@@ -58,7 +58,7 @@ func Of(p orgfile.Pathway) Record {
 
 // Path returns the path of the record in dir.
 func Path(dir axondir.Dir) string {
-	return filepath.Join(dir.Root(), "state", file)
+	return filepath.Join(dir.StatePath(), file)
 }
 
 // Read returns the record. The boolean is false when there is none, or

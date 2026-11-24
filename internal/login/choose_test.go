@@ -59,7 +59,7 @@ func TestNoOrganizationFileStops(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
-	if _, err := os.Stat(axondir.New(h.home).ConfigPath()); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(axondir.New(h.home).SettingsPath()); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("config.toml was written: %v", err)
 	}
 	if h.skyRuns() != 0 {
