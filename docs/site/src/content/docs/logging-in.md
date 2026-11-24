@@ -20,7 +20,7 @@ Kind [1-2]: 1
 SkyPilot API server address, such as https://sky.example.org: sky.example.org
 Checking https://sky.example.org
 Name for this pathway [Enter for sky.example.org]:
-Stored the pathway "sky.example.org" in <home>/.axon/orgs/sky-example-org.toml
+Stored the pathway "sky.example.org" in <home>/.axon/configs/sky-example-org.toml
 ```
 
 Through Teleport, it asks for the Teleport proxy's address and the Teleport
@@ -42,7 +42,7 @@ axon login --teleport-proxy teleport.example.org --sky-app skypilot --name Remot
 an address that does not answer stops the login with an error. With no terminal
 and no pathway set up, `axon login` stops and names these flags and `--config`.
 
-`axon` writes the pathway into `~/.axon/orgs/` as a
+`axon` writes the pathway into `~/.axon/configs/` as a
 [config file](/axon/config-file/) of its own, a hand-made one. Its identifier,
 for `--pathway`, is the name in lowercase with dashes: `Campus` is `campus`. From
 then on it is a pathway like any other.
@@ -59,7 +59,7 @@ axon login --config ~/Downloads/axon.toml
 <command that prints the file> | axon login --config -
 ```
 
-`axon` checks the file and stores it as `~/.axon/orgs/<id>.toml`, named by the
+`axon` checks the file and stores it as `~/.axon/configs/<id>.toml`, named by the
 `id` the file holds, then goes on to log in. It prints the line below, with the
 file's revision when it has one:
 
@@ -96,7 +96,7 @@ of two kinds:
 - A [**Teleport**](/axon/pathways/teleport/) pathway reaches it through
   Teleport, and works from wherever Teleport does.
 
-One pathway is active at a time, and `~/.axon/config.toml` holds its
+One pathway is active at a time, and `~/.axon/settings.toml` holds its
 identifier. Later logins use it without asking.
 
 ### Choosing one
@@ -219,7 +219,7 @@ axon: determine the pathway: the pathway "<id>" is no longer in its config file.
 
 ## Removing a file
 
-Delete it from `~/.axon/orgs/`. There is no command for it. When it held the
+Delete it from `~/.axon/configs/`. There is no command for it. When it held the
 active pathway and another valid file is stored, the next `axon login` disconnects
 that pathway and chooses another. When no valid file is left, `axon login`
 disconnects the pathway first: it stops what it started for the pathway, such
@@ -250,7 +250,7 @@ prints one line for each step, for example on a direct pathway:
 sky: logged out of the SkyPilot API server
 sky: removed the saved login for <endpoint>
 Removed the record of the connected pathway and the logged-in email
-Kept the config files in <home>/.axon/orgs; run `axon login` to log in again
+Kept the config files in <home>/.axon/configs; run `axon login` to log in again
 ```
 
 When SkyPilot's cookie file holds no login for the server, the line about
@@ -261,7 +261,7 @@ sky: logged out of the SkyPilot API server
 sky: stopping the Teleport tunnel on port 46581
 teleport: logged out of <proxy>
 Removed the record of the connected pathway and the logged-in email
-Kept the config files in <home>/.axon/orgs; run `axon login` to log in again
+Kept the config files in <home>/.axon/configs; run `axon login` to log in again
 ```
 
 A step that does not apply says why it was skipped:

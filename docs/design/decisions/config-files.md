@@ -13,7 +13,7 @@ pathway is active at a time.
 
 ## Rationale
 
-`axon` stores every config file it is given in `~/.axon/orgs/`, one
+`axon` stores every config file it is given in `~/.axon/configs/`, one
 file each, named by an `id` that the file carries. Adding a file leaves the
 others in place; adding one with a stored `id` replaces that one. The
 pathways of all stored files form one set to choose from, so pathway
