@@ -647,3 +647,44 @@ func TestLastFileDeletedKeepsRecordsWhenStopFails(t *testing.T) {
 		t.Fatalf("err = %v, want the failed disconnect", err)
 	}
 }
+
+// With SKYPILOT_GLOBAL_CONFIG set, the stored endpoint is read from the
+// file it names, and ~/.sky/config.yaml is not read.
+func TestTeleportStoredEndpointFollowsSkyPilotGlobalConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		named, inHome string // the endpoints in each file
+		skyRuns       int
+	}{
+		{"the named file has the tunnel's", "%s", "https://sky.example.org", 0},
+		{"only ~/.sky has the tunnel's", "https://sky.example.org", "%s", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newMetaHarness(t)
+			named := filepath.Join(h.home, "conf", "sky.yaml")
+			getenv := func(k string) string {
+				if k == "SKYPILOT_GLOBAL_CONFIG" {
+					return named
+				}
+				return ""
+			}
+			inHome := h.l.teleport.skyConfig
+			h.l.teleport.skyConfig = newLogin(h.home, getenv).teleport.skyConfig
+			for path, endpoint := range map[string]string{named: tc.named, inHome: tc.inHome} {
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				config := "api_server:\n  endpoint: " + strings.ReplaceAll(endpoint, "%s", h.endpoint()) + "\n"
+				if err := os.WriteFile(path, []byte(config), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := h.run("remote"); err != nil {
+				t.Fatalf("login: %v\n%s", err, h.out.String())
+			}
+			if n := h.skyRuns(); n != tc.skyRuns {
+				t.Errorf("sky ran %d times, want %d", n, tc.skyRuns)
+			}
+		})
+	}
+}

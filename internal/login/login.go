@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -92,12 +91,18 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return fmt.Errorf("find the home directory: %w", err)
 	}
+	return newLogin(home, os.Getenv).run(ctx, opts)
+}
+
+// newLogin returns the login for the user whose home directory is home, with
+// the environment getenv reads.
+func newLogin(home string, getenv func(string) string) *login {
 	dir := axondir.New(home)
-	l := &login{
+	return &login{
 		dir:          dir,
 		client:       skyClient{dir: dir},
 		health:       apiserver.Fetch,
-		cookieFile:   apiserver.CookieFile(home, os.Getenv),
+		cookieFile:   apiserver.CookieFile(home, getenv),
 		endpoint:     skygroup.Endpoint,
 		loginWait:    loginWait,
 		environ:      os.Environ,
@@ -106,13 +111,12 @@ func Run(ctx context.Context, opts Options) error {
 		teleport: teleport{
 			ensure:    tsh.Ensure,
 			newTunnel: tunnel.New,
-			skyConfig: filepath.Join(home, ".sky", "config.yaml"),
+			skyConfig: skyConfigPath(home, getenv),
 		},
 		isTerminal: isTerminal,
 		probeSky:   probeSky,
 		probeProxy: tsh.Ping,
 	}
-	return l.run(ctx, opts)
 }
 
 // run runs the stages of login in order and stops at the first that fails.
@@ -129,6 +133,16 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	}
 	if err := checkFlags(opts); err != nil {
 		return err
+	}
+
+	// A config file update that stopped part way left the previous copy
+	// beside the stored file; it is dealt with before anything is read.
+	restored, err := orgfile.NewStore(l.dir).Recover()
+	if err != nil {
+		return fmt.Errorf("read the config files: %w", err)
+	}
+	for _, path := range restored {
+		fmt.Fprintf(opts.Out, msgPutBack, path)
 	}
 
 	// 1. Add the config file that --config gives. With --config -,

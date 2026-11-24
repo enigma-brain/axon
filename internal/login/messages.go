@@ -119,6 +119,9 @@ const msgProxyUnreachableNext = "Check your network connection and run `axon log
 
 // Revisions.
 const (
+	// The stored file's path.
+	msgPutBack = "Put back the previous copy of %s, which an interrupted update had replaced.\n"
+
 	// The stored file's path, the stored revision and the new one.
 	msgLowerRevision = "The stored copy of the config file %s is revision %d, and this one is revision %d, which is older.\n"
 	// The new revision.

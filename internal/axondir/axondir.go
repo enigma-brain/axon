@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/BurntSushi/toml"
 )
@@ -173,7 +174,9 @@ func (d Dir) ensure(sub string) (string, error) {
 
 // ReplaceFile replaces path with data, readable by the user only. It writes
 // a temporary file in the same directory and renames it over path, so a
-// reader never sees a partial file. The directory must exist.
+// reader never sees a partial file. It syncs the file before the rename and
+// the directory after it, so a replacement that returns is on disk. The
+// directory must exist.
 func ReplaceFile(path string, data []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
 	if err != nil {
@@ -188,11 +191,44 @@ func ReplaceFile(path string, data []byte) error {
 		tmp.Close()
 		return fmt.Errorf("write %s: %w", path, err)
 	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write %s: %w", path, err)
+	}
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	if err := os.Rename(tmp.Name(), path); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
+	if err := SyncDir(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
 	return nil
+}
+
+// SyncDir syncs the directory dir, so that the names in it, as a rename
+// left them, are on disk. A filesystem that does not support syncing a
+// directory, such as some network and FUSE mounts, answers EINVAL, ENOTSUP
+// or EOPNOTSUPP; SyncDir then reports success, since nothing more can be
+// done there.
+func SyncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	if err := syncFile(d); err != nil && !syncUnsupported(err) {
+		d.Close()
+		return err
+	}
+	return d.Close()
+}
+
+// syncFile syncs an open file. Tests replace it.
+var syncFile = (*os.File).Sync
+
+// syncUnsupported reports whether err says the filesystem does not support
+// the sync.
+func syncUnsupported(err error) bool {
+	return errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.EOPNOTSUPP)
 }

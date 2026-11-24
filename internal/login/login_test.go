@@ -549,3 +549,43 @@ func TestFormatWait(t *testing.T) {
 		t.Errorf("loginWait = %s, want 5 minutes", loginWait)
 	}
 }
+
+// A config file update that stopped with the stored file missing leaves
+// the previous copy beside it, which the next login puts back and reports.
+func TestLoginPutsBackAnInterruptedUpdate(t *testing.T) {
+	h := newHarness(t)
+	h.script("ok")
+	path := orgfile.NewStore(axondir.New(h.home)).Path("example")
+	if err := os.Rename(path, path+".previous"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.run("campus"); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	if want := fmt.Sprintf(msgPutBack, path); !strings.Contains(h.out.String(), want) {
+		t.Errorf("output does not say the file was put back:\n%s", h.out.String())
+	}
+	if got, _ := os.ReadFile(path); string(got) != exampleOrg {
+		t.Errorf("stored file = %q, want the previous copy", got)
+	}
+	if _, err := os.Stat(path + ".previous"); !os.IsNotExist(err) {
+		t.Errorf("the previous copy was left: %v", err)
+	}
+}
+
+func TestLoginReadsSkyPilotsSettingsFile(t *testing.T) {
+	for v, want := range map[string]string{
+		"":              "/home/ada/.sky/config.yaml",
+		"/etc/sky.yaml": "/etc/sky.yaml",
+	} {
+		getenv := func(k string) string {
+			if k == "SKYPILOT_GLOBAL_CONFIG" {
+				return v
+			}
+			return ""
+		}
+		if got := newLogin("/home/ada", getenv).teleport.skyConfig; got != want {
+			t.Errorf("SKYPILOT_GLOBAL_CONFIG=%q: login reads %q, want %q", v, got, want)
+		}
+	}
+}
