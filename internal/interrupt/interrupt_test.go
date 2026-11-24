@@ -91,6 +91,7 @@ func signaledBy(err error, sig syscall.Signal) bool {
 }
 
 func TestNotifyCancelsAndASecondSignalEnds(t *testing.T) {
+	t.Parallel()
 	cmd, out := child(t, context.Background(), "notify", nil)
 
 	cmd.Process.Signal(syscall.SIGINT)
@@ -110,6 +111,7 @@ func TestNotifyCancelsAndASecondSignalEnds(t *testing.T) {
 }
 
 func TestNotifySIGTERM(t *testing.T) {
+	t.Parallel()
 	cmd, out := child(t, context.Background(), "notify", nil)
 	cmd.Process.Signal(syscall.SIGTERM)
 	if line, _ := out.ReadString('\n'); line != "terminated true\n" {
@@ -118,6 +120,7 @@ func TestNotifySIGTERM(t *testing.T) {
 }
 
 func TestSignalOfOtherCancellations(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, ok := Signal(ctx); ok {
@@ -146,6 +149,7 @@ func TestExitEndsBySignal(t *testing.T) {
 }
 
 func TestErrorIsACancellation(t *testing.T) {
+	t.Parallel()
 	err := fmt.Errorf("download: %w", &Error{Signal: syscall.SIGINT})
 	if !errors.Is(err, context.Canceled) {
 		t.Error("an interrupt is not a cancellation")
@@ -156,6 +160,7 @@ func TestErrorIsACancellation(t *testing.T) {
 }
 
 func TestReport(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	Report(&buf)
 	if got := buf.String(); got != Message+"\n" {
@@ -189,6 +194,7 @@ func stopped(t *testing.T, cause error, grace time.Duration, deliver func(*exec.
 }
 
 func TestStopForwardsSIGTERM(t *testing.T) {
+	t.Parallel()
 	_, out, _ := stopped(t, &Error{Signal: syscall.SIGTERM}, 5*time.Second, nil)
 	if !strings.Contains(out, "got terminated") {
 		t.Fatalf("the program printed %q, want it to have received SIGTERM", out)
@@ -196,6 +202,7 @@ func TestStopForwardsSIGTERM(t *testing.T) {
 }
 
 func TestStopSendsNothingOnSIGINT(t *testing.T) {
+	t.Parallel()
 	// The terminal delivers SIGINT to the program; here the test does.
 	deliver := func(cmd *exec.Cmd) { cmd.Process.Signal(syscall.SIGINT) }
 	err, out, _ := stopped(t, &Error{Signal: syscall.SIGINT}, 5*time.Second, deliver)
@@ -208,6 +215,7 @@ func TestStopSendsNothingOnSIGINT(t *testing.T) {
 }
 
 func TestStopKillsAfterGrace(t *testing.T) {
+	t.Parallel()
 	grace := 300 * time.Millisecond
 	err, out, took := stopped(t, &Error{Signal: syscall.SIGINT}, grace, nil)
 	if strings.Contains(out, "got") {
@@ -222,6 +230,7 @@ func TestStopKillsAfterGrace(t *testing.T) {
 }
 
 func TestStopKillsOnOtherCancellations(t *testing.T) {
+	t.Parallel()
 	err, out, took := stopped(t, context.DeadlineExceeded, time.Minute, nil)
 	if strings.Contains(out, "got") || !signaledBy(err, syscall.SIGKILL) {
 		t.Fatalf("Wait returned %v and the program printed %q, want it killed", err, out)
