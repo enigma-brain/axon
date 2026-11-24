@@ -195,6 +195,14 @@ func (l *login) run(ctx context.Context, opts Options) error {
 	// the pathway that was connected is left or the active one changes.
 	if p.Kind == orgfile.KindTeleport {
 		path, err := l.teleport.ensure(ctx, p.Teleport.Proxy)
+		var unreachable *tsh.UnreachableError
+		if errors.As(err, &unreachable) {
+			next := msgProxyUnreachableNext
+			if p.UnreachableHint != "" {
+				next = p.UnreachableHint
+			}
+			return fmt.Errorf("establish the Teleport session: %w. %s", err, next)
+		}
 		if err != nil {
 			return fmt.Errorf("establish the Teleport session: %w", err)
 		}
