@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/enigma-brain/axon/internal/apiserver"
 )
 
 func TestHasWord(t *testing.T) {
@@ -38,7 +40,7 @@ func TestHasWord(t *testing.T) {
 		"/needs_auth then (needs_auth)":                                                          true,
 		"":                                                                                       false,
 	} {
-		if got := hasWord(text, needsAuth); got != want {
+		if got := hasWord(text, apiserver.NeedsAuth); got != want {
 			t.Errorf("hasWord(%q) = %v, want %v", text, got, want)
 		}
 	}

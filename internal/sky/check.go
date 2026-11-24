@@ -177,7 +177,7 @@ func failure(ctx context.Context, p configfile.Pathway, endpoint string, err err
 	case errors.Is(err, apiserver.ErrNotLoggedIn):
 		return errSessionExpired
 	case p.Kind == configfile.KindDirect && errors.Is(err, apiserver.ErrUnreachable):
-		return errors.New(Unreachable(p, endpoint))
+		return errors.New(unreachable(p, endpoint))
 	default:
 		return errNotAnswering
 	}

@@ -15,7 +15,6 @@ import (
 	"github.com/enigma-brain/axon/internal/apiserver"
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/interrupt"
-	"github.com/enigma-brain/axon/internal/skyclient"
 )
 
 // loginWait is how long login waits for the browser login to complete. It
@@ -24,11 +23,6 @@ const loginWait = 5 * time.Minute
 
 // notCompletedHint is the next action login gives when the wait ends.
 const notCompletedHint = "Run `axon login` again."
-
-// needsAuth is the status sky api login ends with when the server still sees
-// no login, which happens when the cookie file holds an expired session that
-// is sent ahead of the new one.
-const needsAuth = "needs_auth"
 
 // WaitDelay bounds how long login waits for sky to end after an
 // interrupt, and for sky's output after sky exits or is stopped.
@@ -44,20 +38,20 @@ func (c Connector) connectDirect(ctx context.Context, p configfile.Pathway, opts
 	case err == nil:
 		return h, nil
 	case errors.Is(err, apiserver.ErrUnreachable):
-		return apiserver.Health{}, errors.New(Unreachable(p, endpoint))
+		return apiserver.Health{}, errors.New(unreachable(p, endpoint))
 	case !errors.Is(err, apiserver.ErrNotLoggedIn):
 		return apiserver.Health{}, fmt.Errorf("check the SkyPilot API server: %w. Run `axon login` again.", err)
 	}
 
 	sawNeedsAuth, err := c.browserLogin(ctx, opts, skyPath, endpoint)
 	if err == nil && sawNeedsAuth {
-		fmt.Fprintf(opts.Out, "sky: the login ended with %s; removing the cookies of %s from %s and logging in once more\n", needsAuth, endpoint, c.CookieFile)
+		fmt.Fprintf(opts.Out, "sky: the login ended with %s; removing the cookies of %s from %s and logging in once more\n", apiserver.NeedsAuth, endpoint, c.CookieFile)
 		if _, err := apiserver.RemoveCookies(c.CookieFile, endpoint); err != nil {
 			return apiserver.Health{}, fmt.Errorf("remove the cookies of %s from %s: %w. Remove that file by hand and run `axon login` again.", endpoint, c.CookieFile, err)
 		}
 		sawNeedsAuth, err = c.browserLogin(ctx, opts, skyPath, endpoint)
 		if err == nil && sawNeedsAuth {
-			err = fmt.Errorf("the SkyPilot login ended with %s twice. Run `axon login` again.", needsAuth)
+			err = fmt.Errorf("the SkyPilot login ended with %s twice. Run `axon login` again.", apiserver.NeedsAuth)
 		}
 	}
 	return apiserver.Health{}, err
@@ -67,15 +61,10 @@ func (c Connector) connectDirect(ctx context.Context, p configfile.Pathway, opts
 // in the user's default browser, and waits for it up to loginWait. It reports whether sky's
 // output named the status needs_auth.
 func (c Connector) browserLogin(ctx context.Context, opts Options, skyPath, endpoint string) (sawNeedsAuth bool, err error) {
-	env := skyEnv(c.Environ())
-	// sky's output goes through a pipe; unbuffered, it reaches the terminal
-	// as sky writes it.
-	env = append(withoutVars(env, "PYTHONUNBUFFERED"), "PYTHONUNBUFFERED=1")
-
 	ctx, cancel := context.WithTimeout(ctx, c.LoginWait)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, skyPath, "api", "login", "-e", endpoint)
-	cmd.Env = env
+	cmd.Env = browserLoginEnviron(c.Environ())
 	interrupt.Stop(ctx, cmd, WaitDelay)
 	var seen scanWriter
 	cmd.Stdin = opts.In
@@ -90,7 +79,7 @@ func (c Connector) browserLogin(ctx context.Context, opts Options, skyPath, endp
 	if ctx.Err() != nil {
 		return false, ctx.Err()
 	}
-	if seen.containsWord(needsAuth) {
+	if seen.containsWord(apiserver.NeedsAuth) {
 		return true, nil
 	}
 	if runErr != nil {
@@ -165,32 +154,6 @@ var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;?]*[A-Za-z]")
 // isWordEdge reports whether c is white space or one of punct.
 func isWordEdge(c byte, punct string) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || strings.IndexByte(punct, c) >= 0
-}
-
-// skyEnv returns the environment sky api login and sky api logout run with:
-// env without the endpoint variable, which both refuse to run with, and
-// without the variables that point Python elsewhere.
-func skyEnv(env []string) []string {
-	return withoutVars(skyclient.ClientEnv(env), endpointVar)
-}
-
-// withoutVars returns env without the variables named.
-func withoutVars(env []string, names ...string) []string {
-	out := make([]string, 0, len(env))
-	for _, kv := range env {
-		name, _, _ := strings.Cut(kv, "=")
-		drop := false
-		for _, n := range names {
-			if name == n {
-				drop = true
-				break
-			}
-		}
-		if !drop {
-			out = append(out, kv)
-		}
-	}
-	return out
 }
 
 // formatWait writes d in words, such as "5 minutes".

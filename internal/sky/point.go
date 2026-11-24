@@ -22,7 +22,7 @@ const skyLoginWait = time.Minute
 
 // pointClient runs a teleport pathway's last step: sky api login
 // against the tunnel's endpoint, when the endpoint the client has stored
-// differs. connectSky runs it after the identity check and the version
+// differs. Connect runs it after the identity check and the version
 // sync, which on this pathway need no SkyPilot login, so sky is a client at
 // the server's version.
 func (c Connector) pointClient(ctx context.Context, p configfile.Pathway, opts Options, skyPath string) error {
@@ -67,7 +67,7 @@ func (c Connector) skyLogin(ctx context.Context, opts Options, skyPath, endpoint
 	ctx, cancel := context.WithTimeout(parent, skyLoginWait)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, skyPath, "api", "login", "-e", endpoint)
-	cmd.Env = skyEnv(c.Environ())
+	cmd.Env = apiEnviron(c.Environ())
 	interrupt.Stop(ctx, cmd, WaitDelay)
 	cmd.Stdout = opts.Out
 	cmd.Stderr = opts.Err
