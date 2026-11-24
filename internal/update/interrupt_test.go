@@ -38,14 +38,15 @@ func (h hangingArchive) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func TestUpdateCancelledDuringDownload(t *testing.T) {
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
-	serve(t, hangingArchive{repo: repo, name: "axon_0.5.0_" + testPlatform + ".tar.gz"})
+	d := serve(t, hangingArchive{repo: repo, name: "axon_0.5.0_" + testPlatform + ".tar.gz"})
 	exe := installed(t, "0.4.0")
 
 	ctx, cancel := context.WithCancelCause(context.Background())
 	timer := time.AfterFunc(300*time.Millisecond, func() { cancel(&interrupt.Error{Signal: syscall.SIGINT}) })
 	defer timer.Stop()
 	start := time.Now()
-	err := Run(ctx, Options{Current: "0.4.0", Exe: exe, Platform: testPlatform, Out: &bytes.Buffer{}})
+	d.executable = func() (string, error) { return exe, nil }
+	err := d.run(ctx, Options{Current: "0.4.0", Out: &bytes.Buffer{}})
 	if err == nil {
 		t.Fatal("the cancelled update succeeded")
 	}
@@ -80,7 +81,7 @@ func TestUpdateCancelledDuringVersionCheck(t *testing.T) {
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
 	archive := tarGz(t, map[string][]byte{"axon": []byte(slowBinary)})
 	repo.setArchive("0.5.0", name, archive, archive)
-	serve(t, repo)
+	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
 
 	ctx, cancel := context.WithCancelCause(context.Background())
@@ -106,7 +107,8 @@ func TestUpdateCancelledDuringVersionCheck(t *testing.T) {
 	}()
 
 	start := time.Now()
-	err := Run(ctx, Options{Current: "0.4.0", Exe: exe, Platform: testPlatform, Out: &bytes.Buffer{}})
+	d.executable = func() (string, error) { return exe, nil }
+	err := d.run(ctx, Options{Current: "0.4.0", Out: &bytes.Buffer{}})
 	if !<-seen {
 		t.Fatalf("the downloaded binary was not seen to start within %v; Run error = %v", testkit.WaitTimeout, err)
 	}
