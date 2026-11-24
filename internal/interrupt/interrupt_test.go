@@ -182,8 +182,10 @@ func stopped(t *testing.T, cause error, grace time.Duration, deliver func(*exec.
 	if deliver != nil {
 		deliver(cmd)
 	}
+	// Everything is read before Wait, which closes the pipe.
+	printed := <-rest
 	err := cmd.Wait()
-	return err, <-rest, time.Since(start)
+	return err, printed, time.Since(start)
 }
 
 func TestStopForwardsSIGTERM(t *testing.T) {
