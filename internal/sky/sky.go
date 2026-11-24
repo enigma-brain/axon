@@ -1,7 +1,9 @@
-// Package sky is the axon sky command group, the user's way to the SkyPilot
-// API server. It runs axon's own SkyPilot client with the user's arguments
-// unchanged, against the API server that axon login connected, and refuses
-// only the sky commands that would undo or bypass that connection.
+// Package sky is everything in axon that is specific to SkyPilot. It is the
+// axon sky command group, the user's way to the SkyPilot API server: it runs
+// axon's own SkyPilot client with the user's arguments unchanged, against
+// the API server that axon login connected, and refuses only the sky
+// commands that would undo or bypass that connection. It also holds the
+// steps axon login and axon logout run with SkyPilot, through Connector.
 package sky
 
 import (
