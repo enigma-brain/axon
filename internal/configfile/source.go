@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/enigma-brain/axon/internal/axondir"
 	"github.com/enigma-brain/axon/internal/termtext"
 )
 
@@ -138,12 +139,12 @@ func Read(ctx context.Context, src Source, stdin io.Reader) ([]byte, error) {
 	case sourcePath:
 		f, err := os.Open(src.value)
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", src.value, unwrapPath(err))
+			return nil, fmt.Errorf("read %s: %w", src.value, axondir.UnwrapPath(err))
 		}
 		defer f.Close()
 		data, err := readLimited(f)
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", src.value, unwrapPath(err))
+			return nil, fmt.Errorf("read %s: %w", src.value, axondir.UnwrapPath(err))
 		}
 		return data, nil
 	}
@@ -222,14 +223,4 @@ func readLimited(r io.Reader) ([]byte, error) {
 		return nil, fmt.Errorf("the file is larger than %d bytes", MaxSize)
 	}
 	return data, nil
-}
-
-// unwrapPath drops the path from a *fs.PathError, whose message the caller
-// already prefixes with the path.
-func unwrapPath(err error) error {
-	var perr *os.PathError
-	if errors.As(err, &perr) {
-		return perr.Err
-	}
-	return err
 }

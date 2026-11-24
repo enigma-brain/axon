@@ -382,3 +382,24 @@ func TestSameServerKeepsThePathsCase(t *testing.T) {
 		t.Errorf("SameServer: host case and trailing slash ignored = %v, path case ignored = %v", SameServer(a, b), SameServer(a, c))
 	}
 }
+
+// A rename that fails for real, here because a non-empty directory stands where the
+// file is set aside, names the file once in the message.
+func TestFailedRenameNamesThePathOnce(t *testing.T) {
+	s, _ := newStore(t)
+	added, old := clashing(t, s)
+	aside := s.Path("a") + removingExt
+	if err := os.MkdirAll(filepath.Join(aside, "occupied"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.Put(added, PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{old}})
+	if err == nil {
+		t.Fatal("Put succeeded with a directory where the file is set aside")
+	}
+	if n := strings.Count(err.Error(), s.Path("a")); n != 1 {
+		t.Errorf("Put = %q, names %s %d times, want once", err, s.Path("a"), n)
+	}
+	if !strings.Contains(err.Error(), "remove "+s.Path("a")+": ") {
+		t.Errorf("Put = %q, want the failed rename of %s", err, s.Path("a"))
+	}
+}

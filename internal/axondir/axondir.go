@@ -184,7 +184,7 @@ func (d Dir) ensure(sub string) (string, error) {
 				return "", fmt.Errorf("create %s: it exists and is not a directory", p)
 			}
 		} else if err != nil {
-			return "", fmt.Errorf("create %s: %w", p, unwrapPath(err))
+			return "", fmt.Errorf("create %s: %w", p, UnwrapPath(err))
 		}
 		path = p
 	}
@@ -250,4 +250,18 @@ var syncFile = (*os.File).Sync
 // the sync.
 func syncUnsupported(err error) bool {
 	return errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.EOPNOTSUPP)
+}
+
+// UnwrapPath returns the error inside a *fs.PathError or *os.LinkError, so
+// that a message naming the path does not name it twice.
+func UnwrapPath(err error) error {
+	var pe *os.PathError
+	if errors.As(err, &pe) {
+		return pe.Err
+	}
+	var le *os.LinkError
+	if errors.As(err, &le) {
+		return le.Err
+	}
+	return err
 }
