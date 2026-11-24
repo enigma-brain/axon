@@ -145,7 +145,7 @@ func TestRefetchAsksForEveryValueOfWhereThePathwayGoes(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var h *harness
 			if tc.pathway == "remote" {
-				h = newMetaHarness(t).harness
+				h = newTeleportHarness(t).harness
 			} else {
 				h = newHarness(t)
 			}

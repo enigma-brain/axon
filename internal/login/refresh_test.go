@@ -487,7 +487,7 @@ func TestActiveFileThatFailsIsLeft(t *testing.T) {
 }
 
 func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
-	h := newMetaHarness(t)
+	h := newTeleportHarness(t)
 	server := h.serveConfigs()
 	h.noFiles()
 	h.storeFrom("/example.toml", exampleConfig)
