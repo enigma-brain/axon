@@ -397,7 +397,22 @@ func TestNoNetwork(t *testing.T) {
 	exe := installed(t, "0.4.0")
 
 	_, err := runUpdate(t, "0.4.0", "", exe)
-	wantErr(t, err, "could not look up the latest release", "Check your network connection")
+	wantErr(t, err, "could not look up the latest release at "+addr+"/org/axon/releases/latest: connection refused. Check your network connection and run `axon update` again.")
+	assertUnchanged(t, exe, "0.4.0")
+}
+
+// A download that gets no answer gives the short reason.
+func TestNoNetworkForDownload(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	addr := srv.URL
+	srv.Close()
+	old := repoURL
+	repoURL = addr + "/org/axon"
+	t.Cleanup(func() { repoURL = old })
+	exe := installed(t, "0.4.0")
+
+	_, err := runUpdate(t, "0.4.0", "0.5.0", exe)
+	wantErr(t, err, "could not download checksums.txt of release v0.5.0: connection refused. axon 0.4.0 is unchanged.")
 	assertUnchanged(t, exe, "0.4.0")
 }
 

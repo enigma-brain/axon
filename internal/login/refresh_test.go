@@ -519,3 +519,43 @@ func TestRefreshedSettingsRestartTheTunnel(t *testing.T) {
 		t.Errorf("active = %q, record = %+v; want remote with skypilot2", h.active(), h.record())
 	}
 }
+
+// An empty answer to the fetch names the address as --config does, without
+// the query string that can hold a token, and the login goes on with the
+// stored file.
+func TestRefreshOfAnEmptyFileNamesTheAddress(t *testing.T) {
+	h := newHarness(t)
+	orgs := h.serveOrgs()
+	h.storeFrom("/example.toml?token=s3cret", exampleOrg)
+	h.connectedTo("campus")
+	orgs.publish("/example.toml", "# nothing but a comment\n")
+
+	if err := h.run(""); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	path := filepath.Join(h.home, ".axon", "orgs", "example.toml")
+	want := "axon: could not update " + path + ": https://example.org/example.toml is empty. Using the stored file.\n"
+	if got := h.errOut.String(); got != want {
+		t.Errorf("warnings = %q, want %q", got, want)
+	}
+	if h.stored("example") != exampleOrg {
+		t.Error("the stored file changed")
+	}
+}
+
+// A failed fetch names the address without its query string.
+func TestRefreshFailureHidesTheToken(t *testing.T) {
+	h := newHarness(t)
+	orgs := h.serveOrgs()
+	h.storeFrom("/example.toml?token=s3cret", exampleOrg)
+	h.connectedTo("campus")
+	orgs.fail("/example.toml", http.StatusInternalServerError)
+
+	if err := h.run(""); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	got := h.errOut.String()
+	if !strings.Contains(got, " from https://example.org/example.toml: ") || strings.Contains(got, "s3cret") {
+		t.Errorf("warnings = %q, want the address without its query string", got)
+	}
+}

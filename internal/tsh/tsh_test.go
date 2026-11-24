@@ -144,8 +144,14 @@ func TestPathTSHInRangeIsUsed(t *testing.T) {
 	}
 }
 
+// A tsh behind the proxy's range is to be updated; one ahead of it is to be
+// replaced by an older one. Either message names both versions, the path,
+// the major versions the proxy accepts and the install link.
 func TestPathTSHOutOfRangeStops(t *testing.T) {
-	for _, version := range []string{"16.4.0", "19.0.0"} {
+	for version, want := range map[string]string{
+		"16.4.0": "tsh 16.4.0 at %s does not work with the Teleport proxy " + testProxy + ", which runs 18.11.7 and supports tsh 18 and 17. Update tsh: " + InstallLink,
+		"19.0.0": "tsh 19.0.0 at %s is newer than the Teleport proxy " + testProxy + " supports: it runs 18.11.7 and accepts tsh 18 or 17. Install an older tsh: " + InstallLink,
+	} {
 		t.Run(version, func(t *testing.T) {
 			f := newFixture(t)
 			path := f.putOnPath(version)
@@ -154,10 +160,8 @@ func TestPathTSHOutOfRangeStops(t *testing.T) {
 			if err == nil {
 				t.Fatal("Ensure succeeded, want an error")
 			}
-			for _, want := range []string{version, "18.11.7", path, "Update tsh", InstallLink} {
-				if !strings.Contains(err.Error(), want) {
-					t.Errorf("error %q does not mention %q", err, want)
-				}
+			if want := fmt.Sprintf(want, path); err.Error() != want {
+				t.Errorf("error = %q, want %q", err, want)
 			}
 		})
 	}

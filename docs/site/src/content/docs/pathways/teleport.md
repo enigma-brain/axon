@@ -43,7 +43,8 @@ axon: establish the Teleport session: this pathway needs Teleport's client, tsh,
 A `tsh` works when its major version is that of your organization's Teleport
 or one behind it. When its version is too old or too new, `axon` names both
 versions and stops; install a `tsh` whose major version is your organization's
-Teleport's or one behind it.
+Teleport's or one behind it, which for a `tsh` that is too new means an older
+one.
 
 ## The tunnel
 

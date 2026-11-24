@@ -108,6 +108,23 @@ func TestAddStoresBytesAndSource(t *testing.T) {
 	}
 }
 
+func TestRecordKeepsTheWholeAddress(t *testing.T) {
+	s, home := newStore(t)
+	address := "https://example.org/campus.toml?" + secret
+	add(t, s, campusFile, address)
+	record, err := os.ReadFile(filepath.Join(home, ".axon", "state", "orgs", "example-campus.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(record), address) {
+		t.Errorf("record = %q, want it to hold %s", record, address)
+	}
+	src, ok, err := s.Source("example-campus")
+	if err != nil || !ok || src.raw() != address || src.String() != "https://example.org/campus.toml" {
+		t.Errorf("Source = %q (raw %q), %v, %v", src, src.raw(), ok, err)
+	}
+}
+
 func TestAddKeepsOtherFiles(t *testing.T) {
 	s, home := newStore(t)
 	add(t, s, campusFile, "-")
