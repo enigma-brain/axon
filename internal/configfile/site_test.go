@@ -17,6 +17,7 @@ var tomlBlock = regexp.MustCompile("(?s)```toml\n(.*?)```")
 // page passes the checks of a config file, and that the page has an
 // example of each kind of pathway.
 func TestSiteExamples(t *testing.T) {
+	t.Parallel()
 	page, err := os.ReadFile(sitePage)
 	if err != nil {
 		t.Fatal(err)

@@ -77,6 +77,7 @@ func TestParseDesignExamples(t *testing.T) {
 }
 
 func TestParseSeveralPathwaysKeepsOrder(t *testing.T) {
+	t.Parallel()
 	data := `format = 2
 id = "example"
 
@@ -248,6 +249,7 @@ func TestParseRefuses(t *testing.T) {
 // A file of the format an earlier axon used is refused as older, before
 // its tables are checked.
 func TestParseRefusesOlderFormat(t *testing.T) {
+	t.Parallel()
 	v1 := `format = 1
 id = "example"
 
@@ -266,6 +268,7 @@ endpoint = "https://sky.example.org"
 }
 
 func TestParseEmpty(t *testing.T) {
+	t.Parallel()
 	for name, data := range map[string]string{
 		"no bytes":        "",
 		"white space":     " \n\t\r\n",

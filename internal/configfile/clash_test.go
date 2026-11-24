@@ -19,6 +19,7 @@ func withRevision(data string, n string) string {
 }
 
 func TestParseRevision(t *testing.T) {
+	t.Parallel()
 	f, err := Parse([]byte(withRevision(campusFile, "7")))
 	if err != nil || !f.HasRevision || f.Revision != 7 {
 		t.Fatalf("Parse = %+v, %v; want revision 7", f, err)
@@ -372,6 +373,7 @@ func TestALeftoverRemovingFileIsIgnored(t *testing.T) {
 }
 
 func TestSameServerKeepsThePathsCase(t *testing.T) {
+	t.Parallel()
 	a := Pathway{Kind: KindDirect, Sky: Sky{Endpoint: "https://Sky.example.org/Team/"}}
 	b := Pathway{Kind: KindDirect, Sky: Sky{Endpoint: "https://sky.example.org/Team"}}
 	c := Pathway{Kind: KindDirect, Sky: Sky{Endpoint: "https://sky.example.org/team"}}

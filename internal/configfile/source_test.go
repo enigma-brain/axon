@@ -65,6 +65,7 @@ func TestParseSource(t *testing.T) {
 }
 
 func TestParseSourceRefuses(t *testing.T) {
+	t.Parallel()
 	for in, part := range map[string]string{
 		"":                                  "empty",
 		"http://example.org/axon.toml":      "https://",
@@ -94,6 +95,7 @@ func TestParseSourceRefuses(t *testing.T) {
 const secret = "token=s3cret"
 
 func TestSourceStringHidesTheSecret(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]string{
 		"https://example.org/axon.toml?" + secret:           "https://example.org/axon.toml",
 		"https://example.org/axon.toml?" + secret + "#frag": "https://example.org/axon.toml",
@@ -115,6 +117,7 @@ func TestSourceStringHidesTheSecret(t *testing.T) {
 }
 
 func TestParseSourceRefusalHidesTheSecret(t *testing.T) {
+	t.Parallel()
 	for _, in := range []string{
 		"http://example.org/axon.toml?" + secret,
 		"https://ada:pw@example.org/a.toml?" + secret,
@@ -132,6 +135,7 @@ func TestParseSourceRefusalHidesTheSecret(t *testing.T) {
 }
 
 func TestReadAddressFailureHidesTheSecret(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		handler http.HandlerFunc
@@ -169,6 +173,7 @@ func TestReadAddressFailureHidesTheSecret(t *testing.T) {
 }
 
 func TestReadStdin(t *testing.T) {
+	t.Parallel()
 	data, err := Read(context.Background(), mustSource(t, "-"), strings.NewReader(campusFile))
 	if err != nil {
 		t.Fatal(err)
@@ -201,6 +206,7 @@ func TestReadPath(t *testing.T) {
 }
 
 func TestReadAddress(t *testing.T) {
+	t.Parallel()
 	var gotCookie, gotAuth string
 	srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		gotCookie, gotAuth = r.Header.Get("Cookie"), r.Header.Get("Authorization")
@@ -223,6 +229,7 @@ func TestReadAddress(t *testing.T) {
 }
 
 func TestReadAddressFollowsHTTPSRedirect(t *testing.T) {
+	t.Parallel()
 	srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/old" {
 			http.Redirect(w, r, "/new", http.StatusFound)
@@ -242,6 +249,7 @@ func TestReadAddressFollowsHTTPSRedirect(t *testing.T) {
 // A redirect target is not told, by a Referer, the address that
 // redirected to it, whose query string can hold a token.
 func TestReadAddressRedirectSendsNoReferer(t *testing.T) {
+	t.Parallel()
 	referer := "unset"
 	srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/old" {
@@ -262,6 +270,7 @@ func TestReadAddressRedirectSendsNoReferer(t *testing.T) {
 // A status line the server makes up is printed without control or format
 // characters.
 func TestReadAddressStatusCleaned(t *testing.T) {
+	t.Parallel()
 	srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		conn, buf, err := w.(http.Hijacker).Hijack()
 		if err != nil {
@@ -282,6 +291,7 @@ func TestReadAddressStatusCleaned(t *testing.T) {
 }
 
 func TestReadAddressFailures(t *testing.T) {
+	t.Parallel()
 	big := bytes.Repeat([]byte("#"), MaxSize+1)
 	tests := []struct {
 		name    string
@@ -314,6 +324,7 @@ func TestReadAddressFailures(t *testing.T) {
 }
 
 func TestReadAddressTimeLimit(t *testing.T) {
+	t.Parallel()
 	release := make(chan struct{})
 	srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -337,6 +348,7 @@ func TestReadAddressTimeLimit(t *testing.T) {
 // A failed request gives the short reason after the address, as every other
 // network failure does.
 func TestReadAddressShortReason(t *testing.T) {
+	t.Parallel()
 	d := defaults()
 	d.transport = &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -355,6 +367,7 @@ func TestReadAddressShortReason(t *testing.T) {
 // A redirect to an address that does not parse is named as such, without
 // the address, which can hold a token.
 func TestReadAddressInvalidRedirectMessage(t *testing.T) {
+	t.Parallel()
 	srv, d := tlsServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", "/%zz?token=s3cret")
 		w.WriteHeader(http.StatusFound)
@@ -367,6 +380,7 @@ func TestReadAddressInvalidRedirectMessage(t *testing.T) {
 }
 
 func TestReadStdinTooLarge(t *testing.T) {
+	t.Parallel()
 	_, err := Read(context.Background(), mustSource(t, "-"), bytes.NewReader(bytes.Repeat([]byte("#"), MaxSize+1)))
 	if err == nil || !strings.Contains(err.Error(), "larger than") {
 		t.Errorf("Read = %v, want a size refusal", err)
