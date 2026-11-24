@@ -10,6 +10,7 @@ import (
 )
 
 func TestPrint(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	Print(&buf, errors.New("login failed. Run `axon login`."))
 	if got, want := buf.String(), "axon: login failed. Run `axon login`.\n"; got != want {
