@@ -38,6 +38,11 @@ func (s Store) Path(id string) string {
 	return filepath.Join(s.dir.ConfigsPath(), id+fileExt)
 }
 
+// lockStore takes the exclusive lock on changing the stored config files,
+// waiting while another process or goroutine holds it, and returns the
+// function that releases it. Tests replace it to see whether it is taken.
+var lockStore = axondir.Dir.Lock
+
 // Problem is a stored file that List left out, and why.
 type Problem struct {
 	// Path is the stored file's path.
@@ -45,8 +50,6 @@ type Problem struct {
 	// Err is the reason it was left out.
 	Err error
 }
-
-func (p Problem) Error() string { return p.Path + ": " + p.Err.Error() }
 
 // record is the content of a stored file's record. A record written by an
 // earlier axon holds only the source.
@@ -282,16 +285,6 @@ func sameProxy(a, b string) bool {
 	return ah == bh && ap == bp
 }
 
-// Add checks data as a config file from src and stores it, byte for
-// byte, replacing the stored file with the same id, and records src as its
-// source. It refuses data that fails the checks, that has the same pathway
-// name or identifier as another stored file, or that lowers the stored
-// copy's revision. A refused file writes nothing.
-func (s Store) Add(data []byte, src Source) (File, error) {
-	f, _, err := s.put(data, PutOptions{Origin: FromSource(src)}, "")
-	return f, err
-}
-
 // Put checks data and stores it as opts say: it removes the stored files
 // opts.Remove names, and stores data in place of the stored file with the
 // same id. It refuses data that fails the checks, that still clashes by
@@ -308,7 +301,7 @@ func (s Store) Put(data []byte, opts PutOptions) (File, error) {
 }
 
 // Refresh replaces the stored file id with data, fetched again from src,
-// as Add does, and refuses data whose id is not id. When data is the stored
+// as Put does with src as its origin, and refuses data whose id is not id. When data is the stored
 // file byte for byte, it writes nothing and reports no change. The boolean
 // reports whether the stored file changed.
 func (s Store) Refresh(id string, data []byte, src Source, allowLower bool) (File, bool, error) {
@@ -326,7 +319,7 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 	if id != "" && f.ID != id {
 		return File{}, false, &CheckError{Field: "id", Check: fmt.Sprintf("is %q, not %q, the id of the stored file", f.ID, id)}
 	}
-	unlock, err := s.lock()
+	unlock, err := lockStore(s.dir)
 	if err != nil {
 		return File{}, false, err
 	}
@@ -375,12 +368,12 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
-		return File{}, false, fmt.Errorf("read %s: %w", path, unwrapPath(err))
+		return File{}, false, fmt.Errorf("read %s: %w", path, axondir.UnwrapPath(err))
 	case !info.Mode().IsRegular():
 		return File{}, false, fmt.Errorf("replace %s: it is not a regular file", path)
 	default:
 		if previous, err = os.ReadFile(path); err != nil {
-			return File{}, false, fmt.Errorf("read %s: %w", path, unwrapPath(err))
+			return File{}, false, fmt.Errorf("read %s: %w", path, axondir.UnwrapPath(err))
 		}
 	}
 	if id != "" && !hadPrevious {
@@ -423,12 +416,12 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 		var undone []string
 		for i := len(aside) - 1; i >= 0; i-- {
 			if undo := renameFile(aside[i]+removingExt, aside[i]); undo != nil {
-				undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", aside[i], aside[i]+removingExt, unwrapPath(undo)))
+				undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", aside[i], aside[i]+removingExt, axondir.UnwrapPath(undo)))
 			}
 		}
 		if hadPrevious {
 			if undo := renameFile(path+previousExt, path); undo != nil {
-				undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", path, path+previousExt, unwrapPath(undo)))
+				undone = append(undone, fmt.Sprintf("%s could not be put back from %s: %v", path, path+previousExt, axondir.UnwrapPath(undo)))
 			} else {
 				// Before the new file is written, the copy is a hard
 				// link to the stored file itself, and renaming one link
@@ -457,7 +450,7 @@ func (s Store) put(data []byte, opts PutOptions, id string) (File, bool, error) 
 				continue
 			}
 			if err != nil {
-				return fail(fmt.Errorf("remove %s: %w", p, unwrapPath(err)))
+				return fail(fmt.Errorf("remove %s: %w", p, axondir.UnwrapPath(err)))
 			}
 			aside = append(aside, p)
 		}
@@ -498,17 +491,17 @@ const previousExt = ".previous"
 func keepPrevious(path string) error {
 	aside := path + previousExt
 	if err := removeFile(aside); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("keep %s: %w", path, unwrapPath(err))
+		return fmt.Errorf("keep %s: %w", path, axondir.UnwrapPath(err))
 	}
 	if linkFile(path, aside) != nil {
 		if err := copyFile(path, aside); err != nil {
 			removeFile(aside)
-			return fmt.Errorf("keep %s: %w", path, unwrapPath(err))
+			return fmt.Errorf("keep %s: %w", path, axondir.UnwrapPath(err))
 		}
 	}
 	if err := syncDir(filepath.Dir(path)); err != nil {
 		removeFile(aside)
-		return fmt.Errorf("keep %s: %w", path, unwrapPath(err))
+		return fmt.Errorf("keep %s: %w", path, axondir.UnwrapPath(err))
 	}
 	return nil
 }
@@ -565,7 +558,7 @@ func (s Store) Recover() ([]string, error) {
 	if err != nil || !found {
 		return nil, err
 	}
-	unlock, err := s.lock()
+	unlock, err := lockStore(s.dir)
 	if err != nil {
 		return nil, err
 	}
@@ -637,7 +630,7 @@ func (s Store) tidy() error {
 			}
 			path := filepath.Join(dir, e.Name())
 			if err := removeFile(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return fmt.Errorf("remove %s: %w", path, unwrapPath(err))
+				return fmt.Errorf("remove %s: %w", path, axondir.UnwrapPath(err))
 			}
 		}
 	}
@@ -686,7 +679,7 @@ func (s Store) recoverPrevious() ([]string, error) {
 		}
 		if back {
 			if err := renameFile(path+previousExt, path); err != nil {
-				return restored, fmt.Errorf("put back %s from %s: %w", path, path+previousExt, unwrapPath(err))
+				return restored, fmt.Errorf("put back %s from %s: %w", path, path+previousExt, axondir.UnwrapPath(err))
 			}
 			restored = append(restored, path)
 			continue
@@ -694,7 +687,7 @@ func (s Store) recoverPrevious() ([]string, error) {
 		// A copy that stays would later bring back a stored file that a
 		// put removed, so a failure to delete it stops recovery.
 		if err := removeFile(path + previousExt); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return restored, fmt.Errorf("remove %s: %w", path+previousExt, unwrapPath(err))
+			return restored, fmt.Errorf("remove %s: %w", path+previousExt, axondir.UnwrapPath(err))
 		}
 	}
 	return restored, nil
@@ -708,7 +701,7 @@ func (s Store) putBack(id, path string) (bool, error) {
 		return true, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("read %s: %w", path, unwrapPath(err))
+		return false, fmt.Errorf("read %s: %w", path, axondir.UnwrapPath(err))
 	}
 	rec, ok, err := s.Record(id)
 	if err != nil {
@@ -723,7 +716,7 @@ func (s Store) putBack(id, path string) (bool, error) {
 	}
 	previous, err := os.ReadFile(path + previousExt)
 	if err != nil {
-		return false, fmt.Errorf("read %s: %w", path+previousExt, unwrapPath(err))
+		return false, fmt.Errorf("read %s: %w", path+previousExt, axondir.UnwrapPath(err))
 	}
 	return fingerprint(previous) == rec.SHA256, nil
 }
@@ -748,7 +741,7 @@ func saveFile(path string) (savedFile, error) {
 	case errors.Is(err, fs.ErrNotExist):
 		return savedFile{path: path}, nil
 	case err != nil:
-		return savedFile{}, fmt.Errorf("read %s: %w", path, unwrapPath(err))
+		return savedFile{}, fmt.Errorf("read %s: %w", path, axondir.UnwrapPath(err))
 	}
 	return savedFile{path: path, data: data, existed: true}, nil
 }
@@ -915,7 +908,7 @@ func readStored(path, id string) (File, error) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return File{}, unwrapPath(err)
+		return File{}, axondir.UnwrapPath(err)
 	}
 	f, err := Parse(data)
 	if err != nil {

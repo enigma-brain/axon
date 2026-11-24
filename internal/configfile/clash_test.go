@@ -181,7 +181,7 @@ func TestLowerRevision(t *testing.T) {
 		t.Fatalf("Inspect = %+v, %v; want a lower revision", c, err)
 	}
 	var lower *LowerRevisionError
-	if _, err := s.Add([]byte(withRevision(campusFile, "5")), mustSource(t, "-")); !errors.As(err, &lower) || lower.Stored != 7 || lower.New != 5 {
+	if _, err := addFile(s, []byte(withRevision(campusFile, "5")), mustSource(t, "-")); !errors.As(err, &lower) || lower.Stored != 7 || lower.New != 5 {
 		t.Fatalf("Add of a lower revision = %v", err)
 	}
 	if _, err := s.Put([]byte(withRevision(campusFile, "5")), PutOptions{Origin: FromSource(mustSource(t, "-")), AllowLower: true}); err != nil {
@@ -218,7 +218,7 @@ func TestSameIDAsAHandMadeFileClashes(t *testing.T) {
 	if err != nil || c.Previous != nil || len(c.Clashes) != 1 || !c.Clashes[0].SameFileID || !c.Clashes[0].StoredHandMade {
 		t.Fatalf("Inspect = %+v, %v", c, err)
 	}
-	if _, err := s.Add([]byte(directConfig("lab", "theirs", "Theirs", "https://t.example.org")), mustSource(t, "-")); !errors.As(err, new(*ClashError)) {
+	if _, err := addFile(s, []byte(directConfig("lab", "theirs", "Theirs", "https://t.example.org")), mustSource(t, "-")); !errors.As(err, new(*ClashError)) {
 		t.Errorf("Add over a hand-made file = %v", err)
 	}
 }
@@ -380,5 +380,26 @@ func TestSameServerKeepsThePathsCase(t *testing.T) {
 	c := Pathway{Kind: KindDirect, Sky: Sky{Endpoint: "https://sky.example.org/team"}}
 	if !SameServer(a, b) || SameServer(a, c) {
 		t.Errorf("SameServer: host case and trailing slash ignored = %v, path case ignored = %v", SameServer(a, b), SameServer(a, c))
+	}
+}
+
+// A rename that fails for real, here because a non-empty directory stands where the
+// file is set aside, names the file once in the message.
+func TestFailedRenameNamesThePathOnce(t *testing.T) {
+	s, _ := newStore(t)
+	added, old := clashing(t, s)
+	aside := s.Path("a") + removingExt
+	if err := os.MkdirAll(filepath.Join(aside, "occupied"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.Put(added, PutOptions{Origin: FromSource(mustSource(t, "-")), Remove: []File{old}})
+	if err == nil {
+		t.Fatal("Put succeeded with a directory where the file is set aside")
+	}
+	if n := strings.Count(err.Error(), s.Path("a")); n != 1 {
+		t.Errorf("Put = %q, names %s %d times, want once", err, s.Path("a"), n)
+	}
+	if !strings.Contains(err.Error(), "remove "+s.Path("a")+": ") {
+		t.Errorf("Put = %q, want the failed rename of %s", err, s.Path("a"))
 	}
 }

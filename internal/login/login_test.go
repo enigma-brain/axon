@@ -202,7 +202,7 @@ func (h *harness) store(data string) {
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	if _, err := configfile.NewStore(axondir.New(h.home)).Add([]byte(data), src); err != nil {
+	if _, err := configfile.NewStore(axondir.New(h.home)).Put([]byte(data), configfile.PutOptions{Origin: configfile.FromSource(src)}); err != nil {
 		h.t.Fatal(err)
 	}
 }

@@ -273,35 +273,54 @@ func newClient(base *url.URL) *http.Client {
 	}
 }
 
+// maxRedirects is the most redirects latestTag follows to find the latest
+// release's tag.
+const maxRedirects = 10
+
 // latestTag returns the tag of the latest release: the one that
-// <repo>/releases/latest redirects to. GitHub never serves a pre-release as
-// the latest.
+// <repo>/releases/latest redirects to, through redirects on the same host
+// when the repository has moved. GitHub never serves a pre-release as the
+// latest.
 func latestTag(ctx context.Context, client *http.Client, base *url.URL) (string, error) {
 	latest := base.JoinPath("releases", "latest")
 	noRelease := fmt.Errorf("no release of axon was found at %s. Name one with --version, such as `axon update --version 1.2.3`.", redact(latest))
 
-	// Read the first redirect, and do not follow it.
+	// Follow the redirects one at a time, on the host of latest, until one
+	// names a release tag: a repository that was renamed or moved
+	// redirects to its new address first.
 	c := *client
 	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, latest.String(), nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := c.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("could not look up the latest release at %s: %v. Check your network connection and run `axon update` again.", redact(latest), netError{err})
-	}
-	resp.Body.Close()
-	loc := resp.Header.Get("Location")
-	if resp.StatusCode < 300 || resp.StatusCode > 399 || loc == "" {
-		if resp.StatusCode >= 500 {
-			return "", fmt.Errorf("could not look up the latest release at %s: %s. Run `axon update` again later.", redact(latest), resp.Status)
+	next := latest
+	var target *url.URL
+	for hops := 0; ; hops++ {
+		if hops == maxRedirects {
+			return "", noRelease
 		}
-		return "", noRelease
-	}
-	target, err := latest.Parse(loc)
-	if err != nil {
-		return "", noRelease
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, next.String(), nil)
+		if err != nil {
+			return "", err
+		}
+		resp, err := c.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("could not look up the latest release at %s: %v. Check your network connection and run `axon update` again.", redact(latest), netError{err})
+		}
+		resp.Body.Close()
+		loc := resp.Header.Get("Location")
+		if resp.StatusCode < 300 || resp.StatusCode > 399 || loc == "" {
+			if resp.StatusCode >= 500 {
+				return "", fmt.Errorf("could not look up the latest release at %s: %s. Run `axon update` again later.", redact(latest), resp.Status)
+			}
+			return "", noRelease
+		}
+		u, err := next.Parse(loc)
+		if err != nil || u.Scheme != latest.Scheme || u.Host != latest.Host {
+			return "", noRelease
+		}
+		if strings.Contains(u.Path, "/releases/tag/") {
+			target = u
+			break
+		}
+		next = u
 	}
 	_, tag, ok := strings.Cut(target.Path, "/releases/tag/")
 	if !ok || tag == "" || strings.Contains(tag, "/") {

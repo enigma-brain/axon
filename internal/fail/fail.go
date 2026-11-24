@@ -1,8 +1,9 @@
 // Package fail prints axon's failure messages.
 //
-// Every message axon prints about its own failure goes through this package,
-// so that each one goes to standard error, begins with "axon:", and is
-// followed by a non-zero exit.
+// The error that ends a command goes through this package, so that it goes
+// to standard error, begins with "axon:", and is followed by a non-zero
+// exit. A warning printed while a command carries on, such as a config file
+// that could not be updated, is written by the command itself.
 package fail
 
 import (

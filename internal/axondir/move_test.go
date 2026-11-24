@@ -113,7 +113,7 @@ func TestMoveOldNamesOnTheNewLayoutWritesNothing(t *testing.T) {
 	if got := readTree(t, d.Root()); !reflect.DeepEqual(got, newLayout) {
 		t.Errorf("files = %v, want %v", got, newLayout)
 	}
-	if _, err := os.Stat(d.LockPath()); !errors.Is(err, fs.ErrNotExist) {
+	if _, err := os.Stat(filepath.Join(d.StatePath(), lockFile)); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("the lock was taken: %v", err)
 	}
 }
@@ -240,7 +240,7 @@ func TestMoveOldNamesCreatesTheStateDirectoryForTheLock(t *testing.T) {
 	if got, want := movedNames(m), []string{allMoved[0], allMoved[2]}; !reflect.DeepEqual(got, want) {
 		t.Errorf("moved = %q, want %q", got, want)
 	}
-	if _, err := os.Stat(d.LockPath()); err != nil {
+	if _, err := os.Stat(filepath.Join(d.StatePath(), lockFile)); err != nil {
 		t.Errorf("lock file: %v", err)
 	}
 	assertMode(t, d.StatePath(), 0o700)

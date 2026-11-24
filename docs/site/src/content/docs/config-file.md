@@ -4,9 +4,10 @@ description: How an organization describes itself to axon, with a complete examp
 ---
 
 `axon` names no organization and has no default for any detail of one. It
-takes every such detail from a **config file**: a small TOML file that
-your organization writes and gives to its members. This page is for the person
-who writes it.
+takes every such detail from a **config file**: a small TOML file that holds
+pathways. A member can make one on their own laptop by answering `axon login`'s
+questions, but an organization with many members writes one and gives it to
+them. This page is for the person who writes it.
 
 A config file holds the pathways your members use to reach your
 SkyPilot API server, the addresses and names those pathways need, and the text

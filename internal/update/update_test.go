@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -574,5 +575,55 @@ func TestChecksumFor(t *testing.T) {
 	}
 	if _, ok := checksumFor(sums, "axon_1_darwin_amd64.tar.gz"); ok {
 		t.Error("found a checksum for a missing archive")
+	}
+}
+
+// A repository that moved redirects its /releases/latest to the new
+// address first; the redirects are followed on the same host until one
+// names a tag.
+func TestLatestTagFollowsAMovedRepository(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/old/axon/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/new/axon/releases/latest", http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("/new/axon/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/new/axon/releases/tag/v1.2.3", http.StatusFound)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	base, _ := url.Parse(srv.URL + "/old/axon")
+
+	tag, err := latestTag(context.Background(), newClient(base), base)
+	if err != nil || tag != "v1.2.3" {
+		t.Errorf("latestTag = %q, %v; want v1.2.3", tag, err)
+	}
+}
+
+// A redirect to another host, and a chain of redirects that names no tag,
+// find no release.
+func TestLatestTagStopsOffTheHostAndAfterTooManyRedirects(t *testing.T) {
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/org/axon/releases/tag/v9.9.9", http.StatusFound)
+	}))
+	t.Cleanup(other.Close)
+	var hops int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/away/axon/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+"/org/axon/releases/latest", http.StatusFound)
+	})
+	mux.HandleFunc("/loop/axon/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		hops++
+		http.Redirect(w, r, "/loop/axon/releases/latest", http.StatusFound)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	for _, repo := range []string{"away", "loop"} {
+		base, _ := url.Parse(srv.URL + "/" + repo + "/axon")
+		_, err := latestTag(context.Background(), newClient(base), base)
+		wantErr(t, err, "no release of axon was found")
+	}
+	if hops != maxRedirects {
+		t.Errorf("followed %d redirects in a loop, want %d", hops, maxRedirects)
 	}
 }

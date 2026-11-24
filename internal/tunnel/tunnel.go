@@ -46,9 +46,6 @@ const Port = 46581
 const (
 	recordFile = "tunnel.json"
 	logFile    = "tunnel.log"
-	// oldRecordFile held only a process ID, with no command line. A record
-	// in it is never trusted; it is deleted and its process left alone.
-	oldRecordFile = "tunnel.pid"
 
 	fileMode fs.FileMode = 0o600
 
@@ -367,14 +364,10 @@ func StopRecorded(stateDir string) error {
 }
 
 // recordedProcess returns the record in stateDir when its process runs and
-// matches it. It discards the old form of record, and a record whose
-// process has exited or does not match. held says whether the caller holds
-// the tunnel's lock; see discardRecord, which stops waiting for the lock
-// when ctx ends.
+// matches it. It discards a record whose process has exited or does not
+// match. held says whether the caller holds the tunnel's lock; see
+// discardRecord, which stops waiting for the lock when ctx ends.
 func recordedProcess(ctx context.Context, stateDir string, held bool) (record, bool, error) {
-	if err := removeOldRecord(stateDir); err != nil {
-		return record{}, false, err
-	}
 	rec, ok, err := readRecord(stateDir)
 	if err != nil || !ok {
 		return record{}, false, err
@@ -807,12 +800,6 @@ func removeRecordOf(stateDir string, pid int) error {
 		return err
 	}
 	return removeRecord(stateDir)
-}
-
-// removeOldRecord deletes the old form of record in stateDir, when there is
-// one. Its process is never signaled.
-func removeOldRecord(stateDir string) error {
-	return removeFile(filepath.Join(stateDir, oldRecordFile))
 }
 
 func removeFile(path string) error {

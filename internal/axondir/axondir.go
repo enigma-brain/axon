@@ -1,9 +1,12 @@
 // Package axondir owns ~/.axon, the one directory axon keeps on the laptop.
 //
 // The directory holds the config files, the settings file, the tools axon
-// installs for its own use, and the state it records. Every name in it is
-// defined here. Directories are created on first use, readable by the user
-// only; files are written readable by the user only.
+// installs for its own use, and the state it records. The names of its
+// directories and of the files this package reads and writes are defined
+// here; a package that keeps its own files in one of the directories, such
+// as the SkyPilot client under tools/ or the tunnel's record under state/,
+// names them itself. Directories are created on first use, readable by the
+// user only; files are written readable by the user only.
 package axondir
 
 import (
@@ -184,7 +187,7 @@ func (d Dir) ensure(sub string) (string, error) {
 				return "", fmt.Errorf("create %s: it exists and is not a directory", p)
 			}
 		} else if err != nil {
-			return "", fmt.Errorf("create %s: %w", p, unwrapPath(err))
+			return "", fmt.Errorf("create %s: %w", p, UnwrapPath(err))
 		}
 		path = p
 	}
@@ -250,4 +253,18 @@ var syncFile = (*os.File).Sync
 // the sync.
 func syncUnsupported(err error) bool {
 	return errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.EOPNOTSUPP)
+}
+
+// UnwrapPath returns the error inside a *fs.PathError or *os.LinkError, so
+// that a message naming the path does not name it twice.
+func UnwrapPath(err error) error {
+	var pe *os.PathError
+	if errors.As(err, &pe) {
+		return pe.Err
+	}
+	var le *os.LinkError
+	if errors.As(err, &le) {
+		return le.Err
+	}
+	return err
 }

@@ -8,7 +8,6 @@ import (
 
 	"github.com/enigma-brain/axon/internal/configfile"
 	"github.com/enigma-brain/axon/internal/connected"
-	"github.com/enigma-brain/axon/internal/tunnel"
 )
 
 // disconnectUnless disconnects every command group from the pathway that
@@ -43,13 +42,12 @@ func (l *login) disconnect(opts Options) error {
 	if _, err := os.Stat(stateDir); errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
-	running, err := tunnel.RecordedRunning(stateDir)
+	running, err := tunnelRunning(stateDir)
 	if err != nil {
 		return err
 	}
 	if running {
-		fmt.Fprintf(opts.Out, "sky: stopping the Teleport tunnel on port %d\n", tunnel.Port)
-		if err := tunnel.StopRecorded(stateDir); err != nil {
+		if err := stopTunnels(opts.Out, stateDir, nil); err != nil {
 			return fmt.Errorf("stop the Teleport tunnel: %w", err)
 		}
 	}

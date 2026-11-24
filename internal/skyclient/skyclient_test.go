@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -179,11 +180,21 @@ func (f *fixture) uvLog(t *testing.T) string {
 	return string(data)
 }
 
+// skyCommand returns a command that runs the installed client's sky with
+// args, named by its absolute path.
+func skyCommand(ctx context.Context, dir axondir.Dir, args ...string) (*exec.Cmd, error) {
+	path, err := Path(dir)
+	if err != nil {
+		return nil, err
+	}
+	return exec.CommandContext(ctx, path, args...), nil
+}
+
 func runSky(t *testing.T, dir axondir.Dir, args ...string) string {
 	t.Helper()
-	cmd, err := Command(context.Background(), dir, args...)
+	cmd, err := skyCommand(context.Background(), dir, args...)
 	if err != nil {
-		t.Fatalf("Command: %v", err)
+		t.Fatalf("skyCommand: %v", err)
 	}
 	out, err := cmd.Output()
 	if err != nil {
@@ -621,9 +632,6 @@ func TestNotInstalled(t *testing.T) {
 	}
 	if _, err := Path(dir); err == nil {
 		t.Error("Path succeeded with no client installed")
-	}
-	if _, err := Command(context.Background(), dir, "status"); err == nil {
-		t.Error("Command succeeded with no client installed")
 	}
 }
 
