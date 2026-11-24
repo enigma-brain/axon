@@ -191,9 +191,39 @@ again, as below, saying which pathway it now uses when only one is left;
 with `--pathway` naming the dropped pathway it stops and lists the
 pathways you can use.
 
+### Seeing what is stored
+
+    axon config list
+
+lists every stored config file: its `id`, where it came from or that it was
+made by hand, its revision and when it was stored. Under each file are its
+pathways, each with its name, the identifier `--pathway` takes, its kind and
+its server. The pathway in use is marked `*`, and the first line names it:
+
+    The pathway in use is Remote (remote), from remote.
+
+    example-campus
+      from https://example.org/axon.toml
+      revision 3, stored 2026-11-20 14:03 CET
+
+        Campus  --pathway campus
+          direct, https://sky.example.org
+
+    remote
+      made by hand at `axon login`
+      no revision, stored 2026-11-21 09:12 CET
+
+      * Remote  --pathway remote
+          teleport, proxy teleport.example.org, application skypilot
+
+It reads only files on the laptop and changes nothing. A stored file that
+cannot be read is listed with the reason, and the command then exits
+non-zero.
+
 ### Removing a file
 
-Delete it from `~/.axon/orgs/`; there is no command for it. When it held
+Delete the file named by its `id`, as `axon config list` shows it, from
+`~/.axon/orgs/`; there is no command for it. When it held
 the active pathway, the next `axon login` chooses another from the stored
 files and, once one is chosen, disconnects the pathway you left. When it
 was the last file, `axon login` disconnects the pathway you left, stopping
@@ -520,7 +550,8 @@ instead of the latest. CI runs it on Linux when `internal/update/` or
 | `main.go` | The entry point. Sends every failure through `internal/fail`. |
 | `install.sh` | The install script that the install line runs. |
 | `.goreleaser.yaml` | How a release is built. |
-| `internal/cli` | The command tree: `login`, `logout`, `sky` and `update`. |
+| `internal/cli` | The command tree: `login`, `logout`, `config`, `sky` and `update`. |
+| `internal/configlist` | `axon config list`: printing the stored config files, their pathways and the pathway in use. |
 | `internal/update` | `axon update`: finding a release, verifying its archive, and replacing the running binary. |
 | `internal/fail` | Prints failures to standard error, prefixed `axon:`, and exits non-zero. |
 | `internal/orgfile` | Config files: reading them from a source, checking them, and storing them in `~/.axon/orgs/`. |
