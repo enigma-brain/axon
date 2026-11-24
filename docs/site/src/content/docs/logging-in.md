@@ -188,9 +188,10 @@ How a change reaches your laptop depends on where the file came from:
   passes the checks and keeps its `id`. You do nothing. Only that one file is
   fetched, and a file that `--config` added in the same login is not fetched
   twice. When the new file differs, `axon` prints `Updated the config file <path>`,
-  with the old and new revisions when the file has them. A fetched file with an
-  older revision than the stored copy asks first, and with no terminal the
-  stored copy is kept. When the fetch fails, or the new file is refused or has a
+  with the old and new revisions when the file has them. A fetched file that
+  changes where your active pathway goes asks first, as below. A fetched file
+  with an older revision than the stored copy asks next, and with no terminal
+  the stored copy is kept. When the fetch fails, or the new file is refused or has a
   pathway named like one in another stored file, `axon` says so in one line and
   logs in with the file it has.
 - **A file path or standard input:** the file is read once. Run `axon login --config`
@@ -198,11 +199,31 @@ How a change reaches your laptop depends on where the file came from:
 
 `axon sky` never fetches a file. It uses the stored ones.
 
-When the new file changes the servers of your active pathway, the login
-disconnects it from the old ones and connects it to the new ones, and the
-pathway stays active. A change to its name or text alone changes nothing.
+When the fetched file changes where your active pathway goes, its kind, the
+API server's address, the Teleport proxy or the application, or no longer has
+the pathway, `axon` prints the old and the new values and asks before it
+stores the file:
 
-When the new file no longer has your active pathway, the login chooses again.
+```text
+The config file at https://example.org/axon.toml changes where the pathway "campus" goes:
+  now: direct, https://sky.example.org
+  new: direct, https://sky2.example.org
+Switch to the fetched config file? [y/N, Enter for no]:
+```
+
+No, the default, keeps the stored copy, and the login goes on with it. With
+no terminal, the stored copy is kept with one line that names `--replace`, and
+`axon login --replace` answers yes. The same server written another way,
+such as with a trailing slash, is no change. A file you add yourself with
+`--config` asks nothing about this, and prints the same `now:` and `new:`
+lines when it moves your active pathway.
+
+When you switch, the login disconnects the pathway from the old servers and
+connects it to the new ones, and the pathway stays active. A change to its
+name or text alone changes nothing.
+
+When you switch to a file that no longer has your active pathway, the login
+chooses again.
 With one pathway left, `axon` says which it now uses:
 
 ```text
