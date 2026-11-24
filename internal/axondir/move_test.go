@@ -293,7 +293,7 @@ func TestMoveOldNamesThatCannotBeMade(t *testing.T) {
 		writeTree(t, d.Root(), oldLayout)
 		readOnly(t, d.Root())
 		m, err := d.MoveOldNames()
-		want := "move " + filepath.Join(d.Root(), "orgs") + " to " + filepath.Join(d.Root(), "configs") + ": permission denied"
+		want := "rename " + filepath.Join(d.Root(), "orgs") + " to " + filepath.Join(d.Root(), "configs") + ": permission denied"
 		if err == nil || err.Error() != want {
 			t.Fatalf("err = %v, want %q", err, want)
 		}
