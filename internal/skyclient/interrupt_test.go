@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/enigma-brain/axon/internal/interrupt"
+	"github.com/enigma-brain/axon/internal/testkit"
 )
 
 // cancelAfter returns a context that is cancelled with cause after d.
@@ -129,15 +130,29 @@ func TestEnsureCancelledDuringUVStopsUV(t *testing.T) {
 			t.Setenv("FAKEUV_PIP_RELEASE", filepath.Join(t.TempDir(), "never"))
 			ctx, cancel := context.WithCancelCause(context.Background())
 			defer cancel(nil)
+			// The cancellation comes once uv is seen in the package stage,
+			// or after testkit.WaitTimeout, so that an install that never
+			// gets there fails the test instead of waiting for ever.
+			seen := make(chan bool, 1)
 			go func() {
+				deadline := time.Now().Add(testkit.WaitTimeout)
 				for !strings.Contains(f.uvLog(t), "uv pip install --python "+filepath.Join(f.tools, skypilotDir, "0.14.1")) {
+					if time.Now().After(deadline) {
+						seen <- false
+						cancel(tc.cause)
+						return
+					}
 					time.Sleep(20 * time.Millisecond)
 				}
+				seen <- true
 				cancel(tc.cause)
 			}()
 
 			start := time.Now()
 			_, _, err := Ensure(ctx, f.dir, "0.14.1", nil)
+			if !<-seen {
+				t.Fatalf("uv was not seen installing the package within %v; Ensure error = %v", testkit.WaitTimeout, err)
+			}
 			if err == nil {
 				t.Fatal("the cancelled Ensure succeeded")
 			}

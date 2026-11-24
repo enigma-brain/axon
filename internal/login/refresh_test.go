@@ -158,10 +158,18 @@ func (h *harness) connectedTo(id string) {
 // emailFile returns the file that records the logged-in email. A disconnect
 // removes it, so the file after a login that disconnected is another file
 // even when it holds the same email.
+//
+// It also links the file from a directory of the test's, so that the file
+// outlives its removal for the rest of the test: a file written after it
+// cannot reuse its inode, and os.SameFile tells the two apart.
 func (h *harness) emailFile() os.FileInfo {
 	h.t.Helper()
-	info, err := os.Stat(filepath.Join(h.home, ".axon", "state", "email"))
+	path := filepath.Join(h.home, ".axon", "state", "email")
+	info, err := os.Stat(path)
 	if err != nil {
+		h.t.Fatal(err)
+	}
+	if err := os.Link(path, filepath.Join(h.t.TempDir(), "email")); err != nil {
 		h.t.Fatal(err)
 	}
 	return info
