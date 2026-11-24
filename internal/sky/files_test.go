@@ -67,3 +67,30 @@ func TestSettingsFile(t *testing.T) {
 		}
 	}
 }
+
+// A ".." after a symbolic link leads where the link points, as it does
+// when SkyPilot opens the path, for a relative path and for one under "~".
+func TestSkyPilotFileKeepsDotDotAfterALink(t *testing.T) {
+	root := t.TempDir()
+	sub := filepath.Join(root, "srv", "sky", "sub")
+	work := filepath.Join(root, "work")
+	for _, d := range []string{sub, work} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := filepath.Join(root, "srv", "sky", "config.yaml")
+	if err := os.WriteFile(want, []byte("api_server:\n  endpoint: http://127.0.0.1:46581\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(sub, filepath.Join(work, "link")); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(work)
+	for _, v := range []string{"link/../config.yaml", "~/link/../config.yaml"} {
+		got := SettingsFile(work, only("SKYPILOT_GLOBAL_CONFIG", v))
+		if endpoint, err := storedEndpoint(got); err != nil || endpoint != "http://127.0.0.1:46581" {
+			t.Errorf("SKYPILOT_GLOBAL_CONFIG=%q: %s holds %q, %v; want the endpoint in %s", v, got, endpoint, err, want)
+		}
+	}
+}
