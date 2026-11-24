@@ -24,10 +24,9 @@ import (
 // InstallLink is Teleport's page on installing its client.
 const InstallLink = "https://goteleport.com/docs/installation/"
 
-// The terminal tsh runs with during the logins, which can open a browser
-// and prompt. Tests replace them.
+// Where tsh writes during the logins, which can open a browser and prompt.
+// Tests replace them.
 var (
-	stdin  io.Reader = os.Stdin
 	stdout io.Writer = os.Stdout
 	stderr io.Writer = os.Stderr
 )
@@ -85,27 +84,28 @@ func Ensure(ctx context.Context, proxyAddr string) (string, error) {
 	return path, nil
 }
 
-// Login runs the Teleport login against the proxy at proxy.
-func Login(ctx context.Context, tshPath, proxy string) error {
+// Login runs the Teleport login against the proxy at proxy. tsh reads its
+// answers from in, which is the terminal when there is one.
+func Login(ctx context.Context, tshPath, proxy string, in io.Reader) error {
 	if err := CheckProxy(proxy); err != nil {
 		return err
 	}
-	if err := runInTerminal(ctx, tshPath, "login", "--proxy="+proxy); err != nil {
+	if err := runInTerminal(ctx, in, tshPath, "login", "--proxy="+proxy); err != nil {
 		return fmt.Errorf("Teleport login (tsh login --proxy=%s): %w", proxy, err)
 	}
 	return nil
 }
 
 // AppLogin issues a fresh certificate for the Teleport application app,
-// served by the proxy at proxy.
-func AppLogin(ctx context.Context, tshPath, proxy, app string) error {
+// served by the proxy at proxy. tsh reads its answers from in, as with Login.
+func AppLogin(ctx context.Context, tshPath, proxy, app string, in io.Reader) error {
 	if err := CheckProxy(proxy); err != nil {
 		return err
 	}
 	if err := CheckApp(app); err != nil {
 		return fmt.Errorf("Teleport application login: %w", err)
 	}
-	if err := runInTerminal(ctx, tshPath, "--proxy="+proxy, "apps", "login", app); err != nil {
+	if err := runInTerminal(ctx, in, tshPath, "--proxy="+proxy, "apps", "login", app); err != nil {
 		return fmt.Errorf("Teleport application login (tsh --proxy=%s apps login %s): %w", proxy, app, err)
 	}
 	return nil
@@ -120,11 +120,12 @@ const terminalGrace = 10 * time.Second
 // runs without a terminal to end, and for its output once it has.
 const waitDelay = 2 * time.Second
 
-// runInTerminal runs tsh with args on axon's own terminal.
-func runInTerminal(ctx context.Context, tshPath string, args ...string) error {
+// runInTerminal runs tsh with args, reading from in and writing to axon's
+// own output.
+func runInTerminal(ctx context.Context, in io.Reader, tshPath string, args ...string) error {
 	cmd := exec.CommandContext(ctx, tshPath, args...)
 	interrupt.Stop(ctx, cmd, terminalGrace)
-	cmd.Stdin = stdin
+	cmd.Stdin = in
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	return cmd.Run()

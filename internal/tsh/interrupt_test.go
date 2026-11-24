@@ -95,9 +95,8 @@ func TestClientVersionCancelled(t *testing.T) {
 	}
 }
 
-// useBuffers replaces the terminal tsh logs in on with buffers.
+// useBuffers replaces the output tsh logs in on with buffers.
 func useBuffers(t *testing.T) {
-	setVar[io.Reader](t, &stdin, bytes.NewReader(nil))
 	setVar[io.Writer](t, &stdout, &bytes.Buffer{})
 	setVar[io.Writer](t, &stderr, &bytes.Buffer{})
 }
@@ -113,7 +112,7 @@ func TestLoginInterruptedBySIGTERMForwardsIt(t *testing.T) {
 	whenStarted(t, marks, func(int) { cancel(&interrupt.Error{Signal: syscall.SIGTERM}) })
 
 	start := time.Now()
-	if err := Login(ctx, path, testProxy); err == nil {
+	if err := Login(ctx, path, testProxy, bytes.NewReader(nil)); err == nil {
 		t.Fatal("the interrupted login succeeded")
 	}
 	if got := mark(marks); got != "TERM" {
@@ -141,7 +140,7 @@ func TestLoginInterruptedBySIGINTWaitsForTsh(t *testing.T) {
 	})
 
 	start := time.Now()
-	if err := Login(ctx, path, testProxy); err == nil {
+	if err := Login(ctx, path, testProxy, bytes.NewReader(nil)); err == nil {
 		t.Fatal("the interrupted login succeeded")
 	}
 	if got := mark(marks); got != "INT" {

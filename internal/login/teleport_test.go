@@ -226,6 +226,48 @@ func TestTeleportFirstLogin(t *testing.T) {
 	}
 }
 
+// With the config file on standard input, tsh's logins read the terminal,
+// as axon's own questions do, and not the used-up standard input.
+func TestTeleportLoginsReadTheTerminalWithConfigFromStdin(t *testing.T) {
+	h := newMetaHarness(t)
+	h.noFiles()
+	// A file the two logins share, as they share a terminal: each reads one
+	// line of it.
+	ttyPath := filepath.Join(t.TempDir(), "tty")
+	if err := os.WriteFile(ttyPath, []byte("for login\nfor apps login\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tty, err := os.Open(ttyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.l.openTerminal = func() (io.ReadCloser, error) { return tty, nil }
+	if err := h.login(Options{Config: "-", Pathway: "remote", In: strings.NewReader(exampleConfig)}); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	for name, want := range map[string]string{"stdin.login": "for login\n", "stdin.apps": "for apps login\n"} {
+		got, err := os.ReadFile(filepath.Join(h.tshDir, name))
+		if err != nil || string(got) != want {
+			t.Errorf("%s = %q, %v, want %q", name, got, err, want)
+		}
+	}
+}
+
+// With no terminal, tsh's logins read an empty input.
+func TestTeleportLoginsReadNothingWithConfigFromStdinAndNoTerminal(t *testing.T) {
+	h := newMetaHarness(t)
+	h.noFiles()
+	if err := h.login(Options{Config: "-", Pathway: "remote", In: strings.NewReader(exampleConfig)}); err != nil {
+		t.Fatalf("login: %v\n%s", err, h.out.String())
+	}
+	for _, name := range []string{"stdin.login", "stdin.apps"} {
+		got, err := os.ReadFile(filepath.Join(h.tshDir, name))
+		if err != nil || len(got) != 0 {
+			t.Errorf("%s = %q, %v, want it empty", name, got, err)
+		}
+	}
+}
+
 func TestTeleportRepeatedLoginKeepsTunnel(t *testing.T) {
 	h := newMetaHarness(t)
 	if err := h.run("remote"); err != nil {
