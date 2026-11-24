@@ -36,6 +36,7 @@ func (h hangingArchive) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // An update cancelled while it downloads the archive stops, and leaves the
 // installed binary as it was, with nothing beside it.
 func TestUpdateCancelledDuringDownload(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
 	d := serve(t, hangingArchive{repo: repo, name: "axon_0.5.0_" + testPlatform + ".tar.gz"})

@@ -215,6 +215,7 @@ func wantErr(t *testing.T, err error, parts ...string) {
 }
 
 func TestUpdateToNewerLatest(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.4.0"}
 	repo.addRelease(t, "0.4.0")
 	d := serve(t, repo)
@@ -231,6 +232,7 @@ func TestUpdateToNewerLatest(t *testing.T) {
 }
 
 func TestUpdateFromReleaseCandidateToFinal(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.4.0"}
 	repo.addRelease(t, "0.4.0")
 	d := serve(t, repo)
@@ -247,6 +249,7 @@ func TestUpdateFromReleaseCandidateToFinal(t *testing.T) {
 }
 
 func TestAlreadyLatest(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.4.0"}
 	repo.addRelease(t, "0.4.0")
 	d := serve(t, repo)
@@ -267,6 +270,7 @@ func TestAlreadyLatest(t *testing.T) {
 }
 
 func TestNewerThanLatest(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.4.0"}
 	repo.addRelease(t, "0.4.0")
 	d := serve(t, repo)
@@ -284,6 +288,7 @@ func TestNewerThanLatest(t *testing.T) {
 }
 
 func TestNamedVersion(t *testing.T) {
+	t.Parallel()
 	for _, arg := range []string{"0.5.0-rc.1", "v0.5.0-rc.1"} {
 		t.Run(arg, func(t *testing.T) {
 			repo := &fakeRepo{latest: "v0.4.0"}
@@ -301,6 +306,7 @@ func TestNamedVersion(t *testing.T) {
 }
 
 func TestNamedOlderVersion(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.4.0"}
 	repo.addRelease(t, "0.3.0")
 	d := serve(t, repo)
@@ -313,6 +319,7 @@ func TestNamedOlderVersion(t *testing.T) {
 }
 
 func TestNamedVersionAlreadyInstalled(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{}
 	d := serve(t, repo)
 	exe := installed(t, "0.4.0")
@@ -330,6 +337,7 @@ func TestNamedVersionAlreadyInstalled(t *testing.T) {
 }
 
 func TestNamedVersionNotFound(t *testing.T) {
+	t.Parallel()
 	d := serve(t, &fakeRepo{})
 	exe := installed(t, "0.4.0")
 
@@ -339,6 +347,7 @@ func TestNamedVersionNotFound(t *testing.T) {
 }
 
 func TestInvalidVersion(t *testing.T) {
+	t.Parallel()
 	d := serve(t, &fakeRepo{})
 	exe := installed(t, "0.4.0")
 
@@ -350,6 +359,7 @@ func TestInvalidVersion(t *testing.T) {
 }
 
 func TestDevelopmentBuild(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.4.0"}
 	repo.addRelease(t, "0.4.0")
 	d := serve(t, repo)
@@ -366,6 +376,7 @@ func TestDevelopmentBuild(t *testing.T) {
 }
 
 func TestNoRelease(t *testing.T) {
+	t.Parallel()
 	d := serve(t, &fakeRepo{})
 	exe := installed(t, "0.4.0")
 
@@ -375,6 +386,7 @@ func TestNoRelease(t *testing.T) {
 }
 
 func TestChecksumMismatch(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
 	archive := tarGz(t, map[string][]byte{"axon": fakeBinary("0.5.0")})
@@ -388,6 +400,7 @@ func TestChecksumMismatch(t *testing.T) {
 }
 
 func TestFailedDownload(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
 	delete(repo.files, "v0.5.0/axon_0.5.0_"+testPlatform+".tar.gz")
@@ -400,6 +413,7 @@ func TestFailedDownload(t *testing.T) {
 }
 
 func TestNoNetwork(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.NotFoundHandler())
 	addr := srv.URL
 	srv.Close()
@@ -413,6 +427,7 @@ func TestNoNetwork(t *testing.T) {
 
 // A download that gets no answer gives the short reason.
 func TestNoNetworkForDownload(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.NotFoundHandler())
 	addr := srv.URL
 	srv.Close()
@@ -425,6 +440,7 @@ func TestNoNetworkForDownload(t *testing.T) {
 }
 
 func TestNoArchiveForPlatform(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
 	d := serve(t, repo)
@@ -439,6 +455,7 @@ func TestNoArchiveForPlatform(t *testing.T) {
 }
 
 func TestUnreleasedPlatform(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
 	d := serve(t, repo)
@@ -453,6 +470,7 @@ func TestUnreleasedPlatform(t *testing.T) {
 }
 
 func TestArchiveWithoutBinary(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
 	archive := tarGz(t, map[string][]byte{"README.md": []byte("no binary")})
@@ -466,6 +484,7 @@ func TestArchiveWithoutBinary(t *testing.T) {
 }
 
 func TestArchiveEntryPathIsIgnored(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
 	archive := tarGz(t, map[string][]byte{"../../evil/axon": fakeBinary("0.5.0")})
@@ -480,6 +499,7 @@ func TestArchiveEntryPathIsIgnored(t *testing.T) {
 }
 
 func TestUnwritableDirectory(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root can write to any directory")
 	}
@@ -499,6 +519,7 @@ func TestUnwritableDirectory(t *testing.T) {
 }
 
 func TestNewBinaryReportsAnotherVersion(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
 	// This binary runs, and reports another version than its release's.
@@ -513,6 +534,7 @@ func TestNewBinaryReportsAnotherVersion(t *testing.T) {
 }
 
 func TestNewBinaryCannotRun(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
 	// No interpreter exists at this path, so the binary cannot be run.
@@ -527,6 +549,7 @@ func TestNewBinaryCannotRun(t *testing.T) {
 }
 
 func TestSymlinkedBinary(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
 	d := serve(t, repo)
@@ -547,6 +570,7 @@ func TestSymlinkedBinary(t *testing.T) {
 
 // A download that stalls ends with the short reason.
 func TestStalledDownload(t *testing.T) {
+	t.Parallel()
 	repo := &fakeRepo{latest: "v0.5.0"}
 	repo.addRelease(t, "0.5.0")
 	name := "axon_0.5.0_" + testPlatform + ".tar.gz"
@@ -574,6 +598,7 @@ func TestStalledDownload(t *testing.T) {
 // A binary that cannot be written in full leaves nothing in the directory:
 // neither the reserved name nor a temporary file.
 func TestStagingFailureLeavesNothing(t *testing.T) {
+	t.Parallel()
 	// noise is content gzip cannot shrink, so a cut archive is cut in the
 	// binary's body, after its header.
 	noise := make([]byte, 0, 64<<10)
@@ -607,6 +632,7 @@ func TestStagingFailureLeavesNothing(t *testing.T) {
 }
 
 func TestRepoURLMustBeHTTPSOrLoopback(t *testing.T) {
+	t.Parallel()
 	for _, raw := range []string{"http://example.org/org/axon", "ftp://127.0.0.1/x", "file:///tmp/x"} {
 		if _, err := parseRepoURL(raw); err == nil {
 			t.Errorf("parseRepoURL(%q) = nil error", raw)
@@ -620,6 +646,7 @@ func TestRepoURLMustBeHTTPSOrLoopback(t *testing.T) {
 }
 
 func TestChecksumFor(t *testing.T) {
+	t.Parallel()
 	sums := []byte("aaaa  axon_1_linux_amd64.tar.gz\nBBBB *axon_1_darwin_arm64.tar.gz\n")
 	if got, ok := checksumFor(sums, "axon_1_linux_amd64.tar.gz"); !ok || got != "aaaa" {
 		t.Errorf("linux = %q, %v", got, ok)
@@ -636,6 +663,7 @@ func TestChecksumFor(t *testing.T) {
 // address first; the redirects are followed on the same host until one
 // names a tag.
 func TestLatestTagFollowsAMovedRepository(t *testing.T) {
+	t.Parallel()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/old/axon/releases/latest", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/new/axon/releases/latest", http.StatusMovedPermanently)
@@ -656,6 +684,7 @@ func TestLatestTagFollowsAMovedRepository(t *testing.T) {
 // A redirect to another host, and a chain of redirects that names no tag,
 // find no release.
 func TestLatestTagStopsOffTheHostAndAfterTooManyRedirects(t *testing.T) {
+	t.Parallel()
 	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/org/axon/releases/tag/v9.9.9", http.StatusFound)
 	}))
@@ -685,6 +714,7 @@ func TestLatestTagStopsOffTheHostAndAfterTooManyRedirects(t *testing.T) {
 // A server error in answer to the lookup of the latest release is reported
 // with the server's status, without the control characters it holds.
 func TestLatestTagServerErrorIsCleaned(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// net/http writes the status text it knows; hijack to send a raw one.
 		conn, buf, err := w.(http.Hijacker).Hijack()
