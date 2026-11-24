@@ -191,6 +191,8 @@ func TestSkyIsWired(t *testing.T) {
 	}
 }
 
+// devenv is the name an earlier axon gave the sky command group; it is
+// refused like any unknown command.
 func TestDevenvIsGone(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	if _, err := run(t, "devenv", "status"); err == nil || !strings.Contains(err.Error(), "unknown command") {

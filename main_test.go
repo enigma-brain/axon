@@ -413,6 +413,8 @@ func TestBinary(t *testing.T) {
 		}
 	})
 
+	// The command group devenv and the flag --org are names an earlier axon
+	// used; they are refused like any unknown name.
 	for _, tc := range []struct {
 		args []string
 		want string
